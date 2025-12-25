@@ -143,3 +143,6 @@ src-tauri/target/
 
 # Plan
 plan/
+
+# Claude Code
+.claude/
