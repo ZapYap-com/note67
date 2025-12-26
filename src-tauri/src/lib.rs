@@ -50,6 +50,7 @@ pub fn run() {
             commands::transcribe_audio,
             commands::is_transcribing,
             commands::get_transcript,
+            commands::add_transcript_segment,
             // AI commands
             commands::get_ollama_status,
             commands::list_ollama_models,

@@ -249,6 +249,20 @@ pub fn get_transcript(
     db.get_transcript_segments(&meeting_id).map_err(|e| e.to_string())
 }
 
+/// Add a transcript segment directly (for seeding/testing)
+#[tauri::command]
+pub fn add_transcript_segment(
+    meeting_id: String,
+    start_time: f64,
+    end_time: f64,
+    text: String,
+    speaker: Option<String>,
+    db: State<Database>,
+) -> Result<i64, String> {
+    db.add_transcript_segment(&meeting_id, start_time, end_time, &text, speaker.as_deref())
+        .map_err(|e| e.to_string())
+}
+
 fn parse_model_size(size: &str) -> Result<ModelSize, String> {
     match size.to_lowercase().as_str() {
         "tiny" => Ok(ModelSize::Tiny),

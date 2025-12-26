@@ -50,7 +50,7 @@ function App() {
   >({});
   const [activeTab, setActiveTab] = useState<
     "notes" | "transcript" | "summary"
-  >("notes");
+  >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
 

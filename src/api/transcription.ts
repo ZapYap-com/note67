@@ -51,4 +51,20 @@ export const transcriptionApi = {
   getTranscript: (meetingId: string): Promise<TranscriptSegment[]> => {
     return invoke("get_transcript", { meetingId });
   },
+
+  addTranscriptSegment: (
+    meetingId: string,
+    startTime: number,
+    endTime: number,
+    text: string,
+    speaker?: string
+  ): Promise<number> => {
+    return invoke("add_transcript_segment", {
+      meetingId,
+      startTime,
+      endTime,
+      text,
+      speaker,
+    });
+  },
 };
