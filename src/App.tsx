@@ -1295,6 +1295,11 @@ function NoteView({
             onGenerate={(type: SummaryType, prompt?: string) =>
               generateSummary(type, prompt)
             }
+            onGenerateAll={async () => {
+              await generateSummary("overview");
+              await generateSummary("action_items");
+              await generateSummary("key_decisions");
+            }}
             onDelete={deleteSummary}
             onRegenerate={onRegenerate}
             isRegenerating={isRegenerating}

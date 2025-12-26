@@ -10,6 +10,7 @@ interface SummaryPanelProps {
   hasOllamaModel: boolean;
   ollamaRunning: boolean;
   onGenerate: (type: SummaryType, customPrompt?: string) => void;
+  onGenerateAll: () => void;
   onDelete: (summaryId: number) => void;
   onRegenerate?: () => void;
   isRegenerating?: boolean;
@@ -37,6 +38,7 @@ export function SummaryPanel({
   hasOllamaModel,
   ollamaRunning,
   onGenerate,
+  onGenerateAll,
   onDelete,
   onRegenerate,
   isRegenerating,
@@ -109,10 +111,10 @@ export function SummaryPanel({
       {/* Generate Buttons */}
       <div className="space-y-4">
         <div className="flex flex-wrap gap-3">
-          {SUMMARY_TYPES.map((type) => (
+          {summaries.length === 0 ? (
+            /* Single Generate button when no summaries exist */
             <button
-              key={type.value}
-              onClick={() => onGenerate(type.value)}
+              onClick={onGenerateAll}
               disabled={!canGenerate}
               className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
@@ -120,22 +122,40 @@ export function SummaryPanel({
                 color: canGenerate ? "white" : "var(--color-text-tertiary)",
               }}
             >
-              {type.label}
+              Generate
             </button>
-          ))}
-          {/* Regenerate Summary & Title Button */}
-          {onRegenerate && summaries.length > 0 && (
-            <button
-              onClick={onRegenerate}
-              disabled={!canGenerate || isRegenerating}
-              className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: "var(--color-accent)",
-                color: "white",
-              }}
-            >
-              {isRegenerating ? "Regenerating..." : "Regenerate"}
-            </button>
+          ) : (
+            /* Individual type buttons when summaries exist */
+            <>
+              {SUMMARY_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => onGenerate(type.value)}
+                  disabled={!canGenerate}
+                  className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
+                    color: canGenerate ? "white" : "var(--color-text-tertiary)",
+                  }}
+                >
+                  {type.label}
+                </button>
+              ))}
+              {/* Regenerate Summary & Title Button */}
+              {onRegenerate && (
+                <button
+                  onClick={onRegenerate}
+                  disabled={!canGenerate || isRegenerating}
+                  className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
+                >
+                  {isRegenerating ? "Regenerating..." : "Regenerate"}
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -324,7 +344,7 @@ export function SummaryPanel({
       {/* Empty State */}
       {summaries.length === 0 && !isGenerating && canGenerate && (
         <p className="text-center py-6" style={{ color: "var(--color-text-tertiary)" }}>
-          Generate a summary using the buttons above.
+          Generate a summary using the button above.
         </p>
       )}
     </div>
