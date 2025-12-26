@@ -838,7 +838,7 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
           Select a meeting or start a new one
         </p>
         <div
-          className="mt-4 flex flex-col items-center gap-2 text-xs"
+          className="mt-4 flex flex-col items-start gap-2 text-xs mx-auto w-fit"
           style={{ color: "var(--color-text-tertiary)" }}
         >
           <div className="flex items-center gap-2">
@@ -881,7 +881,7 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
             >
               R
             </kbd>
-            <span>new note + record</span>
+            <span>start meeting</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd
