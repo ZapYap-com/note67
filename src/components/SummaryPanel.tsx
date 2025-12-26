@@ -7,6 +7,7 @@ interface SummaryPanelProps {
   isGenerating: boolean;
   streamingContent: string;
   onDelete: (summaryId: number) => void;
+  onCopy: (content: string) => void;
 }
 
 const SUMMARY_TYPE_LABELS: Record<SummaryType, string> = {
@@ -21,9 +22,18 @@ export function SummaryPanel({
   isGenerating,
   streamingContent,
   onDelete,
+  onCopy,
 }: SummaryPanelProps) {
   // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
   const [expandState, setExpandState] = useState<Map<number, boolean>>(new Map());
+  // Track which summary was just copied (for showing "Copied" feedback)
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const handleCopy = (summaryId: number, content: string) => {
+    onCopy(content);
+    setCopiedId(summaryId);
+    setTimeout(() => setCopiedId(null), 5000);
+  };
 
   const toggleSummary = (id: number, currentlyExpanded: boolean) => {
     setExpandState((prev) => {
@@ -147,19 +157,42 @@ export function SummaryPanel({
                       {formatDate(summary.created_at)}
                     </span>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(summary.id);
-                    }}
-                    className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
-                    style={{ color: "var(--color-text-tertiary)" }}
-                    title="Delete"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {copiedId === summary.id && (
+                      <span
+                        className="text-xs font-medium mr-1"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        Copied
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(summary.id, summary.content);
+                      }}
+                      className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                      title="Copy"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(summary.id);
+                      }}
+                      className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                      title="Delete"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 {/* AI-generated content with markdown rendering - collapsible */}
                 {isExpanded && (
