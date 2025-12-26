@@ -11,10 +11,10 @@ interface SummaryPanelProps {
   onDelete: (summaryId: number) => void;
 }
 
-const SUMMARY_TYPES: { value: SummaryType; label: string; icon: string }[] = [
-  { value: "overview", label: "Overview", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-  { value: "action_items", label: "Action Items", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" },
-  { value: "key_decisions", label: "Key Decisions", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
+const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
+  { value: "overview", label: "Overview" },
+  { value: "action_items", label: "Action Items" },
+  { value: "key_decisions", label: "Key Decisions" },
 ];
 
 export function SummaryPanel({
@@ -32,16 +32,17 @@ export function SummaryPanel({
   const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating;
 
   const getStatusMessage = () => {
-    if (!ollamaRunning) return "Ollama is not running. Start Ollama first.";
-    if (!hasOllamaModel) return "No AI model selected. Select a model in settings.";
-    if (!hasTranscript) return "No transcript available. Transcribe the meeting first.";
+    if (!ollamaRunning) return "Ollama is not running. Start it first.";
+    if (!hasOllamaModel) return "No AI model selected.";
+    if (!hasTranscript) return "No transcript available.";
     return null;
   };
 
   const statusMessage = getStatusMessage();
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString();
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   };
 
   const getSummaryTypeLabel = (type: SummaryType) => {
@@ -50,27 +51,34 @@ export function SummaryPanel({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Status Message */}
       {statusMessage && (
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <p className="text-sm text-yellow-700 dark:text-yellow-300">{statusMessage}</p>
+        <div
+          className="px-4 py-3 rounded-xl"
+          style={{
+            backgroundColor: "rgba(245, 158, 11, 0.08)",
+            color: "#b45309",
+          }}
+        >
+          {statusMessage}
         </div>
       )}
 
       {/* Generate Buttons */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-3">
           {SUMMARY_TYPES.map((type) => (
             <button
               key={type.value}
               onClick={() => onGenerate(type.value)}
               disabled={!canGenerate}
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: canGenerate ? "var(--color-text)" : "var(--color-bg-subtle)",
+                color: canGenerate ? "white" : "var(--color-text-tertiary)",
+              }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={type.icon} />
-              </svg>
               {type.label}
             </button>
           ))}
@@ -80,18 +88,24 @@ export function SummaryPanel({
         <div>
           <button
             onClick={() => setShowCustom(!showCustom)}
-            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+            className="transition-colors"
+            style={{ color: "var(--color-text-secondary)" }}
           >
-            {showCustom ? "Hide custom prompt" : "Use custom prompt"}
+            {showCustom ? "Hide custom prompt" : "+ Custom prompt"}
           </button>
           {showCustom && (
-            <div className="mt-2 flex gap-2">
+            <div className="mt-3 flex gap-3">
               <input
                 type="text"
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 placeholder="Ask anything about the meeting..."
-                className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-4 py-3 rounded-xl outline-none"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text)",
+                  border: "1px solid var(--color-border)",
+                }}
               />
               <button
                 onClick={() => {
@@ -101,7 +115,11 @@ export function SummaryPanel({
                   }
                 }}
                 disabled={!canGenerate || !customPrompt.trim()}
-                className="px-4 py-2 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-3 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: "var(--color-text)",
+                  color: "white",
+                }}
               >
                 Ask
               </button>
@@ -112,45 +130,69 @@ export function SummaryPanel({
 
       {/* Generating Indicator */}
       {isGenerating && (
-        <div className="flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-300 border-t-indigo-600" />
-          <span className="text-sm text-indigo-700 dark:text-indigo-300">
-            Generating summary...
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl"
+          style={{ backgroundColor: "var(--color-bg-elevated)" }}
+        >
+          <div
+            className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
+            style={{
+              borderColor: "var(--color-text-tertiary)",
+              borderTopColor: "transparent",
+            }}
+          />
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            Generating...
           </span>
         </div>
       )}
 
       {/* Summaries List */}
       {summaries.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Generated Summaries
-          </h4>
+        <div className="space-y-4">
           {summaries.map((summary) => (
             <div
               key={summary.id}
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg"
+              className="rounded-xl overflow-hidden"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                boxShadow: "var(--shadow-sm)",
+              }}
             >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <span className="inline-block px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded">
+              <div
+                className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="text-sm font-medium px-2.5 py-1 rounded-lg"
+                    style={{
+                      backgroundColor: "var(--color-bg-subtle)",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
                     {getSummaryTypeLabel(summary.summary_type)}
                   </span>
-                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
                     {formatDate(summary.created_at)}
                   </span>
                 </div>
                 <button
                   onClick={() => onDelete(summary.id)}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
-                  title="Delete summary"
+                  className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+                  style={{ color: "var(--color-text-tertiary)" }}
+                  title="Delete"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+              {/* AI-generated content in gray per Granola style */}
+              <div
+                className="px-4 py-4 leading-relaxed whitespace-pre-wrap"
+                style={{ color: "var(--color-text-ai)" }}
+              >
                 {summary.content}
               </div>
             </div>
@@ -160,8 +202,8 @@ export function SummaryPanel({
 
       {/* Empty State */}
       {summaries.length === 0 && !isGenerating && canGenerate && (
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-          No summaries yet. Generate one using the buttons above.
+        <p className="text-center py-6" style={{ color: "var(--color-text-tertiary)" }}>
+          Generate a summary using the buttons above.
         </p>
       )}
     </div>

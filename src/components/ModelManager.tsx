@@ -18,34 +18,54 @@ export function ModelManager({ onClose }: ModelManagerProps) {
   } = useModels();
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          boxShadow: "var(--shadow-lg)",
+          maxHeight: "80vh",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 shrink-0"
+          style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
             Whisper Models
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="p-1 rounded-lg transition-colors"
+            style={{ color: "var(--color-text-tertiary)" }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto flex-1">
+        {/* Content */}
+        <div className="p-5 overflow-y-auto flex-1">
           {error && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">
+            <div
+              className="mb-4 px-3 py-2 rounded-lg text-sm"
+              style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }}
+            >
               {error}
             </div>
           )}
 
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Download a Whisper model for local transcription. Larger models are more accurate but require more memory and time.
+          <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
+            Download a model for local transcription. Larger models are more accurate but slower.
           </p>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {models.map((model) => (
               <ModelCard
                 key={model.size}
@@ -61,9 +81,16 @@ export function ModelManager({ onClose }: ModelManagerProps) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Models are stored locally. {loadedModel ? `Current model: ${loadedModel}` : "No model loaded."}
+        {/* Footer */}
+        <div
+          className="px-5 py-3 shrink-0"
+          style={{
+            borderTop: "1px solid var(--color-border-subtle)",
+            backgroundColor: "var(--color-bg-subtle)",
+          }}
+        >
+          <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+            {loadedModel ? `Active: ${loadedModel}` : "No model loaded"}
           </p>
         </div>
       </div>
@@ -91,42 +118,51 @@ function ModelCard({
   onLoad,
 }: ModelCardProps) {
   const sizeLabels: Record<ModelSize, string> = {
-    tiny: "Tiny - Fastest, least accurate",
-    base: "Base - Fast, good accuracy",
-    small: "Small - Balanced",
-    medium: "Medium - Slower, high accuracy",
-    large: "Large - Slowest, best accuracy",
+    tiny: "Fastest, basic accuracy",
+    base: "Fast, good accuracy",
+    small: "Balanced performance",
+    medium: "Slower, high accuracy",
+    large: "Slowest, best accuracy",
   };
 
   return (
     <div
-      className={`p-3 rounded-lg border ${
-        isLoaded
-          ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-      }`}
+      className="p-3 rounded-xl transition-colors"
+      style={{
+        backgroundColor: isLoaded ? "rgba(34, 197, 94, 0.06)" : "var(--color-bg-subtle)",
+        border: isLoaded ? "1px solid rgba(34, 197, 94, 0.2)" : "1px solid transparent",
+      }}
     >
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-            {model.name.charAt(0).toUpperCase() + model.name.slice(1)}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium" style={{ color: "var(--color-text)" }}>
+              {model.name.charAt(0).toUpperCase() + model.name.slice(1)}
+            </h3>
             {isLoaded && (
-              <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
-                Loaded
+              <span
+                className="px-1.5 py-0.5 text-xs font-medium rounded"
+                style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", color: "#16a34a" }}
+              >
+                Active
               </span>
             )}
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {sizeLabels[model.size]} ({model.size_mb} MB)
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
+            {sizeLabels[model.size]} · {model.size_mb} MB
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {model.downloaded ? (
             <>
               {!isLoaded && (
                 <button
                   onClick={onLoad}
-                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
                 >
                   Load
                 </button>
@@ -134,7 +170,11 @@ function ModelCard({
               <button
                 onClick={onDelete}
                 disabled={isLoaded}
-                className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-40"
+                style={{
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  color: "#dc2626",
+                }}
               >
                 Delete
               </button>
@@ -143,7 +183,11 @@ function ModelCard({
             <button
               onClick={onDownload}
               disabled={isDownloading}
-              className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: "var(--color-text)",
+                color: "white",
+              }}
             >
               {isDownloading ? `${downloadProgress}%` : "Download"}
             </button>
@@ -152,10 +196,16 @@ function ModelCard({
       </div>
 
       {isDownloading && !model.downloaded && (
-        <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className="mt-2 h-1 rounded-full overflow-hidden"
+          style={{ backgroundColor: "var(--color-border)" }}
+        >
           <div
-            className="h-full bg-green-500 transition-all duration-300"
-            style={{ width: `${downloadProgress}%` }}
+            className="h-full rounded-full transition-all duration-300"
+            style={{
+              width: `${downloadProgress}%`,
+              backgroundColor: "var(--color-accent)",
+            }}
           />
         </div>
       )}

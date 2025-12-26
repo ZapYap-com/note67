@@ -8,23 +8,28 @@ interface TranscriptViewerProps {
 export function TranscriptViewer({ segments, isLoading }: TranscriptViewerProps) {
   if (isLoading) {
     return (
-      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-blue-500 mr-2" />
-        Transcribing...
+      <div className="flex items-center justify-center py-8">
+        <div
+          className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
+          style={{
+            borderColor: "var(--color-text-tertiary)",
+            borderTopColor: "transparent",
+          }}
+        />
       </div>
     );
   }
 
   if (segments.length === 0) {
     return (
-      <p className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+      <p className="text-center py-8 text-sm" style={{ color: "var(--color-text-tertiary)" }}>
         No transcript available.
       </p>
     );
   }
 
   return (
-    <div className="space-y-2 max-h-64 overflow-y-auto">
+    <div className="space-y-3 max-h-80 overflow-y-auto">
       {segments.map((segment) => (
         <TranscriptSegmentRow key={segment.id} segment={segment} />
       ))}
@@ -40,11 +45,16 @@ function TranscriptSegmentRow({ segment }: { segment: TranscriptSegment }) {
   };
 
   return (
-    <div className="flex gap-3 text-sm">
-      <span className="text-gray-400 dark:text-gray-500 font-mono shrink-0">
+    <div className="flex gap-3 group">
+      <span
+        className="text-xs font-mono shrink-0 pt-0.5"
+        style={{ color: "var(--color-text-tertiary)" }}
+      >
         {formatTime(segment.start_time)}
       </span>
-      <p className="text-gray-700 dark:text-gray-300">{segment.text}</p>
+      <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
+        {segment.text}
+      </p>
     </div>
   );
 }

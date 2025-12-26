@@ -1,71 +1,125 @@
-import { useState } from "react";
-import { MeetingEditor, MeetingSearch, ModelManager, OllamaSettings, SummaryPanel, TranscriptSearch } from "./components";
+import { useState, useMemo } from "react";
+import {
+  ModelManager,
+  OllamaSettings,
+  SummaryPanel,
+  TranscriptSearch,
+} from "./components";
 import { exportApi } from "./api";
-import { useMeetings, useModels, useOllama, useRecording, useSummaries, useTranscription } from "./hooks";
-import type { Meeting, SummaryType, TranscriptSegment, UpdateMeeting } from "./types";
+import {
+  useMeetings,
+  useModels,
+  useOllama,
+  useRecording,
+  useSummaries,
+  useTranscription,
+} from "./hooks";
+import type {
+  Meeting,
+  SummaryType,
+  TranscriptSegment,
+  UpdateMeeting,
+} from "./types";
 
 function App() {
   const {
     meetings,
     loading,
-    error,
-    searchQuery,
-    isSearching,
     createMeeting,
     updateMeeting,
-    searchMeetings,
-    clearSearch,
     endMeeting,
     deleteMeeting,
   } = useMeetings();
-  const {
-    isRecording,
-    audioLevel,
-    error: recordingError,
-    startRecording,
-    stopRecording,
-  } = useRecording();
+  const { isRecording, audioLevel, startRecording, stopRecording } =
+    useRecording();
   const { loadedModel } = useModels();
-  const {
-    isTranscribing,
-    transcript,
-    error: transcriptionError,
-    transcribe,
-    loadTranscript,
-  } = useTranscription();
+  const { isTranscribing, transcript, transcribe, loadTranscript } =
+    useTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
-  const [newTitle, setNewTitle] = useState("");
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(
+    null
+  );
   const [showModelManager, setShowModelManager] = useState(false);
   const [showOllamaSettings, setShowOllamaSettings] = useState(false);
-  const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
-  const [meetingTranscripts, setMeetingTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
-  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
-  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [meetingTranscripts, setMeetingTranscripts] = useState<
+    Record<string, TranscriptSegment[]>
+  >({});
+  const [activeTab, setActiveTab] = useState<
+    "notes" | "transcript" | "summary"
+  >("notes");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-    const meeting = await createMeeting(newTitle.trim());
-    setNewTitle("");
+  const selectedMeeting =
+    meetings.find((m) => m.id === selectedMeetingId) || null;
+  const currentTranscript = selectedMeetingId
+    ? meetingTranscripts[selectedMeetingId] || []
+    : [];
+
+  // Group meetings by date
+  const groupedMeetings = useMemo(() => {
+    const groups: { label: string; meetings: Meeting[] }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayMeetings: Meeting[] = [];
+    const olderGroups: Map<string, Meeting[]> = new Map();
+
+    meetings.forEach((meeting) => {
+      const date = new Date(meeting.started_at);
+      date.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor(
+        (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diffDays === 0) {
+        todayMeetings.push(meeting);
+      } else {
+        const label = diffDays === 1 ? "Yesterday" : `${diffDays} days ago`;
+        if (!olderGroups.has(label)) {
+          olderGroups.set(label, []);
+        }
+        olderGroups.get(label)!.push(meeting);
+      }
+    });
+
+    if (todayMeetings.length > 0) {
+      groups.push({ label: "Today", meetings: todayMeetings });
+    }
+
+    olderGroups.forEach((meetings, label) => {
+      groups.push({ label, meetings });
+    });
+
+    return groups;
+  }, [meetings]);
+
+  const handleStartMeeting = async () => {
+    const meeting = await createMeeting("Untitled");
+    setSelectedMeetingId(meeting.id);
     await startRecording(meeting.id);
   };
 
-  const handleEndMeeting = async (meetingId: string) => {
-    await stopRecording();
-    await endMeeting(meetingId);
+  const handleStopRecording = async () => {
+    if (selectedMeeting) {
+      await stopRecording();
+      await endMeeting(selectedMeeting.id);
+    }
   };
 
-  const handleTranscribe = async (meeting: Meeting) => {
-    if (!meeting.audio_path || !loadedModel) return;
-    const result = await transcribe(meeting.audio_path, meeting.id);
+  const handleTranscribe = async () => {
+    if (!selectedMeeting?.audio_path || !loadedModel) return;
+    const result = await transcribe(
+      selectedMeeting.audio_path,
+      selectedMeeting.id
+    );
     if (result) {
       setMeetingTranscripts((prev) => ({
         ...prev,
-        [meeting.id]: result.segments.map((s, idx) => ({
+        [selectedMeeting.id]: result.segments.map((s, idx) => ({
           id: idx,
-          meeting_id: meeting.id,
+          meeting_id: selectedMeeting.id,
           start_time: s.start_time,
           end_time: s.end_time,
           text: s.text,
@@ -73,470 +127,607 @@ function App() {
           created_at: new Date().toISOString(),
         })),
       }));
-      setExpandedMeetingId(meeting.id);
+      setActiveTab("transcript");
     }
   };
 
-  const handleLoadTranscript = async (meetingId: string) => {
-    await loadTranscript(meetingId);
-    if (transcript.length > 0) {
-      setMeetingTranscripts((prev) => ({
-        ...prev,
-        [meetingId]: transcript,
-      }));
-    }
-    setExpandedMeetingId((prev) => (prev === meetingId ? null : meetingId));
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString();
-  };
-
-  const handleUpdateMeeting = async (update: UpdateMeeting) => {
-    if (!editingMeeting) return;
-    await updateMeeting(editingMeeting.id, update);
-  };
-
-  const handleExportMarkdown = async (meetingId: string) => {
-    try {
-      const data = await exportApi.exportMarkdown(meetingId);
-      const path = await exportApi.saveToFile(data.markdown, data.filename);
-      setExportMessage(`Exported to ${path}`);
-      setTimeout(() => setExportMessage(null), 3000);
-    } catch (err) {
-      setExportMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setExportMessage(null), 3000);
+  const handleSelectMeeting = async (meeting: Meeting) => {
+    setSelectedMeetingId(meeting.id);
+    if (!meetingTranscripts[meeting.id]) {
+      await loadTranscript(meeting.id);
+      if (transcript.length > 0) {
+        setMeetingTranscripts((prev) => ({
+          ...prev,
+          [meeting.id]: transcript,
+        }));
+      }
     }
   };
 
-  const handleCopyMarkdown = async (meetingId: string) => {
-    try {
-      const data = await exportApi.exportMarkdown(meetingId);
-      await exportApi.copyToClipboard(data.markdown);
-      setExportMessage("Copied to clipboard!");
-      setTimeout(() => setExportMessage(null), 2000);
-    } catch (err) {
-      setExportMessage(`Copy failed: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setExportMessage(null), 3000);
+  const handleUpdateTitle = async (title: string) => {
+    if (selectedMeeting && title.trim()) {
+      await updateMeeting(selectedMeeting.id, { title: title.trim() });
     }
+    setEditingTitle(false);
   };
 
-  const displayError = error || recordingError || transcriptionError;
+  const handleUpdateDescription = async (description: string) => {
+    if (selectedMeeting) {
+      await updateMeeting(selectedMeeting.id, {
+        description: description.trim() || undefined,
+      });
+    }
+    setEditingDescription(false);
+  };
+
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Note67
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-8">
-              Your private, local meeting notes assistant
-            </p>
-          </div>
-          <div className="flex gap-2">
+    <div className="h-screen flex">
+      {/* Sidebar */}
+      <aside
+        className="flex flex-col border-r"
+        style={{
+          width: "var(--sidebar-width)",
+          backgroundColor: "var(--color-sidebar)",
+          borderColor: "var(--color-border)",
+        }}
+      >
+        {/* Sidebar Header */}
+        <div className="px-5 py-5 flex items-center justify-between">
+          <span
+            className="text-lg font-semibold"
+            style={{ color: "var(--color-text)" }}
+          >
+            Meetings
+          </span>
+          <div className="flex gap-1">
             <button
               onClick={() => setShowOllamaSettings(true)}
-              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="p-2 rounded-lg hover:bg-black/5 transition-colors"
+              title="AI Settings"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              <svg
+                className="w-4 h-4"
+                style={{ color: "var(--color-text-secondary)" }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
               </svg>
-              AI
-              {ollamaRunning && ollamaModel && (
-                <span className="w-2 h-2 bg-green-500 rounded-full" />
-              )}
             </button>
             <button
               onClick={() => setShowModelManager(true)}
-              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="p-2 rounded-lg hover:bg-black/5 transition-colors"
+              title="Whisper Models"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg
+                className="w-4 h-4"
+                style={{ color: "var(--color-text-secondary)" }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
-              Whisper
-              {loadedModel && (
-                <span className="px-1.5 py-0.5 text-xs bg-green-500 text-white rounded">
-                  {loadedModel}
-                </span>
-              )}
             </button>
           </div>
         </div>
 
-        {/* Recording Status */}
-        {isRecording && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-700 dark:text-red-300 font-medium">
-                Recording in progress
-              </span>
-              <AudioLevelMeter level={audioLevel} />
+        {/* Meeting List */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div
+              className="px-5 py-8 text-center"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Loading...
             </div>
-          </div>
-        )}
-
-        {/* Create Meeting Form */}
-        <form onSubmit={handleCreate} className="flex gap-2 mb-4">
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Meeting title..."
-            disabled={isRecording}
-            className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600
-                       bg-white dark:bg-gray-800 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <button
-            type="submit"
-            disabled={isRecording}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium
-                       hover:bg-blue-700 transition-colors
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Start Meeting
-          </button>
-        </form>
-
-        {/* Search */}
-        <div className="mb-8">
-          <MeetingSearch
-            searchQuery={searchQuery}
-            isSearching={isSearching}
-            onSearch={searchMeetings}
-            onClear={clearSearch}
-          />
-          {searchQuery && (
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Showing results for "{searchQuery}"
-            </p>
+          ) : groupedMeetings.length === 0 ? (
+            <div
+              className="px-5 py-12 text-center"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              No meetings yet
+            </div>
+          ) : (
+            groupedMeetings.map((group) => (
+              <div key={group.label} className="mb-2">
+                <div
+                  className="px-5 py-2 text-xs font-medium uppercase tracking-wider"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {group.label}
+                </div>
+                {group.meetings.map((meeting) => (
+                  <button
+                    key={meeting.id}
+                    onClick={() => handleSelectMeeting(meeting)}
+                    className="w-full px-5 py-3 text-left transition-colors"
+                    style={{
+                      backgroundColor:
+                        selectedMeetingId === meeting.id
+                          ? "var(--color-sidebar-selected)"
+                          : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedMeetingId !== meeting.id) {
+                        e.currentTarget.style.backgroundColor =
+                          "var(--color-sidebar-hover)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedMeetingId !== meeting.id) {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
+                  >
+                    <div
+                      className="font-medium truncate"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {meeting.title}
+                    </div>
+                    <div
+                      className="text-sm mt-0.5"
+                      style={{ color: "var(--color-text-secondary)" }}
+                    >
+                      {formatTime(meeting.started_at)}
+                      {!meeting.ended_at && (
+                        <span
+                          className="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
+                          style={{
+                            backgroundColor: "var(--color-accent-light)",
+                            color: "var(--color-accent)",
+                          }}
+                        >
+                          Live
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))
           )}
         </div>
 
-        {/* Error State */}
-        {displayError && (
-          <div className="p-4 mb-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg">
-            {displayError}
+        {/* Sidebar Footer */}
+        <div
+          className="px-4 py-4 border-t"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <div
+            className="flex flex-wrap items-center gap-2 text-xs"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            {loadedModel && (
+              <span
+                className="px-2 py-1 rounded"
+                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
+              >
+                Whisper: {loadedModel}
+              </span>
+            )}
+            {ollamaRunning && ollamaModel && (
+              <span
+                className="px-2 py-1 rounded"
+                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
+              >
+                AI: {ollamaModel.split(":")[0]}
+              </span>
+            )}
           </div>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <p className="text-gray-500 dark:text-gray-400">Loading meetings...</p>
-        )}
-
-        {/* Meetings List */}
-        {!loading && meetings.length === 0 && (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            No meetings yet. Start your first meeting above.
-          </p>
-        )}
-
-        {/* Export Message Toast */}
-        {exportMessage && (
-          <div className="fixed bottom-4 right-4 p-4 bg-gray-800 text-white rounded-lg shadow-lg z-50">
-            {exportMessage}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {meetings.map((meeting) => (
-            <MeetingCard
-              key={meeting.id}
-              meeting={meeting}
-              isRecording={isRecording}
-              isTranscribing={isTranscribing}
-              hasModel={!!loadedModel}
-              isExpanded={expandedMeetingId === meeting.id}
-              activeTab={activeTab}
-              transcript={meetingTranscripts[meeting.id] || []}
-              ollamaRunning={ollamaRunning}
-              hasOllamaModel={!!ollamaModel}
-              onEnd={() => handleEndMeeting(meeting.id)}
-              onEdit={() => setEditingMeeting(meeting)}
-              onExport={() => handleExportMarkdown(meeting.id)}
-              onCopy={() => handleCopyMarkdown(meeting.id)}
-              onDelete={() => deleteMeeting(meeting.id)}
-              onTranscribe={() => handleTranscribe(meeting)}
-              onToggleTranscript={() => handleLoadTranscript(meeting.id)}
-              onTabChange={setActiveTab}
-              formatDate={formatDate}
-            />
-          ))}
         </div>
-      </div>
+      </aside>
 
-      {/* Model Manager Modal */}
+      {/* Main Content */}
+      <main
+        className="flex-1 flex flex-col relative"
+        style={{ backgroundColor: "var(--color-bg)" }}
+      >
+        {selectedMeeting ? (
+          <MeetingView
+            meeting={selectedMeeting}
+            transcript={currentTranscript}
+            isRecording={isRecording && !selectedMeeting.ended_at}
+            isTranscribing={isTranscribing}
+            audioLevel={audioLevel}
+            activeTab={activeTab}
+            editingTitle={editingTitle}
+            editingDescription={editingDescription}
+            hasModel={!!loadedModel}
+            ollamaRunning={ollamaRunning}
+            hasOllamaModel={!!ollamaModel}
+            onTabChange={setActiveTab}
+            onEditTitle={() => setEditingTitle(true)}
+            onEditDescription={() => setEditingDescription(true)}
+            onUpdateTitle={handleUpdateTitle}
+            onUpdateDescription={handleUpdateDescription}
+            onStopRecording={handleStopRecording}
+            onTranscribe={handleTranscribe}
+            onDelete={() => {
+              deleteMeeting(selectedMeeting.id);
+              setSelectedMeetingId(null);
+            }}
+            onExport={async () => {
+              const data = await exportApi.exportMarkdown(selectedMeeting.id);
+              await exportApi.saveToFile(data.markdown, data.filename);
+            }}
+            onCopy={async () => {
+              const data = await exportApi.exportMarkdown(selectedMeeting.id);
+              await exportApi.copyToClipboard(data.markdown);
+            }}
+          />
+        ) : (
+          <EmptyState />
+        )}
+
+        {/* Start Listening Button */}
+        {!isRecording && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
+            <button
+              onClick={handleStartMeeting}
+              className="flex items-center gap-3 rounded-full font-normal text-sm shadow-lg transition-transform hover:scale-105"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "white",
+                padding: "3px 6px",
+              }}
+            >
+              <span
+                className="rounded-full bg-white"
+                style={{ width: "10px", height: "10px" }}
+              />
+              Start listening
+            </button>
+          </div>
+        )}
+      </main>
+
+      {/* Modals */}
       {showModelManager && (
         <ModelManager onClose={() => setShowModelManager(false)} />
       )}
-
-      {/* Ollama Settings Modal */}
       {showOllamaSettings && (
         <OllamaSettings onClose={() => setShowOllamaSettings(false)} />
       )}
-
-      {/* Meeting Editor Modal */}
-      {editingMeeting && (
-        <MeetingEditor
-          meeting={editingMeeting}
-          onSave={handleUpdateMeeting}
-          onClose={() => setEditingMeeting(null)}
-        />
-      )}
-    </main>
-  );
-}
-
-function AudioLevelMeter({ level }: { level: number }) {
-  const normalizedLevel = Math.min(100, level * 500);
-
-  return (
-    <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-green-500 transition-all duration-75"
-        style={{ width: `${normalizedLevel}%` }}
-      />
     </div>
   );
 }
 
-interface MeetingCardProps {
-  meeting: Meeting;
-  isRecording: boolean;
-  isTranscribing: boolean;
-  hasModel: boolean;
-  isExpanded: boolean;
-  activeTab: "transcript" | "summary";
-  transcript: TranscriptSegment[];
-  ollamaRunning: boolean;
-  hasOllamaModel: boolean;
-  onEnd: () => void;
-  onEdit: () => void;
-  onExport: () => void;
-  onCopy: () => void;
-  onDelete: () => void;
-  onTranscribe: () => void;
-  onToggleTranscript: () => void;
-  onTabChange: (tab: "transcript" | "summary") => void;
-  formatDate: (date: string) => string;
+function EmptyState() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center pb-24">
+      <div className="text-center max-w-md px-8">
+        <h2
+          className="text-3xl font-semibold mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
+          Note67
+        </h2>
+        <p
+          className="text-base leading-relaxed"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Select a meeting from the sidebar or start a new one
+        </p>
+      </div>
+    </div>
+  );
 }
 
-function MeetingCard({
+interface MeetingViewProps {
+  meeting: Meeting;
+  transcript: TranscriptSegment[];
+  isRecording: boolean;
+  isTranscribing: boolean;
+  audioLevel: number;
+  activeTab: "notes" | "transcript" | "summary";
+  editingTitle: boolean;
+  editingDescription: boolean;
+  hasModel: boolean;
+  ollamaRunning: boolean;
+  hasOllamaModel: boolean;
+  onTabChange: (tab: "notes" | "transcript" | "summary") => void;
+  onEditTitle: () => void;
+  onEditDescription: () => void;
+  onUpdateTitle: (title: string) => void;
+  onUpdateDescription: (desc: string) => void;
+  onStopRecording: () => void;
+  onTranscribe: () => void;
+  onDelete: () => void;
+  onExport: () => void;
+  onCopy: () => void;
+}
+
+function MeetingView({
   meeting,
+  transcript,
   isRecording,
   isTranscribing,
-  hasModel,
-  isExpanded,
+  audioLevel,
   activeTab,
-  transcript,
+  editingTitle,
+  editingDescription,
+  hasModel,
   ollamaRunning,
   hasOllamaModel,
-  onEnd,
-  onEdit,
+  onTabChange,
+  onEditTitle,
+  onUpdateTitle,
+  onUpdateDescription,
+  onStopRecording,
+  onTranscribe,
+  onDelete,
   onExport,
   onCopy,
-  onDelete,
-  onTranscribe,
-  onToggleTranscript,
-  onTabChange,
-  formatDate,
-}: MeetingCardProps) {
-  const isActive = !meeting.ended_at;
-  const canTranscribe = !isActive && meeting.audio_path && hasModel && !isTranscribing;
-  const hasTranscript = transcript.length > 0;
+}: MeetingViewProps) {
+  const [titleValue, setTitleValue] = useState(meeting.title);
+  const [descValue, setDescValue] = useState(meeting.description || "");
 
-  // Use summaries hook for this meeting
-  const { summaries, isGenerating, generateSummary, deleteSummary } = useSummaries(
-    isExpanded ? meeting.id : null
-  );
+  const { summaries, isGenerating, generateSummary, deleteSummary } =
+    useSummaries(meeting.id);
 
-  const handleGenerateSummary = (type: SummaryType, customPrompt?: string) => {
-    generateSummary(type, customPrompt);
-  };
+  const canTranscribe =
+    meeting.ended_at && meeting.audio_path && hasModel && !isTranscribing;
 
   return (
-    <div
-      className={`rounded-lg border ${
-        isActive
-          ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-      }`}
-    >
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <header
+        className="px-8 py-6 border-b flex items-center justify-between"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <div className="flex-1">
+          {editingTitle ? (
+            <input
+              autoFocus
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onBlur={() => onUpdateTitle(titleValue)}
+              onKeyDown={(e) => e.key === "Enter" && onUpdateTitle(titleValue)}
+              className="text-2xl font-semibold w-full"
+              style={{ color: "var(--color-text)" }}
+            />
+          ) : (
+            <h1
+              onClick={onEditTitle}
+              className="text-2xl font-semibold cursor-text"
+              style={{ color: "var(--color-text)" }}
+            >
               {meeting.title}
-              {isActive && (
-                <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
-                  Active
-                </span>
-              )}
-              {isActive && isRecording && (
-                <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                  Recording
-                </span>
-              )}
-            </h3>
-            {meeting.description && (
-              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                {meeting.description}
-              </p>
-            )}
-            {meeting.participants && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                <span className="font-medium">Participants:</span> {meeting.participants}
-              </p>
-            )}
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Started: {formatDate(meeting.started_at)}
-            </p>
-            {meeting.ended_at && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Ended: {formatDate(meeting.ended_at)}
-              </p>
-            )}
-            {meeting.audio_path && (
-              <p className="text-sm text-blue-500 dark:text-blue-400 mt-1">
-                Audio saved
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2 shrink-0 flex-wrap">
-            {isActive ? (
+            </h1>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {isRecording && (
+            <button
+              onClick={onStopRecording}
+              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium"
+              style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+            >
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              Stop
+            </button>
+          )}
+          {!isRecording && meeting.ended_at && (
+            <>
               <button
-                onClick={onEnd}
-                className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
+                onClick={onTranscribe}
+                disabled={!canTranscribe}
+                className="px-3 py-1.5 text-sm rounded-md transition-colors disabled:opacity-40"
+                style={{
+                  backgroundColor: "var(--color-sidebar)",
+                  color: "var(--color-text)",
+                }}
               >
-                End
+                {isTranscribing ? "Transcribing..." : "Transcribe"}
               </button>
-            ) : (
-              <>
-                {meeting.audio_path && (
-                  <button
-                    onClick={canTranscribe ? onTranscribe : undefined}
-                    disabled={!canTranscribe}
-                    title={!hasModel ? "Load a model first" : undefined}
-                    className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isTranscribing ? "..." : "Transcribe"}
-                  </button>
-                )}
-                {hasTranscript && (
-                  <button
-                    onClick={onToggleTranscript}
-                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                  >
-                    {isExpanded ? "Hide" : "Show"}
-                  </button>
-                )}
-              </>
-            )}
-            <button
-              onClick={onEdit}
-              className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-              title="Edit meeting details"
-            >
-              Edit
-            </button>
-            {!isActive && (
-              <>
-                <button
-                  onClick={onExport}
-                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                  title="Export to Markdown file"
+              <button
+                onClick={onExport}
+                className="p-1.5 rounded-md hover:bg-black/5"
+                title="Export"
+              >
+                <svg
+                  className="w-5 h-5"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  Export
-                </button>
-                <button
-                  onClick={onCopy}
-                  className="px-3 py-1 text-sm bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors"
-                  title="Copy to clipboard"
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={onCopy}
+                className="p-1.5 rounded-md hover:bg-black/5"
+                title="Copy"
+              >
+                <svg
+                  className="w-5 h-5"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  Copy
-                </button>
-              </>
-            )}
-            <button
-              onClick={onDelete}
-              disabled={isActive && isRecording}
-              className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Delete
-            </button>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={onDelete}
+                className="p-1.5 rounded-md hover:bg-black/5"
+                title="Delete"
+              >
+                <svg
+                  className="w-5 h-5"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      {/* Recording indicator */}
+      {isRecording && (
+        <div
+          className="px-8 py-3 flex items-center gap-3"
+          style={{ backgroundColor: "var(--color-accent-light)" }}
+        >
+          <span
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{ backgroundColor: "var(--color-accent)" }}
+          />
+          <span
+            className="text-sm font-medium"
+            style={{ color: "var(--color-accent)" }}
+          >
+            Recording
+          </span>
+          <div
+            className="flex-1 h-1.5 rounded-full overflow-hidden"
+            style={{ backgroundColor: "rgba(229, 77, 46, 0.2)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-100"
+              style={{
+                width: `${Math.min(100, audioLevel * 400)}%`,
+                backgroundColor: "var(--color-accent)",
+              }}
+            />
           </div>
         </div>
+      )}
+
+      {/* Tabs */}
+      <div
+        className="px-8 border-b flex gap-8"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        {(["notes", "transcript", "summary"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => onTabChange(tab)}
+            className="py-4 font-medium capitalize transition-colors"
+            style={{
+              color:
+                activeTab === tab
+                  ? "var(--color-text)"
+                  : "var(--color-text-secondary)",
+              borderBottom:
+                activeTab === tab
+                  ? "2px solid var(--color-text)"
+                  : "2px solid transparent",
+              marginBottom: "-1px",
+            }}
+          >
+            {tab}
+            {tab === "transcript" && transcript.length > 0 && (
+              <span
+                className="ml-1.5 text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                ({transcript.length})
+              </span>
+            )}
+            {tab === "summary" && summaries.length > 0 && (
+              <span
+                className="ml-1.5 text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                ({summaries.length})
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Transcription in progress */}
-      {isTranscribing && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-purple-50 dark:bg-purple-900/20">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-300 border-t-purple-600" />
-            <span className="text-sm text-purple-700 dark:text-purple-300">
-              Transcribing audio...
-            </span>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-8 py-6">
+        {activeTab === "notes" && (
+          <div>
+            <textarea
+              value={descValue}
+              onChange={(e) => setDescValue(e.target.value)}
+              onBlur={() => onUpdateDescription(descValue)}
+              placeholder="Take notes or press / for commands..."
+              className="w-full min-h-[400px] text-lg leading-relaxed resize-none"
+              style={{ color: "var(--color-text)" }}
+            />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Expanded Section with Tabs */}
-      {isExpanded && hasTranscript && !isTranscribing && (
-        <div className="border-t border-gray-200 dark:border-gray-700">
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => onTabChange("transcript")}
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === "transcript"
-                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
+        {activeTab === "transcript" &&
+          (transcript.length > 0 ? (
+            <TranscriptSearch segments={transcript} />
+          ) : (
+            <div
+              className="text-center py-16"
+              style={{ color: "var(--color-text-secondary)" }}
             >
-              Transcript
-            </button>
-            <button
-              onClick={() => onTabChange("summary")}
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === "summary"
-                  ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-            >
-              AI Summary
-              {summaries.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-full">
-                  {summaries.length}
-                </span>
-              )}
-            </button>
-          </div>
+              {meeting.audio_path
+                ? "Transcribe this meeting to see the transcript"
+                : "No audio recorded"}
+            </div>
+          ))}
 
-          {/* Tab Content */}
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
-            {activeTab === "transcript" ? (
-              <TranscriptSearch segments={transcript} />
-            ) : (
-              <SummaryPanel
-                summaries={summaries}
-                isGenerating={isGenerating}
-                hasTranscript={hasTranscript}
-                hasOllamaModel={hasOllamaModel}
-                ollamaRunning={ollamaRunning}
-                onGenerate={handleGenerateSummary}
-                onDelete={deleteSummary}
-              />
-            )}
-          </div>
-        </div>
-      )}
+        {activeTab === "summary" && (
+          <SummaryPanel
+            summaries={summaries}
+            isGenerating={isGenerating}
+            hasTranscript={transcript.length > 0}
+            hasOllamaModel={hasOllamaModel}
+            ollamaRunning={ollamaRunning}
+            onGenerate={(type: SummaryType, prompt?: string) =>
+              generateSummary(type, prompt)
+            }
+            onDelete={deleteSummary}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -44,49 +44,67 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl overflow-hidden"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
             Edit Meeting
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-1 rounded-lg transition-colors"
+            style={{ color: "var(--color-text-tertiary)" }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <div
+              className="px-3 py-2 rounded-lg text-sm"
+              style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }}
+            >
+              {error}
             </div>
           )}
 
           <div>
             <label
               htmlFor="title"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              className="block text-sm font-medium mb-1.5"
+              style={{ color: "var(--color-text-secondary)" }}
             >
-              Title *
+              Title
             </label>
             <input
               id="title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 text-sm rounded-lg outline-none transition-colors"
+              style={{
+                backgroundColor: "var(--color-bg-subtle)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+              }}
               placeholder="Meeting title..."
             />
           </div>
@@ -94,7 +112,8 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              className="block text-sm font-medium mb-1.5"
+              style={{ color: "var(--color-text-secondary)" }}
             >
               Description
             </label>
@@ -103,17 +122,21 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Meeting description or notes..."
+              className="w-full px-3 py-2.5 text-sm rounded-lg outline-none transition-colors resize-none"
+              style={{
+                backgroundColor: "var(--color-bg-subtle)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+              }}
+              placeholder="Meeting notes or description..."
             />
           </div>
 
           <div>
             <label
               htmlFor="participants"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              className="block text-sm font-medium mb-1.5"
+              style={{ color: "var(--color-text-secondary)" }}
             >
               Participants
             </label>
@@ -122,30 +145,45 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
               type="text"
               value={participants}
               onChange={(e) => setParticipants(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="John Doe, Jane Smith (comma-separated)"
+              className="w-full px-3 py-2.5 text-sm rounded-lg outline-none transition-colors"
+              style={{
+                backgroundColor: "var(--color-bg-subtle)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+              }}
+              placeholder="John, Jane, Alex..."
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Enter participant names separated by commas
+            <p className="mt-1.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+              Separate names with commas
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+          {/* Actions */}
+          <div
+            className="flex justify-end gap-2 pt-4"
+            style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+          >
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                backgroundColor: "var(--color-bg-subtle)",
+                color: "var(--color-text-secondary)",
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: "var(--color-text)",
+                color: "white",
+              }}
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </form>

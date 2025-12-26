@@ -16,56 +16,74 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            AI Settings (Ollama)
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl overflow-hidden"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          boxShadow: "var(--shadow-lg)",
+          maxHeight: "80vh",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
+            AI Settings
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-1 rounded-lg transition-colors"
+            style={{ color: "var(--color-text-tertiary)" }}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[60vh]">
+        {/* Content */}
+        <div className="p-5 overflow-y-auto" style={{ maxHeight: "60vh" }}>
           {/* Status */}
           <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  isRunning ? "bg-green-500" : "bg-red-500"
-                }`}
-              />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Ollama Status: {isRunning ? "Running" : "Not Running"}
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: isRunning ? "#22c55e" : "#ef4444" }}
+                />
+                <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+                  Ollama {isRunning ? "Running" : "Not Running"}
+                </span>
+              </div>
               <button
                 onClick={checkStatus}
                 disabled={loading}
-                className="ml-auto text-sm text-blue-500 hover:text-blue-600"
+                className="text-sm transition-colors"
+                style={{ color: "var(--color-accent)" }}
               >
                 {loading ? "Checking..." : "Refresh"}
               </button>
             </div>
 
             {!isRunning && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Ollama is not running. Please start Ollama first:
-                </p>
-                <ol className="mt-2 text-sm text-yellow-700 dark:text-yellow-300 list-decimal list-inside space-y-1">
+              <div
+                className="mt-3 p-3 rounded-xl text-sm"
+                style={{
+                  backgroundColor: "rgba(245, 158, 11, 0.08)",
+                  color: "#b45309",
+                }}
+              >
+                <p className="font-medium mb-2">Start Ollama first:</p>
+                <ol className="list-decimal list-inside space-y-1 text-xs">
                   <li>
-                    Install Ollama from{" "}
+                    Install from{" "}
                     <a
                       href="https://ollama.ai"
                       target="_blank"
@@ -76,14 +94,10 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
                     </a>
                   </li>
                   <li>
-                    Run <code className="px-1 bg-yellow-100 dark:bg-yellow-800 rounded">ollama serve</code>{" "}
-                    in terminal
+                    Run <code className="px-1 py-0.5 rounded" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>ollama serve</code>
                   </li>
                   <li>
-                    Pull a model:{" "}
-                    <code className="px-1 bg-yellow-100 dark:bg-yellow-800 rounded">
-                      ollama pull llama3.2
-                    </code>
+                    Pull a model: <code className="px-1 py-0.5 rounded" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>ollama pull llama3.2</code>
                   </li>
                 </ol>
               </div>
@@ -92,63 +106,76 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <div
+              className="mb-4 px-3 py-2 rounded-lg text-sm"
+              style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }}
+            >
+              {error}
             </div>
           )}
 
           {/* Models List */}
           {isRunning && (
             <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
                 Available Models
               </h3>
 
               {models.length === 0 ? (
-                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    No models found. Pull a model using:
+                <div
+                  className="p-4 rounded-xl text-center"
+                  style={{ backgroundColor: "var(--color-bg-subtle)" }}
+                >
+                  <p className="text-sm mb-2" style={{ color: "var(--color-text-secondary)" }}>
+                    No models found
                   </p>
-                  <code className="block mt-2 text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                  <code className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
                     ollama pull llama3.2
                   </code>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {models.map((model) => (
-                    <div
+                    <button
                       key={model.name}
-                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedModel === model.name
-                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
-                          : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      }`}
                       onClick={() => selectModel(model.name)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors"
+                      style={{
+                        backgroundColor:
+                          selectedModel === model.name
+                            ? "rgba(59, 130, 246, 0.06)"
+                            : "var(--color-bg-subtle)",
+                        border:
+                          selectedModel === model.name
+                            ? "1px solid rgba(59, 130, 246, 0.2)"
+                            : "1px solid transparent",
+                      }}
                     >
-                      <div className="flex items-center gap-3">
+                      {/* Radio indicator */}
+                      <span
+                        className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center"
+                        style={{
+                          border: selectedModel === model.name
+                            ? "none"
+                            : "2px solid var(--color-border)",
+                          backgroundColor: selectedModel === model.name ? "var(--color-accent)" : "transparent",
+                        }}
+                      >
                         {selectedModel === model.name && (
-                          <svg
-                            className="w-5 h-5 text-indigo-500"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clipRule="evenodd"
-                            />
+                          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {model.name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatSize(model.size)}
-                          </p>
-                        </div>
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate" style={{ color: "var(--color-text)" }}>
+                          {model.name}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                          {formatSize(model.size)}
+                        </p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -156,12 +183,20 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
           )}
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
+        {/* Footer */}
+        <div
+          className="flex justify-end px-5 py-4"
+          style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+        >
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+            style={{
+              backgroundColor: "var(--color-bg-subtle)",
+              color: "var(--color-text-secondary)",
+            }}
           >
-            Close
+            Done
           </button>
         </div>
       </div>
