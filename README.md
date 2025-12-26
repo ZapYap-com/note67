@@ -6,13 +6,30 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 
 - [x] Meeting management (create, end, delete)
 - [x] SQLite database for local storage
-- [x] Transcript viewer with search
+- [x] Audio recording (microphone)
+- [x] Local transcription with Whisper
+- [x] Speaker distinction (You vs Others) on macOS
+- [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
-- [x] Settings with Profile, Whisper, Ollama, Best Practices tabs
+- [x] Export to Markdown
+- [x] Settings with Profile, Whisper, Ollama, System tabs
 - [x] Custom context menus
-- [ ] Audio capture during meetings
-- [ ] Local transcription with Whisper
-- [ ] Cross-platform (macOS, Windows, Linux)
+- [x] System tray support
+- [ ] Cross-platform system audio (Windows, Linux)
+
+## Speaker Distinction (macOS)
+
+On macOS 13+, Note67 can distinguish between your voice and other meeting participants:
+
+| Source | Speaker Label | How it works |
+|--------|---------------|--------------|
+| Microphone | "You" | Your voice via mic input |
+| System Audio | "Others" | Meeting participants via ScreenCaptureKit |
+
+**Requirements:**
+- macOS 13.0 (Ventura) or later
+- Screen Recording permission (System Settings → Privacy & Security → Screen Recording)
+- Microphone permission
 
 ## Tech Stack
 
@@ -22,12 +39,15 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 | Backend | Rust (Tauri v2) |
 | State | Zustand |
 | Database | SQLite (rusqlite) |
-| AI | Ollama (local LLMs), whisper-rs (planned) |
+| Transcription | whisper-rs (local Whisper models) |
+| AI Summaries | Ollama (local LLMs) |
+| System Audio | ScreenCaptureKit (macOS), objc2 bindings |
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://rustup.rs/)
+- [Ollama](https://ollama.ai/) (for AI summaries)
 
 ```bash
 # Install Rust
@@ -35,6 +55,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install Tauri CLI
 cargo install tauri-cli
+
+# Install Ollama and pull a model
+brew install ollama
+ollama pull llama3.2
 ```
 
 ## Development
@@ -69,16 +93,28 @@ note67/
 │   ├── hooks/                # React hooks
 │   ├── stores/               # Zustand state
 │   ├── types/                # TypeScript interfaces
-│   ├── utils/                # Utilities (seeder, etc.)
 │   └── App.tsx
 ├── src-tauri/                # Rust backend
 │   ├── src/
+│   │   ├── audio/            # Audio recording & system audio capture
 │   │   ├── commands/         # Tauri commands
 │   │   ├── db/               # SQLite database
+│   │   ├── transcription/    # Whisper integration
 │   │   └── lib.rs
+│   ├── Info.plist            # macOS permission descriptions
+│   ├── entitlements.plist    # macOS app entitlements
 │   └── Cargo.toml
 └── package.json
 ```
+
+## macOS Permissions
+
+Note67 requires the following permissions on macOS:
+
+| Permission | Purpose | When prompted |
+|------------|---------|---------------|
+| Microphone | Record your voice | First recording |
+| Screen Recording | Capture system audio (others' voices) | When enabling speaker distinction |
 
 ## License
 
