@@ -9,10 +9,14 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Audio recording (microphone)
 - [x] Local transcription with Whisper
 - [x] Speaker distinction (You vs Others) on macOS
+- [x] Acoustic Echo Cancellation (AEC) for speaker usage
+- [x] Live transcription during recording
+- [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
 - [x] Export to Markdown
 - [x] Settings with Profile, Whisper, Ollama, System tabs
+- [x] Dark mode support
 - [x] Custom context menus
 - [x] System tray support
 - [ ] Cross-platform system audio (Windows, Linux)
@@ -31,6 +35,21 @@ On macOS 13+, Note67 can distinguish between your voice and other meeting partic
 - Screen Recording permission (System Settings → Privacy & Security → Screen Recording)
 - Microphone permission
 
+## Acoustic Echo Cancellation (AEC)
+
+When using speakers instead of headphones, your microphone picks up audio from your speakers, causing duplicate transcriptions. Note67 includes built-in AEC to handle this:
+
+**How it works:**
+1. System audio is captured as the "reference signal"
+2. Microphone input contains your voice + speaker echo
+3. NLMS adaptive filter subtracts the reference from mic input
+4. Result: clean voice signal without echo
+
+**For best results:**
+- Headphones are still recommended for optimal quality
+- AEC handles up to 150ms of echo delay
+- Works automatically when system audio capture is enabled
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -42,6 +61,7 @@ On macOS 13+, Note67 can distinguish between your voice and other meeting partic
 | Transcription | whisper-rs (local Whisper models) |
 | AI Summaries | Ollama (local LLMs) |
 | System Audio | ScreenCaptureKit (macOS), objc2 bindings |
+| Echo Cancellation | NLMS adaptive filter |
 
 ## Prerequisites
 
@@ -96,10 +116,13 @@ note67/
 │   └── App.tsx
 ├── src-tauri/                # Rust backend
 │   ├── src/
-│   │   ├── audio/            # Audio recording & system audio capture
+│   │   ├── audio/            # Audio recording, system capture & AEC
+│   │   │   ├── aec.rs        # Acoustic echo cancellation
+│   │   │   ├── macos.rs      # ScreenCaptureKit integration
+│   │   │   └── recorder.rs   # Microphone recording
 │   │   ├── commands/         # Tauri commands
 │   │   ├── db/               # SQLite database
-│   │   ├── transcription/    # Whisper integration
+│   │   ├── transcription/    # Whisper integration & live transcription
 │   │   └── lib.rs
 │   ├── Info.plist            # macOS permission descriptions
 │   ├── entitlements.plist    # macOS app entitlements
