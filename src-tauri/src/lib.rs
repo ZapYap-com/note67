@@ -1,9 +1,10 @@
+mod ai;
 mod audio;
 mod commands;
 mod db;
 mod transcription;
 
-use commands::{init_transcription_state, AudioState};
+use commands::{init_transcription_state, AiState, AudioState};
 use db::Database;
 use tauri::Manager;
 
@@ -20,6 +21,7 @@ pub fn run() {
             let db = Database::new(app.handle())?;
             app.manage(db);
             app.manage(AudioState::default());
+            app.manage(AiState::default());
             let transcription_state = init_transcription_state(app.handle());
             app.manage(transcription_state);
             Ok(())
@@ -45,6 +47,15 @@ pub fn run() {
             commands::transcribe_audio,
             commands::is_transcribing,
             commands::get_transcript,
+            // AI commands
+            commands::get_ollama_status,
+            commands::list_ollama_models,
+            commands::select_ollama_model,
+            commands::get_selected_model,
+            commands::is_ai_generating,
+            commands::generate_summary,
+            commands::get_meeting_summaries,
+            commands::delete_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

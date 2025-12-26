@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ModelManager, TranscriptSearch } from "./components";
-import { useMeetings, useModels, useRecording, useTranscription } from "./hooks";
-import type { Meeting, TranscriptSegment } from "./types";
+import { ModelManager, OllamaSettings, SummaryPanel, TranscriptSearch } from "./components";
+import { useMeetings, useModels, useOllama, useRecording, useSummaries, useTranscription } from "./hooks";
+import type { Meeting, SummaryType, TranscriptSegment } from "./types";
 
 function App() {
   const { meetings, loading, error, createMeeting, endMeeting, deleteMeeting } =
@@ -21,10 +21,13 @@ function App() {
     transcribe,
     loadTranscript,
   } = useTranscription();
+  const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
   const [newTitle, setNewTitle] = useState("");
   const [showModelManager, setShowModelManager] = useState(false);
+  const [showOllamaSettings, setShowOllamaSettings] = useState(false);
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
   const [meetingTranscripts, setMeetingTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -89,21 +92,35 @@ function App() {
               Your private, local meeting notes assistant
             </p>
           </div>
-          <button
-            onClick={() => setShowModelManager(true)}
-            className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Models
-            {loadedModel && (
-              <span className="px-1.5 py-0.5 text-xs bg-green-500 text-white rounded">
-                {loadedModel}
-              </span>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowOllamaSettings(true)}
+              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              AI
+              {ollamaRunning && ollamaModel && (
+                <span className="w-2 h-2 bg-green-500 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setShowModelManager(true)}
+              className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Whisper
+              {loadedModel && (
+                <span className="px-1.5 py-0.5 text-xs bg-green-500 text-white rounded">
+                  {loadedModel}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Recording Status */}
@@ -171,11 +188,15 @@ function App() {
               isTranscribing={isTranscribing}
               hasModel={!!loadedModel}
               isExpanded={expandedMeetingId === meeting.id}
+              activeTab={activeTab}
               transcript={meetingTranscripts[meeting.id] || []}
+              ollamaRunning={ollamaRunning}
+              hasOllamaModel={!!ollamaModel}
               onEnd={() => handleEndMeeting(meeting.id)}
               onDelete={() => deleteMeeting(meeting.id)}
               onTranscribe={() => handleTranscribe(meeting)}
               onToggleTranscript={() => handleLoadTranscript(meeting.id)}
+              onTabChange={setActiveTab}
               formatDate={formatDate}
             />
           ))}
@@ -185,6 +206,11 @@ function App() {
       {/* Model Manager Modal */}
       {showModelManager && (
         <ModelManager onClose={() => setShowModelManager(false)} />
+      )}
+
+      {/* Ollama Settings Modal */}
+      {showOllamaSettings && (
+        <OllamaSettings onClose={() => setShowOllamaSettings(false)} />
       )}
     </main>
   );
@@ -209,11 +235,15 @@ interface MeetingCardProps {
   isTranscribing: boolean;
   hasModel: boolean;
   isExpanded: boolean;
+  activeTab: "transcript" | "summary";
   transcript: TranscriptSegment[];
+  ollamaRunning: boolean;
+  hasOllamaModel: boolean;
   onEnd: () => void;
   onDelete: () => void;
   onTranscribe: () => void;
   onToggleTranscript: () => void;
+  onTabChange: (tab: "transcript" | "summary") => void;
   formatDate: (date: string) => string;
 }
 
@@ -223,15 +253,29 @@ function MeetingCard({
   isTranscribing,
   hasModel,
   isExpanded,
+  activeTab,
   transcript,
+  ollamaRunning,
+  hasOllamaModel,
   onEnd,
   onDelete,
   onTranscribe,
   onToggleTranscript,
+  onTabChange,
   formatDate,
 }: MeetingCardProps) {
   const isActive = !meeting.ended_at;
   const canTranscribe = !isActive && meeting.audio_path && hasModel && !isTranscribing;
+  const hasTranscript = transcript.length > 0;
+
+  // Use summaries hook for this meeting
+  const { summaries, isGenerating, generateSummary, deleteSummary } = useSummaries(
+    isExpanded ? meeting.id : null
+  );
+
+  const handleGenerateSummary = (type: SummaryType, customPrompt?: string) => {
+    generateSummary(type, customPrompt);
+  };
 
   return (
     <div
@@ -292,7 +336,7 @@ function MeetingCard({
                     {isTranscribing ? "..." : "Transcribe"}
                   </button>
                 )}
-                {transcript.length > 0 && (
+                {hasTranscript && (
                   <button
                     onClick={onToggleTranscript}
                     className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
@@ -325,13 +369,54 @@ function MeetingCard({
         </div>
       )}
 
-      {/* Transcript Section */}
-      {isExpanded && transcript.length > 0 && !isTranscribing && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Transcript
-          </h4>
-          <TranscriptSearch segments={transcript} />
+      {/* Expanded Section with Tabs */}
+      {isExpanded && hasTranscript && !isTranscribing && (
+        <div className="border-t border-gray-200 dark:border-gray-700">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => onTabChange("transcript")}
+              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "transcript"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Transcript
+            </button>
+            <button
+              onClick={() => onTabChange("summary")}
+              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "summary"
+                  ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              AI Summary
+              {summaries.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-full">
+                  {summaries.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
+            {activeTab === "transcript" ? (
+              <TranscriptSearch segments={transcript} />
+            ) : (
+              <SummaryPanel
+                summaries={summaries}
+                isGenerating={isGenerating}
+                hasTranscript={hasTranscript}
+                hasOllamaModel={hasOllamaModel}
+                ollamaRunning={ollamaRunning}
+                onGenerate={handleGenerateSummary}
+                onDelete={deleteSummary}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>

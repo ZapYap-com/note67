@@ -8,4 +8,6 @@ export type {
   ModelInfo,
   TranscriptionSegment,
   TranscriptionResult,
+  OllamaModel,
+  OllamaStatus,
 } from "./meeting";

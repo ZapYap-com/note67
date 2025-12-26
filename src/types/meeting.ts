@@ -59,3 +59,17 @@ export interface TranscriptionResult {
   full_text: string;
   language: string | null;
 }
+
+// Ollama types for AI summaries
+export interface OllamaModel {
+  name: string;
+  size: number;
+  modified_at: string;
+  digest: string;
+}
+
+export interface OllamaStatus {
+  running: boolean;
+  models: OllamaModel[];
+  selected_model: string | null;
+}

@@ -2236,6 +2236,7 @@ dependencies = [
  "reqwest",
  "ringbuf",
  "rusqlite",
+ "scopeguard",
  "serde",
  "serde_json",
  "tauri",
