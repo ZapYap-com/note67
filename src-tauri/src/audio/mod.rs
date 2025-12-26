@@ -1,3 +1,4 @@
+pub mod aec;
 pub mod mixer;
 pub mod recorder;
 pub mod system_audio;

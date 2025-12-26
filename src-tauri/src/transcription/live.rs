@@ -6,10 +6,50 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
-use crate::audio::{take_system_audio_samples, RecordingState};
+use crate::audio::{aec, take_system_audio_samples, RecordingState};
 use crate::db::Database;
 use crate::transcription::{TranscriptionError, TranscriptionResult, TranscriptionSegment};
 use tauri::Manager;
+
+/// Buffer to store recent system audio samples for AEC reference
+static SYSTEM_AUDIO_REFERENCE: std::sync::OnceLock<std::sync::Mutex<Vec<f32>>> = std::sync::OnceLock::new();
+
+fn get_system_audio_reference() -> &'static std::sync::Mutex<Vec<f32>> {
+    SYSTEM_AUDIO_REFERENCE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Store system audio samples as AEC reference
+fn store_reference_samples(samples: &[f32]) {
+    if let Ok(mut buffer) = get_system_audio_reference().lock() {
+        // Keep last 5 seconds of audio at 16kHz (80000 samples)
+        const MAX_SAMPLES: usize = 80000;
+        buffer.extend_from_slice(samples);
+        if buffer.len() > MAX_SAMPLES {
+            let drain_count = buffer.len() - MAX_SAMPLES;
+            buffer.drain(0..drain_count);
+        }
+    }
+}
+
+/// Get reference samples for AEC
+fn get_reference_samples(count: usize) -> Vec<f32> {
+    if let Ok(buffer) = get_system_audio_reference().lock() {
+        if buffer.len() >= count {
+            buffer[buffer.len() - count..].to_vec()
+        } else {
+            buffer.clone()
+        }
+    } else {
+        Vec::new()
+    }
+}
+
+/// Clear reference buffer
+fn clear_reference_buffer() {
+    if let Ok(mut buffer) = get_system_audio_reference().lock() {
+        buffer.clear();
+    }
+}
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
@@ -79,6 +119,10 @@ pub async fn start_live_transcription(
     *live_state.system_time_offset.lock().await = 0.0;
     live_state.segments.lock().await.clear();
 
+    // Initialize AEC for echo cancellation (16kHz sample rate)
+    aec::init_aec(16000);
+    clear_reference_buffer();
+
     let app_clone = app.clone();
     let meeting_id_clone = meeting_id.clone();
     let recording_state_clone = recording_state.clone();
@@ -106,15 +150,46 @@ pub async fn start_live_transcription(
             let mic_samples = recording_state_clone.take_audio_buffer();
             let system_samples = take_system_audio_samples();
 
+            // Store system audio as AEC reference (before any processing)
+            if !system_samples.is_empty() {
+                store_reference_samples(&system_samples);
+            }
+
             // Build list of audio sources to process
             let mut audio_sources: Vec<(Vec<f32>, u32, usize, AudioSource)> = Vec::new();
 
-            // Add mic samples if available
+            // Add mic samples if available (with AEC applied)
             if !mic_samples.is_empty() {
                 let rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
                 let ch = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
                 if rate > 0 && ch > 0 {
-                    audio_sources.push((mic_samples, rate, ch, AudioSource::Mic));
+                    // Convert mic to mono first if needed
+                    let mono_mic: Vec<f32> = if ch > 1 {
+                        mic_samples
+                            .chunks(ch)
+                            .map(|chunk| chunk.iter().sum::<f32>() / ch as f32)
+                            .collect()
+                    } else {
+                        mic_samples
+                    };
+
+                    // Resample mic to 16kHz for AEC processing
+                    let mic_16k = if rate != 16000 {
+                        resample(&mono_mic, rate, 16000)
+                    } else {
+                        mono_mic
+                    };
+
+                    // Apply AEC to remove speaker echo from mic
+                    let reference = get_reference_samples(mic_16k.len());
+                    let cleaned_mic = if !reference.is_empty() {
+                        aec::apply_aec(&mic_16k, &reference)
+                    } else {
+                        mic_16k
+                    };
+
+                    // Mic samples are now cleaned (16kHz mono)
+                    audio_sources.push((cleaned_mic, 16000_u32, 1_usize, AudioSource::Mic));
                 }
             }
 
