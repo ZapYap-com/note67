@@ -431,16 +431,90 @@ function EmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center pb-20">
       <div className="text-center max-w-sm px-6">
-        <h2
-          className="text-2xl font-semibold mb-2"
-          style={{ color: "var(--color-text)" }}
+        {/* Logo with wordmark */}
+        <svg
+          className="w-44 h-auto mx-auto mb-4"
+          viewBox="0 0 180 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          Note67
-        </h2>
-        <p
-          className="text-sm"
-          style={{ color: "var(--color-text-secondary)" }}
-        >
+          {/* Icon - rounded square with note + audio waves */}
+          <rect
+            x="2"
+            y="4"
+            width="40"
+            height="40"
+            rx="10"
+            fill="var(--color-accent)"
+          />
+          <path
+            d="M12 12h14l6 6v16a1.5 1.5 0 01-1.5 1.5h-17A1.5 1.5 0 0112 34V13.5A1.5 1.5 0 0113.5 12z"
+            fill="white"
+            fillOpacity="0.95"
+          />
+          <path
+            d="M26 12v5a1 1 0 001 1h5l-6-6z"
+            fill="white"
+            fillOpacity="0.6"
+          />
+          <rect
+            x="16"
+            y="23"
+            width="1.5"
+            height="6"
+            rx="0.75"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="20"
+            y="20"
+            width="1.5"
+            height="12"
+            rx="0.75"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="24"
+            y="22"
+            width="1.5"
+            height="8"
+            rx="0.75"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="28"
+            y="19"
+            width="1.5"
+            height="14"
+            rx="0.75"
+            fill="var(--color-accent)"
+          />
+
+          {/* Wordmark */}
+          <text
+            x="52"
+            y="34"
+            fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
+            fontSize="28"
+            fontWeight="600"
+            letterSpacing="-0.5"
+            fill="var(--color-text)"
+          >
+            Note
+          </text>
+          <text
+            x="112.5"
+            y="34"
+            fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif"
+            fontSize="28"
+            fontWeight="600"
+            letterSpacing="-0.5"
+            fill="var(--color-accent)"
+          >
+            67
+          </text>
+        </svg>
+        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Select a meeting or start a new one
         </p>
       </div>
