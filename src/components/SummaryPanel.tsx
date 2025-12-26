@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Summary, SummaryType } from "../types";
 
@@ -21,6 +21,14 @@ const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
   { value: "key_decisions", label: "Key Decisions" },
 ];
 
+// Helper to compute expanded summaries - always expand latest (first) summary
+function getExpandedSummaries(summaries: Summary[]): Set<number> {
+  if (summaries.length > 0) {
+    return new Set([summaries[0].id]);
+  }
+  return new Set();
+}
+
 export function SummaryPanel({
   summaries,
   isGenerating,
@@ -35,7 +43,19 @@ export function SummaryPanel({
 }: SummaryPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustom, setShowCustom] = useState(false);
-  const [expandedSummaries, setExpandedSummaries] = useState<Set<number>>(new Set());
+  const prevFirstSummaryId = useRef<number | null>(null);
+
+  // Track which summaries are expanded - derived from summaries prop
+  const firstSummaryId = summaries.length > 0 ? summaries[0].id : null;
+  const [expandedSummaries, setExpandedSummaries] = useState<Set<number>>(() => getExpandedSummaries(summaries));
+
+  // Update expanded summaries when a new summary is added (first summary ID changes)
+  if (firstSummaryId !== prevFirstSummaryId.current) {
+    prevFirstSummaryId.current = firstSummaryId;
+    if (firstSummaryId !== null) {
+      setExpandedSummaries(new Set([firstSummaryId]));
+    }
+  }
 
   const toggleSummary = (id: number) => {
     setExpandedSummaries((prev) => {
@@ -48,13 +68,6 @@ export function SummaryPanel({
       return next;
     });
   };
-
-  // Always expand only the latest summary (first in the list), close others
-  useEffect(() => {
-    if (summaries.length > 0) {
-      setExpandedSummaries(new Set([summaries[0].id]));
-    }
-  }, [summaries]);
 
   const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating;
 
