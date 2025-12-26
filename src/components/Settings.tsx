@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useModels, useOllama } from "../hooks";
 import { useProfileStore } from "../stores/profileStore";
-import { useThemeStore, applyTheme } from "../stores/themeStore";
+import { useThemeStore } from "../stores/themeStore";
 import type { ModelInfo, ModelSize } from "../types";
 
 export type { UserProfile } from "../stores/profileStore";
@@ -450,11 +450,6 @@ function ProfileTab() {
 function AppearanceTab() {
   const { theme, setTheme } = useThemeStore();
 
-  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
-    setTheme(newTheme);
-    applyTheme(newTheme);
-  };
-
   const themeOptions: {
     value: "light" | "dark" | "system";
     label: string;
@@ -544,7 +539,7 @@ function AppearanceTab() {
         {themeOptions.map((option) => (
           <button
             key={option.value}
-            onClick={() => handleThemeChange(option.value)}
+            onClick={() => setTheme(option.value)}
             className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors"
             style={{
               backgroundColor:
@@ -983,6 +978,7 @@ function ShortcutsTab() {
   const shortcuts = [
     { keys: [modKey, "N"], description: "Create new note" },
     { keys: [modKey, "R"], description: "Create new note and start recording" },
+    { keys: [modKey, "M"], description: "Toggle light/dark mode" },
     { keys: [modKey, ","], description: "Open settings" },
     { keys: ["Esc"], description: "Close modals" },
   ];

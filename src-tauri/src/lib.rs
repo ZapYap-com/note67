@@ -70,6 +70,9 @@ pub fn run() {
             commands::export_meeting_markdown,
             commands::save_export_to_file,
             commands::get_export_directory,
+            // Settings commands
+            commands::get_theme_preference,
+            commands::set_theme_preference,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

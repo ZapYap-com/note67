@@ -15,7 +15,7 @@ import {
   useTranscription,
   useLiveTranscription,
 } from "./hooks";
-import { useThemeStore, applyTheme } from "./stores/themeStore";
+import { useThemeStore } from "./stores/themeStore";
 import type { Meeting, SummaryType, TranscriptSegment } from "./types";
 
 // Import seeder for dev console access
@@ -45,15 +45,22 @@ function App() {
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
+  const loadTheme = useThemeStore((state) => state.loadTheme);
+  const toggleTheme = useThemeStore((state) => state.toggleTheme);
 
-  // Apply theme on mount and when theme changes
+  // Load theme from database on mount
   useEffect(() => {
-    applyTheme(theme);
+    loadTheme();
+  }, [loadTheme]);
 
-    // Listen for system preference changes when theme is set to "system"
+  // Listen for system preference changes when theme is "system"
+  useEffect(() => {
     if (theme === "system") {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handleChange = () => applyTheme("system");
+      const handleChange = () => {
+        const root = document.documentElement;
+        root.classList.toggle("dark", mediaQuery.matches);
+      };
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
@@ -212,6 +219,19 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Keyboard shortcut: Cmd/Ctrl + M to toggle theme
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "m") {
+        e.preventDefault();
+        toggleTheme();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleTheme]);
 
   // Global right-click handler - prevent default and show custom menu
   useEffect(() => {
@@ -897,6 +917,27 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
               R
             </kbd>
             <span>start meeting</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ⌘
+            </kbd>
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              M
+            </kbd>
+            <span>toggle theme</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd

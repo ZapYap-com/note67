@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i32 = 2;
+pub const SCHEMA_VERSION: i32 = 3;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -10,6 +10,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 2 {
         migrate_v2(conn)?;
+    }
+    if version < 3 {
+        migrate_v3(conn)?;
     }
 
     Ok(())
@@ -152,6 +155,27 @@ fn migrate_v2(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 2)?;
+
+    Ok(())
+}
+
+fn migrate_v3(conn: &Connection) -> rusqlite::Result<()> {
+    // Settings table for app preferences
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Insert default theme preference
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'system')",
+        [],
+    )?;
+
+    set_schema_version(conn, 3)?;
 
     Ok(())
 }

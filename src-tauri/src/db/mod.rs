@@ -180,6 +180,29 @@ impl Database {
         conn.execute("DELETE FROM summaries WHERE meeting_id = ?1", [meeting_id])?;
         Ok(())
     }
+
+    /// Get a setting value
+    pub fn get_setting(&self, key: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .ok();
+        Ok(value)
+    }
+
+    /// Set a setting value
+    pub fn set_setting(&self, key: &str, value: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            params![key, value],
+        )?;
+        Ok(())
+    }
 }
 
 fn get_db_path(app_handle: &AppHandle) -> anyhow::Result<PathBuf> {
