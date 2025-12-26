@@ -2,26 +2,29 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## Features (Planned)
+## Features
 
-- Audio capture during meetings
-- Local transcription with Whisper (no cloud)
-- AI-powered meeting summaries
-- Private, on-device processing
-- Cross-platform (macOS, Windows, Linux)
+- [x] Meeting management (create, end, delete)
+- [x] SQLite database for local storage
+- [ ] Audio capture during meetings
+- [ ] Local transcription with Whisper
+- [ ] AI-powered meeting summaries
+- [ ] Cross-platform (macOS, Windows, Linux)
 
 ## Tech Stack
 
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Backend**: Rust (Tauri v2)
-- **State**: Zustand
-- **AI**: whisper-rs, llama-cpp-rs (planned)
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18 + TypeScript + Tailwind CSS v4 |
+| Backend | Rust (Tauri v2) |
+| State | Zustand |
+| Database | SQLite (rusqlite) |
+| AI | whisper-rs, llama-cpp-rs (planned) |
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://rustup.rs/)
-- [Tauri CLI](https://tauri.app/)
 
 ```bash
 # Install Rust
@@ -48,7 +51,6 @@ npm run tauri build
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite dev server |
 | `npm run tauri dev` | Run Tauri app in dev mode |
 | `npm run tauri build` | Build production app |
 | `npm run lint` | Run ESLint |
@@ -58,16 +60,18 @@ npm run tauri build
 
 ```
 note67/
-├── src/                  # React frontend
-│   ├── stores/           # Zustand state
-│   ├── App.tsx
-│   └── main.tsx
-├── src-tauri/            # Rust backend
+├── src/                      # React frontend
+│   ├── api/                  # Tauri invoke wrappers
+│   ├── hooks/                # React hooks
+│   ├── stores/               # Zustand state
+│   ├── types/                # TypeScript interfaces
+│   └── App.tsx
+├── src-tauri/                # Rust backend
 │   ├── src/
-│   │   ├── lib.rs        # Tauri commands
-│   │   └── main.rs
+│   │   ├── commands/         # Tauri commands
+│   │   ├── db/               # SQLite database
+│   │   └── lib.rs
 │   └── Cargo.toml
-├── plan/                 # Implementation docs
 └── package.json
 ```
 
