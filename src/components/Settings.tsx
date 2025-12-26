@@ -16,6 +16,7 @@ export function useProfile() {
 type SettingsTab =
   | "profile"
   | "appearance"
+  | "system"
   | "whisper"
   | "ollama"
   | "privacy"
@@ -27,6 +28,8 @@ interface SettingsProps {
   onClose: () => void;
   initialTab?: SettingsTab;
 }
+
+const DEFAULT_TAB: SettingsTab = "about";
 
 const WarningIcon = () => (
   <svg
@@ -43,7 +46,7 @@ const WarningIcon = () => (
   </svg>
 );
 
-export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
+export function Settings({ onClose, initialTab = DEFAULT_TAB }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const { profile } = useProfile();
   const { loadedModel } = useModels();
@@ -54,173 +57,224 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
   const whisperNeedsSetup = !loadedModel;
   const ollamaNeedsSetup = !ollamaRunning || !ollamaModel;
 
-  const tabs: {
+  type TabItem = {
     id: SettingsTab;
     label: string;
     icon: React.ReactNode;
     warning: boolean;
-  }[] = [
+  };
+
+  type TabSection = {
+    title: string;
+    tabs: TabItem[];
+  };
+
+  const sections: TabSection[] = [
     {
-      id: "profile",
-      label: "Profile",
-      warning: profileNeedsSetup,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-          />
-        </svg>
-      ),
+      title: "General",
+      tabs: [
+        {
+          id: "appearance",
+          label: "Appearance",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          warning: profileNeedsSetup,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "system",
+          label: "System",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          ),
+        },
+      ],
     },
     {
-      id: "appearance",
-      label: "Appearance",
-      warning: false,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-          />
-        </svg>
-      ),
+      title: "AI & Models",
+      tabs: [
+        {
+          id: "whisper",
+          label: "Whisper",
+          warning: whisperNeedsSetup,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "ollama",
+          label: "Ollama",
+          warning: ollamaNeedsSetup,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+              />
+            </svg>
+          ),
+        },
+      ],
     },
     {
-      id: "whisper",
-      label: "Whisper",
-      warning: whisperNeedsSetup,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "ollama",
-      label: "Ollama",
-      warning: ollamaNeedsSetup,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "privacy",
-      label: "Best Practices",
-      warning: false,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "shortcuts",
-      label: "Shortcuts",
-      warning: false,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "about",
-      label: "About",
-      warning: false,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "updates",
-      label: "Updates",
-      warning: false,
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-          />
-        </svg>
-      ),
+      title: "Help & Info",
+      tabs: [
+        {
+          id: "about",
+          label: "About",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "privacy",
+          label: "Best Practices",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "shortcuts",
+          label: "Shortcuts",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
+            </svg>
+          ),
+        },
+        {
+          id: "updates",
+          label: "Updates",
+          warning: false,
+          icon: (
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          ),
+        },
+      ],
     },
   ];
+
+  // Flatten tabs for header lookup
+  const allTabs = sections.flatMap((section) => section.tabs);
 
   return (
     <div
@@ -252,27 +306,37 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
               Settings
             </h2>
           </div>
-          <nav className="flex-1 px-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium transition-colors mb-1"
-                style={{
-                  backgroundColor:
-                    activeTab === tab.id
-                      ? "var(--color-sidebar-selected)"
-                      : "transparent",
-                  color:
-                    activeTab === tab.id
-                      ? "var(--color-text)"
-                      : "var(--color-text-secondary)",
-                }}
-              >
-                {tab.icon}
-                <span className="flex-1">{tab.label}</span>
-                {tab.warning && <WarningIcon />}
-              </button>
+          <nav className="flex-1 px-2 overflow-y-auto">
+            {sections.map((section, sectionIndex) => (
+              <div key={section.title} className={sectionIndex > 0 ? "mt-4" : ""}>
+                <h3
+                  className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--color-text-tertiary)" }}
+                >
+                  {section.title}
+                </h3>
+                {section.tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium transition-colors mb-1"
+                    style={{
+                      backgroundColor:
+                        activeTab === tab.id
+                          ? "var(--color-sidebar-selected)"
+                          : "transparent",
+                      color:
+                        activeTab === tab.id
+                          ? "var(--color-text)"
+                          : "var(--color-text-secondary)",
+                    }}
+                  >
+                    {tab.icon}
+                    <span className="flex-1">{tab.label}</span>
+                    {tab.warning && <WarningIcon />}
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
         </div>
@@ -288,7 +352,7 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
               className="text-base font-medium"
               style={{ color: "var(--color-text)" }}
             >
-              {tabs.find((t) => t.id === activeTab)?.label}
+              {allTabs.find((t) => t.id === activeTab)?.label}
             </h3>
             <button
               onClick={onClose}
@@ -315,6 +379,7 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
           <div className="flex-1 overflow-y-auto p-5">
             {activeTab === "profile" && <ProfileTab />}
             {activeTab === "appearance" && <AppearanceTab />}
+            {activeTab === "system" && <SystemTab />}
             {activeTab === "whisper" && <WhisperTab />}
             {activeTab === "ollama" && <OllamaTab />}
             {activeTab === "privacy" && <PrivacyTab />}
@@ -450,29 +515,6 @@ function ProfileTab() {
 
 function AppearanceTab() {
   const { theme, setTheme } = useThemeStore();
-  const [autostart, setAutostart] = useState(false);
-  const [autostartLoading, setAutostartLoading] = useState(true);
-
-  useEffect(() => {
-    invoke<boolean>("get_autostart_enabled")
-      .then((enabled) => {
-        setAutostart(enabled);
-        setAutostartLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to get autostart status:", err);
-        setAutostartLoading(false);
-      });
-  }, []);
-
-  const handleAutostartChange = async (enabled: boolean) => {
-    try {
-      await invoke("set_autostart_enabled", { enabled });
-      setAutostart(enabled);
-    } catch (err) {
-      console.error("Failed to set autostart:", err);
-    }
-  };
 
   const themeOptions: {
     value: "light" | "dark" | "system";
@@ -626,77 +668,117 @@ function AppearanceTab() {
       <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
         Your theme preference is stored locally on this device.
       </p>
+    </div>
+  );
+}
 
-      {/* Startup Section */}
-      <div className="pt-4 border-t" style={{ borderColor: "var(--color-border)" }}>
+function SystemTab() {
+  const [autostart, setAutostart] = useState(false);
+  const [autostartLoading, setAutostartLoading] = useState(true);
+
+  useEffect(() => {
+    invoke<boolean>("get_autostart_enabled")
+      .then((enabled) => {
+        setAutostart(enabled);
+        setAutostartLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to get autostart status:", err);
+        setAutostartLoading(false);
+      });
+  }, []);
+
+  const handleAutostartChange = async (enabled: boolean) => {
+    try {
+      await invoke("set_autostart_enabled", { enabled });
+      setAutostart(enabled);
+    } catch (err) {
+      console.error("Failed to set autostart:", err);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
         <h3
           className="text-sm font-semibold mb-3"
           style={{ color: "var(--color-text)" }}
         >
           Startup
         </h3>
-        <button
-          onClick={() => handleAutostartChange(!autostart)}
-          disabled={autostartLoading}
-          className="w-full flex items-center justify-between p-3 rounded-xl transition-colors"
-          style={{ backgroundColor: "var(--color-bg-subtle)" }}
+        <p
+          className="text-sm mb-4"
+          style={{ color: "var(--color-text-secondary)" }}
         >
-          <div className="flex items-center gap-3">
-            <span
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{
-                backgroundColor: autostart
-                  ? "var(--color-accent-light)"
-                  : "var(--color-bg-elevated)",
-                color: autostart
-                  ? "var(--color-accent)"
-                  : "var(--color-text-secondary)",
-              }}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                />
-              </svg>
-            </span>
-            <div className="text-left">
-              <p
-                className="font-medium"
-                style={{ color: "var(--color-text)" }}
-              >
-                Launch at login
-              </p>
-              <p
-                className="text-xs"
-                style={{ color: "var(--color-text-tertiary)" }}
-              >
-                Start Note67 automatically when you log in
-              </p>
-            </div>
-          </div>
-          <div
-            className="w-11 h-6 rounded-full transition-colors relative"
+          Configure how Note67 starts up.
+        </p>
+      </div>
+
+      <button
+        onClick={() => handleAutostartChange(!autostart)}
+        disabled={autostartLoading}
+        className="w-full flex items-center justify-between p-3 rounded-xl transition-colors"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
             style={{
-              backgroundColor: autostart ? "var(--color-accent)" : "var(--color-border)",
+              backgroundColor: autostart
+                ? "var(--color-accent-light)"
+                : "var(--color-bg-elevated)",
+              color: autostart
+                ? "var(--color-accent)"
+                : "var(--color-text-secondary)",
             }}
           >
-            <div
-              className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform"
-              style={{
-                transform: autostart ? "translateX(22px)" : "translateX(2px)",
-              }}
-            />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+              />
+            </svg>
+          </span>
+          <div className="text-left">
+            <p
+              className="font-medium"
+              style={{ color: "var(--color-text)" }}
+            >
+              Launch at login
+            </p>
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-tertiary)" }}
+            >
+              Start Note67 automatically when you log in
+            </p>
           </div>
-        </button>
-      </div>
+        </div>
+        <div
+          className="w-11 h-6 rounded-full transition-colors relative"
+          style={{
+            backgroundColor: autostart ? "var(--color-accent)" : "var(--color-border)",
+          }}
+        >
+          <div
+            className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform"
+            style={{
+              transform: autostart ? "translateX(22px)" : "translateX(2px)",
+            }}
+          />
+        </div>
+      </button>
+
+      <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+        System settings are stored locally on this device.
+      </p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   Settings,
@@ -71,7 +71,7 @@ function App() {
     null
   );
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates">("profile");
+  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "system" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates">("about");
   const [meetingTranscripts, setMeetingTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
@@ -236,12 +236,12 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [contextMenu, showDeleteConfirm, showSettings, selectedMeetingId]);
 
-  // Keyboard shortcut: Cmd/Ctrl + , to open settings
+  // Keyboard shortcut: Cmd/Ctrl + , to toggle settings
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setShowSettings(true);
+        setShowSettings((prev) => !prev);
       }
     };
 
