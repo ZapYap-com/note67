@@ -142,12 +142,17 @@ pub async fn generate_summary(
         return Err("No transcript found for this meeting. Please transcribe the audio first.".to_string());
     }
 
-    // Combine segments into full transcript
+    // Combine segments into full transcript, filtering out blank audio markers
     let transcript = segments
         .iter()
         .map(|s| s.text.clone())
+        .filter(|text| !text.contains("[BLANK_AUDIO]"))
         .collect::<Vec<_>>()
         .join(" ");
+
+    if transcript.trim().is_empty() {
+        return Err("No meaningful transcript found (only silence detected).".to_string());
+    }
 
     // Parse summary type
     let stype = SummaryType::from_str(&summary_type);
@@ -232,12 +237,17 @@ pub async fn generate_summary_stream(
         return Err("No transcript found for this meeting. Please transcribe the audio first.".to_string());
     }
 
-    // Combine segments into full transcript
+    // Combine segments into full transcript, filtering out blank audio markers
     let transcript = segments
         .iter()
         .map(|s| s.text.clone())
+        .filter(|text| !text.contains("[BLANK_AUDIO]"))
         .collect::<Vec<_>>()
         .join(" ");
+
+    if transcript.trim().is_empty() {
+        return Err("No meaningful transcript found (only silence detected).".to_string());
+    }
 
     // Parse summary type
     let stype = SummaryType::from_str(&summary_type);
@@ -341,12 +351,18 @@ pub async fn generate_title(
         return Err("No transcript found for this meeting.".to_string());
     }
 
-    // Combine segments into full transcript (limit to first ~2000 chars to keep prompt small)
+    // Combine segments, filtering out blank audio markers (limit to ~2000 chars)
     let transcript: String = segments
         .iter()
         .map(|s| s.text.clone())
+        .filter(|text| !text.contains("[BLANK_AUDIO]"))
         .collect::<Vec<_>>()
         .join(" ");
+
+    if transcript.trim().is_empty() {
+        return Err("No meaningful transcript found (only silence detected).".to_string());
+    }
+
     let truncated = if transcript.len() > 2000 {
         format!("{}...", &transcript[..2000])
     } else {
