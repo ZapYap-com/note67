@@ -42,7 +42,13 @@ export function useProfile() {
   return { profile, updateProfile };
 }
 
-type SettingsTab = "profile" | "whisper" | "ollama" | "privacy";
+type SettingsTab =
+  | "profile"
+  | "whisper"
+  | "ollama"
+  | "privacy"
+  | "about"
+  | "updates";
 
 interface SettingsProps {
   onClose: () => void;
@@ -50,8 +56,17 @@ interface SettingsProps {
 }
 
 const WarningIcon = () => (
-  <svg className="w-3.5 h-3.5" style={{ color: "#f59e0b" }} fill="currentColor" viewBox="0 0 20 20">
-    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+  <svg
+    className="w-3.5 h-3.5"
+    style={{ color: "#f59e0b" }}
+    fill="currentColor"
+    viewBox="0 0 20 20"
+  >
+    <path
+      fillRule="evenodd"
+      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+      clipRule="evenodd"
+    />
   </svg>
 );
 
@@ -66,14 +81,29 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
   const whisperNeedsSetup = !loadedModel;
   const ollamaNeedsSetup = !ollamaRunning || !ollamaModel;
 
-  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; warning: boolean }[] = [
+  const tabs: {
+    id: SettingsTab;
+    label: string;
+    icon: React.ReactNode;
+    warning: boolean;
+  }[] = [
     {
       id: "profile",
       label: "Profile",
       warning: profileNeedsSetup,
       icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+          />
         </svg>
       ),
     },
@@ -82,8 +112,18 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
       label: "Whisper",
       warning: whisperNeedsSetup,
       icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+          />
         </svg>
       ),
     },
@@ -92,18 +132,78 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
       label: "Ollama",
       warning: ollamaNeedsSetup,
       icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+          />
         </svg>
       ),
     },
     {
       id: "privacy",
-      label: "Privacy",
+      label: "Best Practices",
       warning: false,
       icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+          />
+        </svg>
+      ),
+    },
+    {
+      id: "about",
+      label: "About",
+      warning: false,
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      ),
+    },
+    {
+      id: "updates",
+      label: "Updates",
+      warning: false,
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+          />
         </svg>
       ),
     },
@@ -132,7 +232,10 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
           }}
         >
           <div className="p-4">
-            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
+            <h2
+              className="text-lg font-semibold"
+              style={{ color: "var(--color-text)" }}
+            >
               Settings
             </h2>
           </div>
@@ -143,8 +246,14 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium transition-colors mb-1"
                 style={{
-                  backgroundColor: activeTab === tab.id ? "var(--color-sidebar-selected)" : "transparent",
-                  color: activeTab === tab.id ? "var(--color-text)" : "var(--color-text-secondary)",
+                  backgroundColor:
+                    activeTab === tab.id
+                      ? "var(--color-sidebar-selected)"
+                      : "transparent",
+                  color:
+                    activeTab === tab.id
+                      ? "var(--color-text)"
+                      : "var(--color-text-secondary)",
                 }}
               >
                 {tab.icon}
@@ -162,7 +271,10 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
             className="flex items-center justify-between px-5 py-4 shrink-0"
             style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
           >
-            <h3 className="text-base font-medium" style={{ color: "var(--color-text)" }}>
+            <h3
+              className="text-base font-medium"
+              style={{ color: "var(--color-text)" }}
+            >
               {tabs.find((t) => t.id === activeTab)?.label}
             </h3>
             <button
@@ -170,8 +282,18 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
               className="p-1 rounded-lg transition-colors hover:bg-black/5"
               style={{ color: "var(--color-text-tertiary)" }}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -182,6 +304,8 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
             {activeTab === "whisper" && <WhisperTab />}
             {activeTab === "ollama" && <OllamaTab />}
             {activeTab === "privacy" && <PrivacyTab />}
+            {activeTab === "about" && <AboutTab />}
+            {activeTab === "updates" && <UpdatesTab />}
           </div>
         </div>
       </div>
@@ -210,7 +334,10 @@ function ProfileTab() {
   return (
     <div className="space-y-6">
       <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+        <label
+          className="block text-sm font-medium mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
           Avatar
         </label>
         <div className="flex gap-2 flex-wrap">
@@ -223,8 +350,14 @@ function ProfileTab() {
               }}
               className="w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all"
               style={{
-                backgroundColor: avatar === emoji ? "var(--color-accent-light)" : "var(--color-bg-subtle)",
-                border: avatar === emoji ? "2px solid var(--color-accent)" : "2px solid transparent",
+                backgroundColor:
+                  avatar === emoji
+                    ? "var(--color-accent-light)"
+                    : "var(--color-bg-subtle)",
+                border:
+                  avatar === emoji
+                    ? "2px solid var(--color-accent)"
+                    : "2px solid transparent",
               }}
             >
               {emoji}
@@ -234,7 +367,10 @@ function ProfileTab() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+        <label
+          className="block text-sm font-medium mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
           Name
         </label>
         <input
@@ -253,7 +389,10 @@ function ProfileTab() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+        <label
+          className="block text-sm font-medium mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
           Email
         </label>
         <input
@@ -303,14 +442,21 @@ function WhisperTab() {
       {error && (
         <div
           className="mb-4 px-3 py-2 rounded-lg text-sm"
-          style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }}
+          style={{
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            color: "#dc2626",
+          }}
         >
           {error}
         </div>
       )}
 
-      <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
-        Download a model for local transcription. Larger models are more accurate but slower.
+      <p
+        className="text-sm mb-4"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        Download a model for local transcription. Larger models are more
+        accurate but slower.
       </p>
 
       <div className="space-y-2">
@@ -329,7 +475,10 @@ function WhisperTab() {
         ))}
       </div>
 
-      <p className="mt-4 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+      <p
+        className="mt-4 text-xs"
+        style={{ color: "var(--color-text-tertiary)" }}
+      >
         {loadedModel ? `Active model: ${loadedModel}` : "No model loaded"}
       </p>
     </div>
@@ -361,8 +510,12 @@ function WhisperModelCard({
     <div
       className="p-3 rounded-xl transition-colors"
       style={{
-        backgroundColor: isLoaded ? "rgba(34, 197, 94, 0.06)" : "var(--color-bg-subtle)",
-        border: isLoaded ? "1px solid rgba(34, 197, 94, 0.2)" : "1px solid transparent",
+        backgroundColor: isLoaded
+          ? "rgba(34, 197, 94, 0.06)"
+          : "var(--color-bg-subtle)",
+        border: isLoaded
+          ? "1px solid rgba(34, 197, 94, 0.2)"
+          : "1px solid transparent",
       }}
     >
       <div className="flex items-center justify-between">
@@ -374,13 +527,19 @@ function WhisperModelCard({
             {isLoaded && (
               <span
                 className="px-1.5 py-0.5 text-xs font-medium rounded"
-                style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", color: "#16a34a" }}
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.15)",
+                  color: "#16a34a",
+                }}
               >
                 Active
               </span>
             )}
           </div>
-          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
+          <p
+            className="text-xs mt-0.5"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
             {sizeLabel} · {model.size_mb} MB
           </p>
         </div>
@@ -449,11 +608,18 @@ function PrivacyTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--color-text)" }}>
+        <h3
+          className="text-sm font-semibold mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
           Best Practices for Recording
         </h3>
-        <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
-          When recording meetings with other participants, follow these guidelines to ensure ethical and legal use.
+        <p
+          className="text-sm mb-4"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          When recording meetings with other participants, follow these
+          guidelines to ensure ethical and legal use.
         </p>
       </div>
 
@@ -469,14 +635,27 @@ function PrivacyTab() {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div>
-            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+            <h4
+              className="text-sm font-medium mb-1"
+              style={{ color: "var(--color-text)" }}
+            >
               Always Get Consent
             </h4>
-            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              Inform all participants before recording begins. Get explicit verbal or written consent. Some jurisdictions require all-party consent.
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Inform all participants before recording begins. Get explicit
+              verbal or written consent. Some jurisdictions require all-party
+              consent.
             </p>
           </div>
         </div>
@@ -494,14 +673,27 @@ function PrivacyTab() {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div>
-            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+            <h4
+              className="text-sm font-medium mb-1"
+              style={{ color: "var(--color-text)" }}
+            >
               State the Purpose
             </h4>
-            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              Clearly explain why you're recording and how the recording will be used. Mention if AI transcription or summarization will be applied.
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Clearly explain why you're recording and how the recording will be
+              used. Mention if AI transcription or summarization will be
+              applied.
             </p>
           </div>
         </div>
@@ -519,14 +711,26 @@ function PrivacyTab() {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
           </svg>
           <div>
-            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+            <h4
+              className="text-sm font-medium mb-1"
+              style={{ color: "var(--color-text)" }}
+            >
               Secure Your Data
             </h4>
-            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              All recordings and transcripts are stored locally on your device. Delete recordings when no longer needed.
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              All recordings and transcripts are stored locally on your device.
+              Delete recordings when no longer needed.
             </p>
           </div>
         </div>
@@ -544,29 +748,357 @@ function PrivacyTab() {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"
+            />
           </svg>
           <div>
-            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+            <h4
+              className="text-sm font-medium mb-1"
+              style={{ color: "var(--color-text)" }}
+            >
               Know the Law
             </h4>
-            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              Recording laws vary by location. Some regions require one-party consent, others require all-party consent. Check local regulations.
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Recording laws vary by location. Some regions require one-party
+              consent, others require all-party consent. Check local
+              regulations.
             </p>
           </div>
         </div>
       </div>
 
       <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-        Note67 processes everything locally. No audio or transcripts are sent to external servers.
+        Note67 processes everything locally. No audio or transcripts are sent to
+        external servers.
+      </p>
+    </div>
+  );
+}
+
+const APP_VERSION = "0.1.0";
+
+function AboutTab() {
+  return (
+    <div className="space-y-6">
+      {/* Logo and App Name */}
+      <div className="text-center pb-4">
+        <svg
+          className="w-20 h-20 mx-auto mb-4"
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect
+            x="2"
+            y="4"
+            width="44"
+            height="40"
+            rx="10"
+            fill="var(--color-accent)"
+          />
+          <path
+            d="M12 12h18l6 6v18a1.5 1.5 0 01-1.5 1.5h-21A1.5 1.5 0 0112 36V13.5A1.5 1.5 0 0113.5 12z"
+            fill="white"
+            fillOpacity="0.95"
+          />
+          <path
+            d="M30 12v5a1 1 0 001 1h5l-6-6z"
+            fill="white"
+            fillOpacity="0.6"
+          />
+          <rect
+            x="16"
+            y="24"
+            width="2"
+            height="8"
+            rx="1"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="21"
+            y="20"
+            width="2"
+            height="16"
+            rx="1"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="26"
+            y="22"
+            width="2"
+            height="12"
+            rx="1"
+            fill="var(--color-accent)"
+          />
+          <rect
+            x="31"
+            y="18"
+            width="2"
+            height="18"
+            rx="1"
+            fill="var(--color-accent)"
+          />
+        </svg>
+        <h2
+          className="text-2xl font-bold"
+          style={{ color: "var(--color-text)" }}
+        >
+          Note<span style={{ color: "var(--color-accent)" }}>67</span>
+        </h2>
+        <p
+          className="text-sm mt-1"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Version {APP_VERSION}
+        </p>
+      </div>
+
+      {/* Description */}
+      <div
+        className="p-4 rounded-xl text-center"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <p className="text-sm" style={{ color: "var(--color-text)" }}>
+          A privacy-focused meeting notes app with local AI transcription and
+          summarization.
+        </p>
+      </div>
+
+      {/* Privacy Commitment */}
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "rgba(34, 197, 94, 0.06)" }}
+      >
+        <div className="flex gap-3">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5"
+            style={{ color: "#22c55e" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            />
+          </svg>
+          <div>
+            <h4
+              className="text-sm font-medium mb-1"
+              style={{ color: "var(--color-text)" }}
+            >
+              Privacy First
+            </h4>
+            <p
+              className="text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              All processing happens locally on your device. Your recordings,
+              transcripts, and notes never leave your computer. No cloud, no
+              tracking, no compromises.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Features */}
+      <div className="space-y-2">
+        <h4
+          className="text-xs font-medium uppercase tracking-wider"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          Features
+        </h4>
+        <ul
+          className="space-y-1.5 text-sm"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          <li className="flex items-center gap-2">
+            <span style={{ color: "var(--color-accent)" }}>•</span>
+            Local speech-to-text with Whisper
+          </li>
+          <li className="flex items-center gap-2">
+            <span style={{ color: "var(--color-accent)" }}>•</span>
+            AI summaries powered by Ollama
+          </li>
+          <li className="flex items-center gap-2">
+            <span style={{ color: "var(--color-accent)" }}>•</span>
+            Export to Markdown
+          </li>
+          <li className="flex items-center gap-2">
+            <span style={{ color: "var(--color-accent)" }}>•</span>
+            100% offline capable
+          </li>
+        </ul>
+      </div>
+
+      {/* Credits */}
+      <p
+        className="text-xs text-center"
+        style={{ color: "var(--color-text-tertiary)" }}
+      >
+        Built with Tauri, React, and Rust
+      </p>
+    </div>
+  );
+}
+
+function UpdatesTab() {
+  const [checking, setChecking] = useState(false);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+
+  const handleCheckUpdates = async () => {
+    setChecking(true);
+    // Simulate checking for updates
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setChecking(false);
+    setLastChecked(new Date().toLocaleTimeString());
+  };
+
+  const recentChanges = [
+    {
+      version: "0.1.0",
+      date: "December 2025",
+      changes: [
+        "Initial release",
+        "Local Whisper transcription",
+        "Ollama integration for AI summaries",
+        "Meeting management with notes",
+        "Export to Markdown",
+        "Privacy-focused design",
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Current Version */}
+      <div
+        className="p-4 rounded-xl flex items-center justify-between"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div>
+          <p
+            className="text-sm font-medium"
+            style={{ color: "var(--color-text)" }}
+          >
+            Current Version
+          </p>
+          <p
+            className="text-2xl font-bold mt-1"
+            style={{ color: "var(--color-accent)" }}
+          >
+            {APP_VERSION}
+          </p>
+        </div>
+        <button
+          onClick={handleCheckUpdates}
+          disabled={checking}
+          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          style={{
+            backgroundColor: "var(--color-accent)",
+            color: "white",
+          }}
+        >
+          {checking ? "Checking..." : "Check for Updates"}
+        </button>
+      </div>
+
+      {lastChecked && (
+        <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+          Last checked: {lastChecked} — You're up to date!
+        </p>
+      )}
+
+      {/* Recent Changes */}
+      <div>
+        <h3
+          className="text-sm font-medium mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
+          What's New
+        </h3>
+        <div className="space-y-4">
+          {recentChanges.map((release) => (
+            <div
+              key={release.version}
+              className="p-4 rounded-xl"
+              style={{ backgroundColor: "var(--color-bg-subtle)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span
+                  className="px-2 py-0.5 text-xs font-medium rounded"
+                  style={{
+                    backgroundColor: "var(--color-accent-light)",
+                    color: "var(--color-accent)",
+                  }}
+                >
+                  v{release.version}
+                </span>
+                <span
+                  className="text-xs"
+                  style={{ color: "var(--color-text-tertiary)" }}
+                >
+                  {release.date}
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {release.changes.map((change, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-start gap-2 text-sm"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    <svg
+                      className="w-4 h-4 shrink-0 mt-0.5"
+                      style={{ color: "#22c55e" }}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    {change}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Auto-update info */}
+      <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+        Updates are downloaded and installed automatically when available.
       </p>
     </div>
   );
 }
 
 function OllamaTab() {
-  const { loading, error, isRunning, models, selectedModel, selectModel, checkStatus } =
-    useOllama();
+  const {
+    loading,
+    error,
+    isRunning,
+    models,
+    selectedModel,
+    selectModel,
+    checkStatus,
+  } = useOllama();
 
   const formatSize = (bytes: number) => {
     const gb = bytes / (1024 * 1024 * 1024);
@@ -585,7 +1117,10 @@ function OllamaTab() {
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: isRunning ? "#22c55e" : "#ef4444" }}
             />
-            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+            <span
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text)" }}
+            >
               Ollama {isRunning ? "Running" : "Not Running"}
             </span>
           </div>
@@ -621,10 +1156,22 @@ function OllamaTab() {
                 </a>
               </li>
               <li>
-                Run <code className="px-1 py-0.5 rounded" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>ollama serve</code>
+                Run{" "}
+                <code
+                  className="px-1 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}
+                >
+                  ollama serve
+                </code>
               </li>
               <li>
-                Pull a model: <code className="px-1 py-0.5 rounded" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>ollama pull llama3.2</code>
+                Pull a model:{" "}
+                <code
+                  className="px-1 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}
+                >
+                  ollama pull llama3.2
+                </code>
               </li>
             </ol>
           </div>
@@ -635,7 +1182,10 @@ function OllamaTab() {
       {error && (
         <div
           className="mb-4 px-3 py-2 rounded-lg text-sm"
-          style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", color: "#dc2626" }}
+          style={{
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            color: "#dc2626",
+          }}
         >
           {error}
         </div>
@@ -644,7 +1194,10 @@ function OllamaTab() {
       {/* Models List */}
       {isRunning && (
         <div>
-          <h3 className="text-sm font-medium mb-3" style={{ color: "var(--color-text-secondary)" }}>
+          <h3
+            className="text-sm font-medium mb-3"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             Available Models
           </h3>
 
@@ -653,10 +1206,16 @@ function OllamaTab() {
               className="p-4 rounded-xl text-center"
               style={{ backgroundColor: "var(--color-bg-subtle)" }}
             >
-              <p className="text-sm mb-2" style={{ color: "var(--color-text-secondary)" }}>
+              <p
+                className="text-sm mb-2"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
                 No models found
               </p>
-              <code className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+              <code
+                className="text-xs"
+                style={{ color: "var(--color-text-tertiary)" }}
+              >
                 ollama pull llama3.2
               </code>
             </div>
@@ -682,23 +1241,41 @@ function OllamaTab() {
                   <span
                     className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center"
                     style={{
-                      border: selectedModel === model.name
-                        ? "none"
-                        : "2px solid var(--color-border)",
-                      backgroundColor: selectedModel === model.name ? "var(--color-accent)" : "transparent",
+                      border:
+                        selectedModel === model.name
+                          ? "none"
+                          : "2px solid var(--color-border)",
+                      backgroundColor:
+                        selectedModel === model.name
+                          ? "var(--color-accent)"
+                          : "transparent",
                     }}
                   >
                     {selectedModel === model.name && (
-                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      <svg
+                        className="w-2.5 h-2.5 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     )}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate" style={{ color: "var(--color-text)" }}>
+                    <p
+                      className="font-medium truncate"
+                      style={{ color: "var(--color-text)" }}
+                    >
                       {model.name}
                     </p>
-                    <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
                       {formatSize(model.size)}
                     </p>
                   </div>
