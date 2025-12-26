@@ -11,6 +11,19 @@ use crate::transcription::{
     Transcriber,
 };
 
+/// Check if a transcript segment should be skipped (blank audio, inaudible, etc.)
+fn should_skip_segment(text: &str) -> bool {
+    let text_lower = text.to_lowercase();
+    text_lower.contains("[blank_audio]")
+        || text_lower.contains("[inaudible]")
+        || text_lower.contains("[ inaudible ]")
+        || text_lower.contains("[silence]")
+        || text_lower.contains("[music]")
+        || text_lower.contains("[applause]")
+        || text_lower.contains("[laughter]")
+        || text.trim().is_empty()
+}
+
 /// State for transcription operations
 pub struct TranscriptionState {
     pub model_manager: Mutex<Option<ModelManager>>,
@@ -249,10 +262,12 @@ pub async fn transcribe_audio(
             e.to_string()
         })?;
 
-    // Save segments to database
+    // Save segments to database (skip blank/noise segments)
     for segment in &result.segments {
-        db.add_transcript_segment(&meeting_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
-            .map_err(|e| e.to_string())?;
+        if !should_skip_segment(&segment.text) {
+            db.add_transcript_segment(&meeting_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     state.is_transcribing.store(false, Ordering::SeqCst);
@@ -323,17 +338,19 @@ pub async fn transcribe_dual_audio(
             e.to_string()
         })?;
 
-    // Save mic segments to database with "You" speaker label
+    // Save mic segments to database with "You" speaker label (skip blank/noise)
     for segment in &mic_result.segments {
-        db.add_transcript_segment(
-            &meeting_id,
-            segment.start_time,
-            segment.end_time,
-            &segment.text,
-            Some("You"),
-        )
-        .map_err(|e| e.to_string())?;
-        total_segments += 1;
+        if !should_skip_segment(&segment.text) {
+            db.add_transcript_segment(
+                &meeting_id,
+                segment.start_time,
+                segment.end_time,
+                &segment.text,
+                Some("You"),
+            )
+            .map_err(|e| e.to_string())?;
+            total_segments += 1;
+        }
     }
 
     // Transcribe system audio if provided (labeled as "Others")
@@ -343,17 +360,19 @@ pub async fn transcribe_dual_audio(
 
         match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
             Ok(Ok(result)) => {
-                // Save system segments to database with "Others" speaker label
+                // Save system segments to database with "Others" speaker label (skip blank/noise)
                 for segment in &result.segments {
-                    db.add_transcript_segment(
-                        &meeting_id,
-                        segment.start_time,
-                        segment.end_time,
-                        &segment.text,
-                        Some("Others"),
-                    )
-                    .map_err(|e| e.to_string())?;
-                    total_segments += 1;
+                    if !should_skip_segment(&segment.text) {
+                        db.add_transcript_segment(
+                            &meeting_id,
+                            segment.start_time,
+                            segment.end_time,
+                            &segment.text,
+                            Some("Others"),
+                        )
+                        .map_err(|e| e.to_string())?;
+                        total_segments += 1;
+                    }
                 }
                 Some(result)
             }

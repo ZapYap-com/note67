@@ -53,6 +53,20 @@ fn clear_reference_buffer() {
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
+/// Check if a transcript segment should be skipped (blank audio, inaudible, etc.)
+fn should_skip_segment(text: &str) -> bool {
+    let text_lower = text.to_lowercase();
+    // Skip common Whisper artifacts for silence/noise
+    text_lower.contains("[blank_audio]")
+        || text_lower.contains("[inaudible]")
+        || text_lower.contains("[ inaudible ]")
+        || text_lower.contains("[silence]")
+        || text_lower.contains("[music]")
+        || text_lower.contains("[applause]")
+        || text_lower.contains("[laughter]")
+        || text.trim().is_empty()
+}
+
 /// Live transcription state
 pub struct LiveTranscriptionState {
     pub is_running: AtomicBool,
@@ -226,42 +240,51 @@ pub async fn start_live_transcription(
                                 }
                             }
 
-                            // Determine speaker based on audio source
-                            let speaker = match audio_source {
-                                AudioSource::Mic => Some("You"),
-                                AudioSource::System => Some("Others"),
-                            };
-
-                            // Save segments to database with speaker
-                            let db = app_clone.state::<Database>();
-                            for segment in &transcription.segments {
-                                if let Err(e) = db.add_transcript_segment(
-                                    &meeting_id_clone,
-                                    segment.start_time,
-                                    segment.end_time,
-                                    &segment.text,
-                                    speaker,
-                                ) {
-                                    eprintln!("Failed to save transcript segment: {}", e);
-                                }
-                            }
-
-                            // Store segments in memory (for final result)
-                            live_state_clone
+                            // Filter out blank/noise segments
+                            let valid_segments: Vec<_> = transcription
                                 .segments
-                                .lock()
-                                .await
-                                .extend(transcription.segments.clone());
+                                .into_iter()
+                                .filter(|s| !should_skip_segment(&s.text))
+                                .collect();
 
-                            // Emit event with audio source
-                            let event = TranscriptionUpdateEvent {
-                                meeting_id: meeting_id_clone.clone(),
-                                segments: transcription.segments,
-                                is_final: false,
-                                audio_source,
-                            };
+                            if !valid_segments.is_empty() {
+                                // Determine speaker based on audio source
+                                let speaker = match audio_source {
+                                    AudioSource::Mic => Some("You"),
+                                    AudioSource::System => Some("Others"),
+                                };
 
-                            let _ = app_clone.emit("transcription-update", event);
+                                // Save segments to database with speaker
+                                let db = app_clone.state::<Database>();
+                                for segment in &valid_segments {
+                                    if let Err(e) = db.add_transcript_segment(
+                                        &meeting_id_clone,
+                                        segment.start_time,
+                                        segment.end_time,
+                                        &segment.text,
+                                        speaker,
+                                    ) {
+                                        eprintln!("Failed to save transcript segment: {}", e);
+                                    }
+                                }
+
+                                // Store segments in memory (for final result)
+                                live_state_clone
+                                    .segments
+                                    .lock()
+                                    .await
+                                    .extend(valid_segments.clone());
+
+                                // Emit event with audio source
+                                let event = TranscriptionUpdateEvent {
+                                    meeting_id: meeting_id_clone.clone(),
+                                    segments: valid_segments,
+                                    is_final: false,
+                                    audio_source,
+                                };
+
+                                let _ = app_clone.emit("transcription-update", event);
+                            }
                         }
                     }
                     Ok(Err(e)) => {
