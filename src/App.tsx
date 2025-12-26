@@ -125,7 +125,7 @@ function App() {
     setSelectedMeetingId(meeting.id);
   }, [createMeeting]);
 
-  const handleStartMeeting = async () => {
+  const handleStartMeeting = useCallback(async () => {
     const meeting = await createMeeting("Untitled");
     setSelectedMeetingId(meeting.id);
     setRecordingMeetingId(meeting.id);
@@ -133,7 +133,7 @@ function App() {
     await startRecording(meeting.id);
     // Start live transcription
     await startLiveTranscription(meeting.id, profile?.name || "Me");
-  };
+  }, [createMeeting, startRecording, startLiveTranscription, profile?.name]);
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
   useEffect(() => {
@@ -147,6 +147,22 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNewNote]);
+
+  // Keyboard shortcut: Cmd/Ctrl + R for new note and start recording
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "r") {
+        e.preventDefault();
+        // Only start if not already recording and setup is complete
+        if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
+          handleStartMeeting();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting]);
 
   // Keyboard shortcut: ESC to close modals
   useEffect(() => {
@@ -168,6 +184,19 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [contextMenu, showDeleteConfirm, showSettings, selectedMeetingId]);
+
+  // Keyboard shortcut: Cmd/Ctrl + , to open settings
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setShowSettings(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Global right-click handler - prevent default and show custom menu
   useEffect(() => {
@@ -809,28 +838,72 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
           Select a meeting or start a new one
         </p>
         <div
-          className="mt-4 flex items-center justify-center gap-2 text-xs"
+          className="mt-4 flex flex-col items-center gap-2 text-xs"
           style={{ color: "var(--color-text-tertiary)" }}
         >
-          <kbd
-            className="px-1.5 py-0.5 rounded font-medium"
-            style={{
-              backgroundColor: "var(--color-sidebar)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            ⌘
-          </kbd>
-          <kbd
-            className="px-1.5 py-0.5 rounded font-medium"
-            style={{
-              backgroundColor: "var(--color-sidebar)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            N
-          </kbd>
-          <span>to create new note</span>
+          <div className="flex items-center gap-2">
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ⌘
+            </kbd>
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              N
+            </kbd>
+            <span>new note</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ⌘
+            </kbd>
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              R
+            </kbd>
+            <span>new note + record</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ⌘
+            </kbd>
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ,
+            </kbd>
+            <span>settings</span>
+          </div>
         </div>
         {needsSetup && (
           <button
