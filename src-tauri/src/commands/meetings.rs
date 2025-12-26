@@ -215,13 +215,17 @@ pub fn search_meetings(db: State<Database>, query: String) -> Result<Vec<Meeting
 }
 
 #[tauri::command]
-pub fn end_meeting(db: State<Database>, id: String) -> Result<(), String> {
+pub fn end_meeting(
+    db: State<Database>,
+    id: String,
+    audio_path: Option<String>,
+) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
 
     conn.execute(
-        "UPDATE meetings SET ended_at = ?1, updated_at = ?2 WHERE id = ?3",
-        (now.to_rfc3339(), now.to_rfc3339(), &id),
+        "UPDATE meetings SET ended_at = ?1, updated_at = ?2, audio_path = ?3 WHERE id = ?4",
+        (now.to_rfc3339(), now.to_rfc3339(), &audio_path, &id),
     )
     .map_err(|e| e.to_string())?;
 

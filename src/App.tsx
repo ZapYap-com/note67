@@ -14,12 +14,7 @@ import {
   useSummaries,
   useTranscription,
 } from "./hooks";
-import type {
-  Meeting,
-  SummaryType,
-  TranscriptSegment,
-  UpdateMeeting,
-} from "./types";
+import type { Meeting, SummaryType, TranscriptSegment } from "./types";
 
 // Import seeder for dev console access
 import "./utils/seeder";
@@ -36,8 +31,7 @@ function App() {
   const { isRecording, audioLevel, startRecording, stopRecording } =
     useRecording();
   const { loadedModel } = useModels();
-  const { isTranscribing, transcript, transcribe, loadTranscript } =
-    useTranscription();
+  const { isTranscribing, transcribe, loadTranscript } = useTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
   const { profile } = useProfile();
@@ -54,7 +48,7 @@ function App() {
     "notes" | "transcript" | "summary"
   >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
-  const [editingDescription, setEditingDescription] = useState(false);
+  const [_editingDescription, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
   const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
@@ -122,6 +116,7 @@ function App() {
     const meeting = await createMeeting("Untitled");
     setSelectedMeetingId(meeting.id);
     setRecordingMeetingId(meeting.id);
+    setActiveTab("transcript");
     await startRecording(meeting.id);
   };
 
@@ -223,8 +218,8 @@ function App() {
 
   const handleStopRecording = async () => {
     if (recordingMeetingId) {
-      await stopRecording();
-      await endMeeting(recordingMeetingId);
+      const audioPath = await stopRecording();
+      await endMeeting(recordingMeetingId, audioPath ?? undefined);
       setRecordingMeetingId(null);
     }
   };
@@ -255,11 +250,11 @@ function App() {
   const handleSelectMeeting = async (meeting: Meeting) => {
     setSelectedMeetingId(meeting.id);
     if (!meetingTranscripts[meeting.id]) {
-      await loadTranscript(meeting.id);
-      if (transcript.length > 0) {
+      const segments = await loadTranscript(meeting.id);
+      if (segments.length > 0) {
         setMeetingTranscripts((prev) => ({
           ...prev,
-          [meeting.id]: transcript,
+          [meeting.id]: segments,
         }));
       }
     }
@@ -536,13 +531,11 @@ function App() {
             audioLevel={audioLevel}
             activeTab={activeTab}
             editingTitle={editingTitle}
-            editingDescription={editingDescription}
             hasModel={!!loadedModel}
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
-            onEditDescription={() => setEditingDescription(true)}
             onUpdateTitle={handleUpdateTitle}
             onUpdateDescription={handleUpdateDescription}
             onStopRecording={handleStopRecording}
@@ -811,13 +804,11 @@ interface MeetingViewProps {
   audioLevel: number;
   activeTab: "notes" | "transcript" | "summary";
   editingTitle: boolean;
-  editingDescription: boolean;
   hasModel: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
-  onEditDescription: () => void;
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
   onStopRecording: () => void;
@@ -835,7 +826,6 @@ function MeetingView({
   audioLevel,
   activeTab,
   editingTitle,
-  editingDescription,
   hasModel,
   ollamaRunning,
   hasOllamaModel,
@@ -1288,21 +1278,24 @@ function ContextMenu({ x, y, type, onAction }: ContextMenuProps) {
           "0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
       }}
     >
-      {menuItems.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => onAction(item.id)}
-          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-sm transition-colors hover:bg-black/5"
-          style={{
-            color: item.danger ? "#ef4444" : "var(--color-text)",
-          }}
-        >
-          <span style={{ color: item.danger ? "#ef4444" : "var(--color-text-secondary)" }}>
-            {item.icon}
-          </span>
-          {item.label}
-        </button>
-      ))}
+      {menuItems.map((item) => {
+        const isDanger = "danger" in item && item.danger;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onAction(item.id)}
+            className="w-full px-3 py-1.5 flex items-center gap-2.5 text-sm transition-colors hover:bg-black/5"
+            style={{
+              color: isDanger ? "#ef4444" : "var(--color-text)",
+            }}
+          >
+            <span style={{ color: isDanger ? "#ef4444" : "var(--color-text-secondary)" }}>
+              {item.icon}
+            </span>
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

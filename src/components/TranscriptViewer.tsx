@@ -37,6 +37,22 @@ export function TranscriptViewer({ segments, isLoading }: TranscriptViewerProps)
   );
 }
 
+function SpeakerLabel({ speaker }: { speaker: string | null }) {
+  if (!speaker) return null;
+
+  const isYou = speaker === "You";
+  return (
+    <span
+      className="text-xs font-medium shrink-0"
+      style={{
+        color: isYou ? "var(--color-accent)" : "var(--color-text-secondary)",
+      }}
+    >
+      {speaker}
+    </span>
+  );
+}
+
 function TranscriptSegmentRow({ segment }: { segment: TranscriptSegment }) {
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -52,9 +68,16 @@ function TranscriptSegmentRow({ segment }: { segment: TranscriptSegment }) {
       >
         {formatTime(segment.start_time)}
       </span>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
-        {segment.text}
-      </p>
+      <div className="flex-1 min-w-0">
+        {segment.speaker && (
+          <div className="mb-0.5">
+            <SpeakerLabel speaker={segment.speaker} />
+          </div>
+        )}
+        <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
+          {segment.text}
+        </p>
+      </div>
     </div>
   );
 }

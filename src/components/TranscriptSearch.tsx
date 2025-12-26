@@ -1,6 +1,22 @@
 import { useState, useMemo } from "react";
 import type { TranscriptSegment } from "../types";
 
+function SpeakerLabel({ speaker }: { speaker: string | null }) {
+  if (!speaker) return null;
+
+  const isYou = speaker === "You";
+  return (
+    <span
+      className="text-xs font-medium"
+      style={{
+        color: isYou ? "var(--color-accent)" : "var(--color-text-secondary)",
+      }}
+    >
+      {speaker}
+    </span>
+  );
+}
+
 interface TranscriptSearchProps {
   segments: TranscriptSegment[];
   onSegmentClick?: (segment: TranscriptSegment) => void;
@@ -110,9 +126,16 @@ export function TranscriptSearch({ segments, onSegmentClick }: TranscriptSearchP
             >
               {formatTime(segment.start_time)}
             </span>
-            <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
-              {highlightMatch(segment.text, searchQuery)}
-            </p>
+            <div className="flex-1 min-w-0">
+              {segment.speaker && (
+                <div className="mb-0.5">
+                  <SpeakerLabel speaker={segment.speaker} />
+                </div>
+              )}
+              <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
+                {highlightMatch(segment.text, searchQuery)}
+              </p>
+            </div>
           </button>
         ))}
         {filteredSegments.length === 0 && searchQuery && (

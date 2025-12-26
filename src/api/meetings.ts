@@ -22,8 +22,8 @@ export const meetingsApi = {
     return invoke("search_meetings", { query });
   },
 
-  end: (id: string): Promise<void> => {
-    return invoke("end_meeting", { id });
+  end: (id: string, audioPath?: string): Promise<void> => {
+    return invoke("end_meeting", { id, audioPath });
   },
 
   delete: (id: string): Promise<void> => {

@@ -13,7 +13,7 @@ interface UseMeetingsReturn {
   updateMeeting: (id: string, update: UpdateMeeting) => Promise<Meeting>;
   searchMeetings: (query: string) => Promise<void>;
   clearSearch: () => void;
-  endMeeting: (id: string) => Promise<void>;
+  endMeeting: (id: string, audioPath?: string) => Promise<void>;
   deleteMeeting: (id: string) => Promise<void>;
 }
 
@@ -79,11 +79,11 @@ export function useMeetings(): UseMeetingsReturn {
     refresh();
   }, [refresh]);
 
-  const endMeeting = useCallback(async (id: string): Promise<void> => {
-    await meetingsApi.end(id);
+  const endMeeting = useCallback(async (id: string, audioPath?: string): Promise<void> => {
+    await meetingsApi.end(id, audioPath);
     setMeetings((prev) =>
       prev.map((m) =>
-        m.id === id ? { ...m, ended_at: new Date().toISOString() } : m
+        m.id === id ? { ...m, ended_at: new Date().toISOString(), audio_path: audioPath ?? null } : m
       )
     );
   }, []);

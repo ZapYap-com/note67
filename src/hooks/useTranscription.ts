@@ -55,7 +55,7 @@ interface UseTranscriptionReturn {
   transcript: TranscriptSegment[];
   error: string | null;
   transcribe: (audioPath: string, meetingId: string) => Promise<TranscriptionResult | null>;
-  loadTranscript: (meetingId: string) => Promise<void>;
+  loadTranscript: (meetingId: string) => Promise<TranscriptSegment[]>;
 }
 
 export function useTranscription(): UseTranscriptionReturn {
@@ -91,13 +91,15 @@ export function useTranscription(): UseTranscriptionReturn {
     []
   );
 
-  const loadTranscript = useCallback(async (meetingId: string) => {
+  const loadTranscript = useCallback(async (meetingId: string): Promise<TranscriptSegment[]> => {
     try {
       setError(null);
       const segments = await transcriptionApi.getTranscript(meetingId);
       setTranscript(segments);
+      return segments;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return [];
     }
   }, []);
 
