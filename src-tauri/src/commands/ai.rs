@@ -5,9 +5,61 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use crate::ai::prompts::MAX_CONTENT_LENGTH;
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts};
 use crate::db::models::{Summary, SummaryType};
 use crate::db::Database;
+
+/// Split text into chunks of approximately max_size characters
+/// Tries to split on sentence boundaries when possible
+fn split_into_chunks(text: &str, max_size: usize) -> Vec<String> {
+    if text.len() <= max_size {
+        return vec![text.to_string()];
+    }
+
+    let mut chunks = Vec::new();
+    let mut current_chunk = String::new();
+
+    // Split by sentences (rough approximation)
+    for sentence in text.split_inclusive(|c| c == '.' || c == '!' || c == '?') {
+        if current_chunk.len() + sentence.len() > max_size && !current_chunk.is_empty() {
+            chunks.push(current_chunk.trim().to_string());
+            current_chunk = String::new();
+        }
+        current_chunk.push_str(sentence);
+    }
+
+    if !current_chunk.trim().is_empty() {
+        chunks.push(current_chunk.trim().to_string());
+    }
+
+    // If we still have chunks that are too large, force split them
+    let mut final_chunks = Vec::new();
+    for chunk in chunks {
+        if chunk.len() <= max_size {
+            final_chunks.push(chunk);
+        } else {
+            // Force split on word boundaries
+            let words: Vec<&str> = chunk.split_whitespace().collect();
+            let mut sub_chunk = String::new();
+            for word in words {
+                if sub_chunk.len() + word.len() + 1 > max_size && !sub_chunk.is_empty() {
+                    final_chunks.push(sub_chunk.trim().to_string());
+                    sub_chunk = String::new();
+                }
+                if !sub_chunk.is_empty() {
+                    sub_chunk.push(' ');
+                }
+                sub_chunk.push_str(word);
+            }
+            if !sub_chunk.trim().is_empty() {
+                final_chunks.push(sub_chunk.trim().to_string());
+            }
+        }
+    }
+
+    final_chunks
+}
 
 pub struct AiState {
     pub client: Arc<OllamaClient>,
@@ -161,24 +213,84 @@ pub async fn generate_summary(
 
     // Parse summary type
     let stype = SummaryType::from_str(&summary_type);
+    let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
 
-    // Build prompt based on summary type
-    let prompt = match stype {
-        SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
-        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript, notes.as_deref()),
-        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript, notes.as_deref()),
-        SummaryType::Custom => {
-            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
-            SummaryPrompts::custom(&transcript, &user_prompt, notes.as_deref())
+    // Check if we need to use chunked summarization
+    let response = if transcript.len() > MAX_CONTENT_LENGTH {
+        // Split transcript into chunks
+        let chunks = split_into_chunks(&transcript, MAX_CONTENT_LENGTH);
+        let total_chunks = chunks.len();
+
+        // Summarize each chunk
+        let mut chunk_summaries = Vec::new();
+        for (i, chunk) in chunks.iter().enumerate() {
+            let chunk_prompt = match stype {
+                SummaryType::Overview => {
+                    SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks)
+                }
+                SummaryType::ActionItems => {
+                    SummaryPrompts::chunk_action_items(chunk, i + 1, total_chunks)
+                }
+                SummaryType::KeyDecisions => {
+                    SummaryPrompts::chunk_key_decisions(chunk, i + 1, total_chunks)
+                }
+                SummaryType::Custom => {
+                    SummaryPrompts::chunk_custom(chunk, &user_prompt_str, i + 1, total_chunks)
+                }
+            };
+
+            let chunk_response = ai_state
+                .client
+                .generate(&model, &chunk_prompt, 0.7, Some(4096))
+                .await
+                .map_err(|e| e.to_string())?;
+
+            chunk_summaries.push(strip_thinking_tags(&chunk_response));
         }
-    };
 
-    // Generate with Ollama
-    let response = ai_state
-        .client
-        .generate(&model, &prompt, 0.7, Some(4096))
-        .await
-        .map_err(|e| e.to_string())?;
+        // Merge chunk summaries
+        let merge_prompt = match stype {
+            SummaryType::Overview => {
+                SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::ActionItems => {
+                SummaryPrompts::merge_action_items(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::KeyDecisions => {
+                SummaryPrompts::merge_key_decisions(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::Custom => {
+                SummaryPrompts::merge_custom(&chunk_summaries, &user_prompt_str, notes.as_deref())
+            }
+        };
+
+        ai_state
+            .client
+            .generate(&model, &merge_prompt, 0.7, Some(4096))
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        // Build prompt based on summary type (single pass)
+        let prompt = match stype {
+            SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
+            SummaryType::ActionItems => {
+                SummaryPrompts::action_items(&transcript, notes.as_deref())
+            }
+            SummaryType::KeyDecisions => {
+                SummaryPrompts::key_decisions(&transcript, notes.as_deref())
+            }
+            SummaryType::Custom => {
+                SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
+            }
+        };
+
+        // Generate with Ollama
+        ai_state
+            .client
+            .generate(&model, &prompt, 0.7, Some(4096))
+            .await
+            .map_err(|e| e.to_string())?
+    };
 
     // Strip thinking tags from response
     let clean_response = strip_thinking_tags(&response);
@@ -261,41 +373,142 @@ pub async fn generate_summary_stream(
 
     // Parse summary type
     let stype = SummaryType::from_str(&summary_type);
+    let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
 
-    // Build prompt based on summary type
-    let prompt = match stype {
-        SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
-        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript, notes.as_deref()),
-        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript, notes.as_deref()),
-        SummaryType::Custom => {
-            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
-            SummaryPrompts::custom(&transcript, &user_prompt, notes.as_deref())
-        }
-    };
+    // Check if we need to use chunked summarization
+    let response = if transcript.len() > MAX_CONTENT_LENGTH {
+        // Split transcript into chunks
+        let chunks = split_into_chunks(&transcript, MAX_CONTENT_LENGTH);
+        let total_chunks = chunks.len();
 
-    // Create channel for streaming
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
-    let app_clone = app.clone();
-    let note_id_clone = note_id.clone();
+        // Emit a status message about processing chunks
+        let status_event = SummaryStreamEvent {
+            note_id: note_id.clone(),
+            chunk: format!("Processing {} sections...\n\n", total_chunks),
+            is_done: false,
+        };
+        let _ = app.emit("summary-stream", status_event);
 
-    // Spawn task to receive chunks and emit events
-    tokio::spawn(async move {
-        while let Some(chunk) = rx.recv().await {
-            let event = SummaryStreamEvent {
-                note_id: note_id_clone.clone(),
-                chunk,
+        // Summarize each chunk (non-streaming for intermediate steps)
+        let mut chunk_summaries = Vec::new();
+        for (i, chunk) in chunks.iter().enumerate() {
+            // Emit progress update
+            let progress_event = SummaryStreamEvent {
+                note_id: note_id.clone(),
+                chunk: format!("Analyzing section {} of {}...\n", i + 1, total_chunks),
                 is_done: false,
             };
-            let _ = app_clone.emit("summary-stream", event);
-        }
-    });
+            let _ = app.emit("summary-stream", progress_event);
 
-    // Generate with Ollama streaming
-    let response = ai_state
-        .client
-        .generate_stream(&model, &prompt, 0.7, Some(4096), tx)
-        .await
-        .map_err(|e| e.to_string())?;
+            let chunk_prompt = match stype {
+                SummaryType::Overview => {
+                    SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks)
+                }
+                SummaryType::ActionItems => {
+                    SummaryPrompts::chunk_action_items(chunk, i + 1, total_chunks)
+                }
+                SummaryType::KeyDecisions => {
+                    SummaryPrompts::chunk_key_decisions(chunk, i + 1, total_chunks)
+                }
+                SummaryType::Custom => {
+                    SummaryPrompts::chunk_custom(chunk, &user_prompt_str, i + 1, total_chunks)
+                }
+            };
+
+            let chunk_response = ai_state
+                .client
+                .generate(&model, &chunk_prompt, 0.7, Some(4096))
+                .await
+                .map_err(|e| e.to_string())?;
+
+            chunk_summaries.push(strip_thinking_tags(&chunk_response));
+        }
+
+        // Emit status about merging
+        let merge_event = SummaryStreamEvent {
+            note_id: note_id.clone(),
+            chunk: "\nCombining results...\n\n".to_string(),
+            is_done: false,
+        };
+        let _ = app.emit("summary-stream", merge_event);
+
+        // Merge chunk summaries with streaming
+        let merge_prompt = match stype {
+            SummaryType::Overview => {
+                SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::ActionItems => {
+                SummaryPrompts::merge_action_items(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::KeyDecisions => {
+                SummaryPrompts::merge_key_decisions(&chunk_summaries, notes.as_deref())
+            }
+            SummaryType::Custom => {
+                SummaryPrompts::merge_custom(&chunk_summaries, &user_prompt_str, notes.as_deref())
+            }
+        };
+
+        // Create channel for streaming the merge
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+        let app_clone = app.clone();
+        let note_id_clone = note_id.clone();
+
+        // Spawn task to receive chunks and emit events
+        tokio::spawn(async move {
+            while let Some(chunk) = rx.recv().await {
+                let event = SummaryStreamEvent {
+                    note_id: note_id_clone.clone(),
+                    chunk,
+                    is_done: false,
+                };
+                let _ = app_clone.emit("summary-stream", event);
+            }
+        });
+
+        ai_state
+            .client
+            .generate_stream(&model, &merge_prompt, 0.7, Some(4096), tx)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        // Build prompt based on summary type (single pass)
+        let prompt = match stype {
+            SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
+            SummaryType::ActionItems => {
+                SummaryPrompts::action_items(&transcript, notes.as_deref())
+            }
+            SummaryType::KeyDecisions => {
+                SummaryPrompts::key_decisions(&transcript, notes.as_deref())
+            }
+            SummaryType::Custom => {
+                SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
+            }
+        };
+
+        // Create channel for streaming
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+        let app_clone = app.clone();
+        let note_id_clone = note_id.clone();
+
+        // Spawn task to receive chunks and emit events
+        tokio::spawn(async move {
+            while let Some(chunk) = rx.recv().await {
+                let event = SummaryStreamEvent {
+                    note_id: note_id_clone.clone(),
+                    chunk,
+                    is_done: false,
+                };
+                let _ = app_clone.emit("summary-stream", event);
+            }
+        });
+
+        // Generate with Ollama streaming
+        ai_state
+            .client
+            .generate_stream(&model, &prompt, 0.7, Some(4096), tx)
+            .await
+            .map_err(|e| e.to_string())?
+    };
 
     // Emit done event
     let done_event = SummaryStreamEvent {

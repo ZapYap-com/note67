@@ -1,3 +1,7 @@
+/// Maximum content length before chunking is applied (in characters)
+/// Roughly ~10k chars to leave room for prompt template and response
+pub const MAX_CONTENT_LENGTH: usize = 10000;
+
 /// Prompt templates for note summaries
 pub struct SummaryPrompts;
 
@@ -187,6 +191,248 @@ RESPONSE:"#,
             notes_section,
             transcript,
             user_prompt
+        )
+    }
+
+    /// Summarize a chunk of transcript (used for long transcripts)
+    pub fn chunk_overview(chunk: &str, chunk_num: usize, total_chunks: usize) -> String {
+        format!(
+            r#"You are summarizing part {chunk_num} of {total_chunks} from a longer transcript.
+
+TRANSCRIPT CHUNK:
+{chunk}
+
+Provide a concise summary of this section including:
+- Main topics discussed in this part
+- Key points and any conclusions
+- Important details mentioned
+
+Rules:
+- Be concise but capture all important information
+- Use bullet points for clarity
+- Do NOT use emojis
+- This will be combined with other chunk summaries later
+
+CHUNK SUMMARY:"#
+        )
+    }
+
+    /// Summarize a chunk for action items
+    pub fn chunk_action_items(chunk: &str, chunk_num: usize, total_chunks: usize) -> String {
+        format!(
+            r#"You are extracting action items from part {chunk_num} of {total_chunks} of a longer transcript.
+
+TRANSCRIPT CHUNK:
+{chunk}
+
+Extract any action items from this section:
+- The specific task to be completed
+- Responsible person (if mentioned)
+- Deadline or timeline (if mentioned)
+
+Rules:
+- Use numbered lists
+- Be specific and actionable
+- Do NOT use emojis
+- If no action items in this chunk, respond with "No action items in this section."
+
+ACTION ITEMS:"#
+        )
+    }
+
+    /// Summarize a chunk for key decisions
+    pub fn chunk_key_decisions(chunk: &str, chunk_num: usize, total_chunks: usize) -> String {
+        format!(
+            r#"You are extracting key decisions from part {chunk_num} of {total_chunks} of a longer transcript.
+
+TRANSCRIPT CHUNK:
+{chunk}
+
+Extract any decisions from this section:
+- What was decided
+- Context or reasoning (if provided)
+- Who made or approved the decision (if mentioned)
+
+Rules:
+- Use numbered lists
+- Be specific and clear
+- Do NOT use emojis
+- If no decisions in this chunk, respond with "No decisions in this section."
+
+KEY DECISIONS:"#
+        )
+    }
+
+    /// Merge multiple chunk summaries into a final summary
+    pub fn merge_overview(chunk_summaries: &[String], notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        let summaries = chunk_summaries
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("--- Part {} ---\n{}", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            r#"You are creating a final summary from multiple section summaries of a long transcript{}.
+{}SECTION SUMMARIES:
+{summaries}
+
+Combine these into a single, coherent summary that includes:
+- Main topics discussed
+- Key points and conclusions
+- Overall outcome
+
+Rules:
+- Use markdown formatting (headings, bullet points, bold for emphasis)
+- Be concise and professional
+- Do NOT use emojis
+- Eliminate redundancy between sections
+- Present information in a logical flow
+- If user notes are provided, incorporate relevant context
+
+FINAL SUMMARY:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section
+        )
+    }
+
+    /// Merge multiple chunk action items into a final list
+    pub fn merge_action_items(chunk_summaries: &[String], notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        let summaries = chunk_summaries
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("--- Part {} ---\n{}", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            r#"You are consolidating action items from multiple sections of a long transcript{}.
+{}SECTION ACTION ITEMS:
+{summaries}
+
+Combine these into a single, deduplicated list of action items:
+- The specific task to be completed
+- Responsible person (if mentioned)
+- Deadline or timeline (if mentioned)
+
+Rules:
+- Use markdown formatting with numbered lists
+- Remove duplicate or redundant items
+- Be specific and actionable
+- Do NOT use emojis
+- If no action items found, state "No action items identified."
+- If user notes mention action items, include them
+
+ACTION ITEMS:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section
+        )
+    }
+
+    /// Merge multiple chunk key decisions into a final list
+    pub fn merge_key_decisions(chunk_summaries: &[String], notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        let summaries = chunk_summaries
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("--- Part {} ---\n{}", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            r#"You are consolidating key decisions from multiple sections of a long transcript{}.
+{}SECTION DECISIONS:
+{summaries}
+
+Combine these into a single, deduplicated list of decisions:
+- What was decided
+- Context or reasoning (if provided)
+- Who made or approved the decision (if mentioned)
+
+Rules:
+- Use markdown formatting with numbered lists
+- Remove duplicate or redundant decisions
+- Be specific and clear
+- Do NOT use emojis
+- If no decisions found, state "No key decisions identified."
+- If user notes mention decisions, include them
+
+KEY DECISIONS:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section
+        )
+    }
+
+    /// Merge custom prompt chunk results
+    pub fn merge_custom(chunk_summaries: &[String], user_prompt: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        let summaries = chunk_summaries
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("--- Part {} ---\n{}", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            r#"You are consolidating results from multiple sections of a long transcript{} for the user's request.
+{}USER REQUEST:
+{user_prompt}
+
+SECTION RESULTS:
+{summaries}
+
+Combine these into a single, coherent response that addresses the user's request.
+
+Rules:
+- Use markdown formatting where appropriate
+- Be professional and concise
+- Do NOT use emojis
+- Eliminate redundancy
+- If user notes are provided, consider them as additional context
+
+FINAL RESPONSE:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section
+        )
+    }
+
+    /// Custom prompt for a single chunk
+    pub fn chunk_custom(chunk: &str, user_prompt: &str, chunk_num: usize, total_chunks: usize) -> String {
+        format!(
+            r#"You are analyzing part {chunk_num} of {total_chunks} from a longer transcript for the user's request.
+
+USER REQUEST:
+{user_prompt}
+
+TRANSCRIPT CHUNK:
+{chunk}
+
+Provide relevant information from this section that addresses the user's request.
+
+Rules:
+- Be concise but capture all relevant information
+- Do NOT use emojis
+- This will be combined with results from other sections later
+
+RESPONSE:"#
         )
     }
 }
