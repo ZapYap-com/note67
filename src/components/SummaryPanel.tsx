@@ -117,6 +117,9 @@ export function SummaryPanel({
         <div className="space-y-2">
           {summaries.map((summary, index) => {
             const isExpanded = isSummaryExpanded(summary.id, index);
+            // Hide delete button if this is the only overview
+            const overviewCount = summaries.filter(s => s.summary_type === "overview").length;
+            const hideDelete = summary.summary_type === "overview" && overviewCount === 1;
             return (
               <div
                 key={summary.id}
@@ -179,19 +182,21 @@ export function SummaryPanel({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(summary.id);
-                      }}
-                      className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
-                      style={{ color: "var(--color-text-tertiary)" }}
-                      title="Delete"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    {!hideDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(summary.id);
+                        }}
+                        className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+                        style={{ color: "var(--color-text-tertiary)" }}
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* AI-generated content with markdown rendering - collapsible */}
