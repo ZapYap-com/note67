@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   Settings,
   SummaryPanel,
@@ -185,6 +186,23 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting]);
+
+  // Listen for tray "New Meeting" event
+  useEffect(() => {
+    const unlisten = listen("tray-new-meeting", () => {
+      // Start a new meeting if not already recording and setup is complete
+      if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
+        handleStartMeeting();
+      } else {
+        // Just create a new note
+        handleNewNote();
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting, handleNewNote]);
 
   // Keyboard shortcut: ESC to close modals
   useEffect(() => {

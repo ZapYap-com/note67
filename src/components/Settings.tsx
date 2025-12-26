@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useModels, useOllama } from "../hooks";
 import { useProfileStore } from "../stores/profileStore";
 import { useThemeStore } from "../stores/themeStore";
@@ -449,6 +450,29 @@ function ProfileTab() {
 
 function AppearanceTab() {
   const { theme, setTheme } = useThemeStore();
+  const [autostart, setAutostart] = useState(false);
+  const [autostartLoading, setAutostartLoading] = useState(true);
+
+  useEffect(() => {
+    invoke<boolean>("get_autostart_enabled")
+      .then((enabled) => {
+        setAutostart(enabled);
+        setAutostartLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to get autostart status:", err);
+        setAutostartLoading(false);
+      });
+  }, []);
+
+  const handleAutostartChange = async (enabled: boolean) => {
+    try {
+      await invoke("set_autostart_enabled", { enabled });
+      setAutostart(enabled);
+    } catch (err) {
+      console.error("Failed to set autostart:", err);
+    }
+  };
 
   const themeOptions: {
     value: "light" | "dark" | "system";
@@ -602,6 +626,77 @@ function AppearanceTab() {
       <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
         Your theme preference is stored locally on this device.
       </p>
+
+      {/* Startup Section */}
+      <div className="pt-4 border-t" style={{ borderColor: "var(--color-border)" }}>
+        <h3
+          className="text-sm font-semibold mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
+          Startup
+        </h3>
+        <button
+          onClick={() => handleAutostartChange(!autostart)}
+          disabled={autostartLoading}
+          className="w-full flex items-center justify-between p-3 rounded-xl transition-colors"
+          style={{ backgroundColor: "var(--color-bg-subtle)" }}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className="w-10 h-10 rounded-lg flex items-center justify-center"
+              style={{
+                backgroundColor: autostart
+                  ? "var(--color-accent-light)"
+                  : "var(--color-bg-elevated)",
+                color: autostart
+                  ? "var(--color-accent)"
+                  : "var(--color-text-secondary)",
+              }}
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                />
+              </svg>
+            </span>
+            <div className="text-left">
+              <p
+                className="font-medium"
+                style={{ color: "var(--color-text)" }}
+              >
+                Launch at login
+              </p>
+              <p
+                className="text-xs"
+                style={{ color: "var(--color-text-tertiary)" }}
+              >
+                Start Note67 automatically when you log in
+              </p>
+            </div>
+          </div>
+          <div
+            className="w-11 h-6 rounded-full transition-colors relative"
+            style={{
+              backgroundColor: autostart ? "var(--color-accent)" : "var(--color-border)",
+            }}
+          >
+            <div
+              className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform"
+              style={{
+                transform: autostart ? "translateX(22px)" : "translateX(2px)",
+              }}
+            />
+          </div>
+        </button>
+      </div>
     </div>
   );
 }
