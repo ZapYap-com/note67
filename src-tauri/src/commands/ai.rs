@@ -190,10 +190,6 @@ pub async fn generate_summary(
         .get_transcript_segments(&note_id)
         .map_err(|e| e.to_string())?;
 
-    if segments.is_empty() {
-        return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
-    }
-
     // Get user notes (description) from database
     let notes = db
         .get_note_description(&note_id)
@@ -207,8 +203,11 @@ pub async fn generate_summary(
         .collect::<Vec<_>>()
         .join(" ");
 
-    if transcript.trim().is_empty() {
-        return Err("No meaningful transcript found (only silence detected).".to_string());
+    let has_transcript = !transcript.trim().is_empty();
+    let has_notes = notes.as_ref().is_some_and(|n| !n.trim().is_empty());
+
+    if !has_transcript && !has_notes {
+        return Err("No content to summarize. Please add notes or record audio first.".to_string());
     }
 
     // Parse summary type
@@ -216,7 +215,7 @@ pub async fn generate_summary(
     let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
 
     // Check if we need to use chunked summarization
-    let response = if transcript.len() > MAX_CONTENT_LENGTH {
+    let response = if has_transcript && transcript.len() > MAX_CONTENT_LENGTH {
         // Split transcript into chunks
         let chunks = split_into_chunks(&transcript, MAX_CONTENT_LENGTH);
         let total_chunks = chunks.len();
@@ -269,8 +268,8 @@ pub async fn generate_summary(
             .generate(&model, &merge_prompt, 0.7, Some(4096))
             .await
             .map_err(|e| e.to_string())?
-    } else {
-        // Build prompt based on summary type (single pass)
+    } else if has_transcript {
+        // Build prompt based on summary type (single pass with transcript)
         let prompt = match stype {
             SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
             SummaryType::ActionItems => {
@@ -281,6 +280,24 @@ pub async fn generate_summary(
             }
             SummaryType::Custom => {
                 SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
+            }
+        };
+
+        // Generate with Ollama
+        ai_state
+            .client
+            .generate(&model, &prompt, 0.7, Some(4096))
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        // Notes only (no transcript)
+        let notes_content = notes.as_ref().unwrap();
+        let prompt = match stype {
+            SummaryType::Overview => SummaryPrompts::overview_notes_only(notes_content),
+            SummaryType::ActionItems => SummaryPrompts::action_items_notes_only(notes_content),
+            SummaryType::KeyDecisions => SummaryPrompts::key_decisions_notes_only(notes_content),
+            SummaryType::Custom => {
+                SummaryPrompts::custom_notes_only(notes_content, &user_prompt_str)
             }
         };
 
@@ -350,10 +367,6 @@ pub async fn generate_summary_stream(
         .get_transcript_segments(&note_id)
         .map_err(|e| e.to_string())?;
 
-    if segments.is_empty() {
-        return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
-    }
-
     // Get user notes (description) from database
     let notes = db
         .get_note_description(&note_id)
@@ -367,8 +380,11 @@ pub async fn generate_summary_stream(
         .collect::<Vec<_>>()
         .join(" ");
 
-    if transcript.trim().is_empty() {
-        return Err("No meaningful transcript found (only silence detected).".to_string());
+    let has_transcript = !transcript.trim().is_empty();
+    let has_notes = notes.as_ref().is_some_and(|n| !n.trim().is_empty());
+
+    if !has_transcript && !has_notes {
+        return Err("No content to summarize. Please add notes or record audio first.".to_string());
     }
 
     // Parse summary type
@@ -376,7 +392,7 @@ pub async fn generate_summary_stream(
     let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
 
     // Check if we need to use chunked summarization
-    let response = if transcript.len() > MAX_CONTENT_LENGTH {
+    let response = if has_transcript && transcript.len() > MAX_CONTENT_LENGTH {
         // Split transcript into chunks
         let chunks = split_into_chunks(&transcript, MAX_CONTENT_LENGTH);
         let total_chunks = chunks.len();
@@ -472,16 +488,31 @@ pub async fn generate_summary_stream(
             .map_err(|e| e.to_string())?
     } else {
         // Build prompt based on summary type (single pass)
-        let prompt = match stype {
-            SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
-            SummaryType::ActionItems => {
-                SummaryPrompts::action_items(&transcript, notes.as_deref())
+        let prompt = if has_transcript {
+            match stype {
+                SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
+                SummaryType::ActionItems => {
+                    SummaryPrompts::action_items(&transcript, notes.as_deref())
+                }
+                SummaryType::KeyDecisions => {
+                    SummaryPrompts::key_decisions(&transcript, notes.as_deref())
+                }
+                SummaryType::Custom => {
+                    SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
+                }
             }
-            SummaryType::KeyDecisions => {
-                SummaryPrompts::key_decisions(&transcript, notes.as_deref())
-            }
-            SummaryType::Custom => {
-                SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
+        } else {
+            // Notes only (no transcript)
+            let notes_content = notes.as_ref().unwrap();
+            match stype {
+                SummaryType::Overview => SummaryPrompts::overview_notes_only(notes_content),
+                SummaryType::ActionItems => SummaryPrompts::action_items_notes_only(notes_content),
+                SummaryType::KeyDecisions => {
+                    SummaryPrompts::key_decisions_notes_only(notes_content)
+                }
+                SummaryType::Custom => {
+                    SummaryPrompts::custom_notes_only(notes_content, &user_prompt_str)
+                }
             }
         };
 

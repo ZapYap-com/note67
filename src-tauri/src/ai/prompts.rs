@@ -21,6 +21,100 @@ USER NOTES:
         }
     }
 
+    /// Generate a note overview summary (notes only, no transcript)
+    pub fn overview_notes_only(notes: &str) -> String {
+        format!(
+            r#"You are a professional note summarizer. Analyze the following user notes and provide a clear, concise summary in markdown format.
+
+USER NOTES:
+{notes}
+
+Provide a professional summary that includes:
+- Main topics covered
+- Key points and conclusions
+- Overall outcome or insights
+
+Rules:
+- Use markdown formatting (headings, bullet points, bold for emphasis)
+- Be concise and professional
+- Do NOT use emojis
+- Focus on factual information
+- Use clear, formal language
+
+SUMMARY:"#
+        )
+    }
+
+    /// Extract action items from notes only
+    pub fn action_items_notes_only(notes: &str) -> String {
+        format!(
+            r#"You are a professional note analyst. Extract all action items from the following user notes.
+
+USER NOTES:
+{notes}
+
+For each action item, identify:
+- The specific task to be completed
+- Responsible person (if mentioned)
+- Deadline or timeline (if mentioned)
+
+Rules:
+- Use markdown formatting with numbered lists
+- Be specific and actionable
+- Do NOT use emojis
+- If no action items are found, state "No action items identified."
+- Use professional, clear language
+
+ACTION ITEMS:"#
+        )
+    }
+
+    /// Extract key decisions from notes only
+    pub fn key_decisions_notes_only(notes: &str) -> String {
+        format!(
+            r#"You are a professional note analyst. Extract all key decisions from the following user notes.
+
+USER NOTES:
+{notes}
+
+For each decision, include:
+- What was decided
+- Context or reasoning (if provided)
+- Who made or approved the decision (if mentioned)
+
+Rules:
+- Use markdown formatting with numbered lists
+- Be specific and clear
+- Do NOT use emojis
+- If no decisions were made, state "No key decisions identified."
+- Use professional, formal language
+
+KEY DECISIONS:"#
+        )
+    }
+
+    /// Generate a custom summary from notes only
+    pub fn custom_notes_only(notes: &str, user_prompt: &str) -> String {
+        format!(
+            r#"You are a professional note analyst. Analyze the following user notes based on the user's request.
+
+USER NOTES:
+{notes}
+
+USER REQUEST:
+{user_prompt}
+
+Rules:
+- Use markdown formatting where appropriate
+- Be professional and concise
+- Do NOT use emojis
+- Directly address the user's request
+- Use clear, formal language
+
+RESPONSE:"#
+        )
+    }
+
     /// Generate a note overview summary
     pub fn overview(transcript: &str, notes: Option<&str>) -> String {
         let notes_section = Self::format_notes_section(notes);

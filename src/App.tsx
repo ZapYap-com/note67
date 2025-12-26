@@ -1241,7 +1241,7 @@ function NoteView({
           !isTranscribing &&
           !isGenerating &&
           !isRegenerating &&
-          transcript.length > 0 &&
+          (transcript.length > 0 || descValue.trim().length > 0) &&
           hasOllamaModel &&
           ollamaRunning && (
             <button
