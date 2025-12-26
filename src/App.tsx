@@ -71,7 +71,7 @@ function App() {
     null
   );
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "system" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates">("about");
+  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "system" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates" | "disclaimer">("about");
   const [meetingTranscripts, setMeetingTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
