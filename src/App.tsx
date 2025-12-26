@@ -684,11 +684,8 @@ function App() {
             onDelete={() => setShowDeleteConfirm(true)}
             onExport={async () => {
               try {
-                console.log("Exporting note:", selectedNote.id);
                 const data = await exportApi.exportMarkdown(selectedNote.id);
-                console.log("Export data:", data);
-                const path = await exportApi.saveToFile(data.markdown, data.filename);
-                console.log("Saved to:", path);
+                await exportApi.saveToFileWithDialog(data.markdown, data.filename);
               } catch (error) {
                 console.error("Export failed:", error);
               }

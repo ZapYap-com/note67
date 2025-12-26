@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 export interface ExportData {
   markdown: string;
@@ -11,12 +13,17 @@ export const exportApi = {
     return invoke("export_note_markdown", { noteId });
   },
 
-  saveToFile: (content: string, filename: string): Promise<string> => {
-    return invoke("save_export_to_file", { content, filename });
-  },
+  saveToFileWithDialog: async (content: string, defaultFilename: string): Promise<string | null> => {
+    const filePath = await save({
+      defaultPath: defaultFilename,
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    });
 
-  getExportDirectory: (): Promise<string> => {
-    return invoke("get_export_directory");
+    if (filePath) {
+      await writeTextFile(filePath, content);
+      return filePath;
+    }
+    return null;
   },
 
   copyToClipboard: async (text: string): Promise<void> => {
