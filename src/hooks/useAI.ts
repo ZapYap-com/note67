@@ -1,48 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
 import { aiApi } from "../api";
-import type { OllamaStatus, Summary, SummaryType } from "../types";
+import { useOllamaStore } from "../stores/ollamaStore";
+import type { Summary, SummaryType } from "../types";
 
 export function useOllama() {
-  const [status, setStatus] = useState<OllamaStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const store = useOllamaStore();
 
-  const checkStatus = useCallback(async () => {
-    try {
-      setLoading(true);
-      const status = await aiApi.getOllamaStatus();
-      setStatus(status);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
+  // Initialize on first mount
+  useEffect(() => {
+    if (store.status === null && !store.loading) {
+      store.checkStatus();
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    checkStatus();
-  }, [checkStatus]);
-
-  const selectModel = useCallback(async (modelName: string) => {
-    try {
-      await aiApi.selectModel(modelName);
-      await checkStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      throw err;
-    }
-  }, [checkStatus]);
+    store.checkStatus();
+  }, []);
 
   return {
-    status,
-    loading,
-    error,
-    isRunning: status?.running ?? false,
-    models: status?.models ?? [],
-    selectedModel: status?.selected_model ?? null,
-    checkStatus,
-    selectModel,
+    status: store.status,
+    loading: store.loading,
+    error: store.error,
+    isRunning: store.isRunning(),
+    models: store.models(),
+    selectedModel: store.selectedModel(),
+    checkStatus: store.checkStatus,
+    selectModel: store.selectModel,
   };
 }
 
