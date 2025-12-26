@@ -6,15 +6,18 @@
 
 #![cfg(target_os = "macos")]
 
+use std::ffi::c_void;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use hound::{WavSpec, WavWriter};
 use objc2::rc::Retained;
-use objc2::runtime::{AnyObject, Bool};
-use objc2::{class, msg_send};
-use objc2_foundation::{NSArray, NSError};
+use objc2::runtime::{AnyClass, AnyObject, Bool, Sel};
+use objc2::{class, msg_send, sel};
+// CMSampleBuffer is an opaque type, we use a raw pointer
+type CMSampleBufferRef = *mut c_void;
+use objc2_foundation::{NSArray, NSError, NSObject};
 
 use super::system_audio::{SystemAudioCapture, SystemAudioResult};
 use crate::audio::AudioError;
@@ -48,22 +51,208 @@ fn macos_version() -> (u32, u32, u32) {
     )
 }
 
-/// State for an active system audio capture session
-struct CaptureState {
-    output_path: PathBuf,
+/// Shared state for audio writing, accessible from the callback
+struct AudioWriterState {
     writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
+    output_path: PathBuf,
+    is_active: bool,
+}
+
+/// Global state for the audio callback (needed because ObjC callbacks can't capture Rust state directly)
+static AUDIO_WRITER: std::sync::OnceLock<Mutex<Option<AudioWriterState>>> = std::sync::OnceLock::new();
+
+fn get_audio_writer() -> &'static Mutex<Option<AudioWriterState>> {
+    AUDIO_WRITER.get_or_init(|| Mutex::new(None))
+}
+
+/// Global buffer for system audio samples (for live transcription)
+static SYSTEM_AUDIO_BUFFER: std::sync::OnceLock<Mutex<Vec<f32>>> = std::sync::OnceLock::new();
+
+fn get_system_audio_buffer() -> &'static Mutex<Vec<f32>> {
+    SYSTEM_AUDIO_BUFFER.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Take all samples from the system audio buffer (clears the buffer)
+pub fn take_system_audio_samples() -> Vec<f32> {
+    if let Ok(mut buffer) = get_system_audio_buffer().lock() {
+        std::mem::take(&mut *buffer)
+    } else {
+        Vec::new()
+    }
+}
+
+/// Clear the system audio buffer
+pub fn clear_system_audio_buffer() {
+    if let Ok(mut buffer) = get_system_audio_buffer().lock() {
+        buffer.clear();
+    }
+}
+
+/// Process audio samples from CMSampleBuffer and write to WAV file
+fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
+    unsafe {
+        extern "C" {
+            fn CMSampleBufferGetDataBuffer(sbuf: CMSampleBufferRef) -> *mut c_void;
+            fn CMBlockBufferGetDataLength(block_buffer: *mut c_void) -> usize;
+            fn CMBlockBufferGetDataPointer(
+                block_buffer: *mut c_void,
+                offset: usize,
+                length_at_offset_out: *mut usize,
+                total_length_out: *mut usize,
+                data_pointer_out: *mut *mut u8,
+            ) -> i32;
+        }
+
+        // Get the data buffer from the sample buffer
+        let block_buffer = CMSampleBufferGetDataBuffer(sample_buffer);
+        if block_buffer.is_null() {
+            return;
+        }
+
+        // Get data pointer and length
+        let mut data_ptr: *mut u8 = std::ptr::null_mut();
+        let mut length_at_offset: usize = 0;
+        let mut total_length: usize = 0;
+
+        let status = CMBlockBufferGetDataPointer(
+            block_buffer,
+            0,
+            &mut length_at_offset,
+            &mut total_length,
+            &mut data_ptr,
+        );
+
+        if status != 0 || data_ptr.is_null() || total_length == 0 {
+            return;
+        }
+
+        // ScreenCaptureKit provides audio as 32-bit float samples
+        let sample_count = total_length / std::mem::size_of::<f32>();
+        if sample_count == 0 {
+            return;
+        }
+
+        let samples = std::slice::from_raw_parts(data_ptr as *const f32, sample_count);
+
+        // Write audio data to WAV file
+        if let Ok(mut guard) = get_audio_writer().lock() {
+            if let Some(ref mut state) = *guard {
+                if state.is_active {
+                    if let Some(ref mut writer) = state.writer {
+                        for &sample in samples {
+                            // Convert f32 (-1.0 to 1.0) to i16
+                            let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                            let _ = writer.write_sample(sample_i16);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also push to the system audio buffer for live transcription
+        // Downsample from stereo 48kHz to mono 16kHz for Whisper
+        // ScreenCaptureKit gives us stereo, so take every 6th sample (48000/16000 * 2 channels = 6)
+        if let Ok(mut buffer) = get_system_audio_buffer().lock() {
+            for (i, &sample) in samples.iter().enumerate() {
+                // Take left channel only (even indices) and downsample 3x
+                if i % 6 == 0 {
+                    buffer.push(sample);
+                }
+            }
+        }
+    }
+}
+
+/// Create and register a dynamic Objective-C class that implements SCStreamOutput protocol
+fn create_stream_output_class() -> *const AnyClass {
+    use std::sync::Once;
+    static REGISTER: Once = Once::new();
+    static mut CLASS: *const AnyClass = std::ptr::null();
+
+    REGISTER.call_once(|| {
+        unsafe {
+            extern "C" {
+                fn objc_allocateClassPair(
+                    superclass: *const AnyClass,
+                    name: *const i8,
+                    extra_bytes: usize,
+                ) -> *mut AnyClass;
+                fn objc_registerClassPair(cls: *mut AnyClass);
+                fn class_addMethod(
+                    cls: *mut AnyClass,
+                    name: Sel,
+                    imp: *const c_void,
+                    types: *const i8,
+                ) -> bool;
+                fn class_addProtocol(cls: *mut AnyClass, protocol: *const c_void) -> bool;
+                fn objc_getProtocol(name: *const i8) -> *const c_void;
+            }
+
+            // Create class inheriting from NSObject
+            let superclass = class!(NSObject) as *const _ as *const AnyClass;
+            let class_name = b"RustSCStreamOutput\0".as_ptr() as *const i8;
+            let new_class = objc_allocateClassPair(superclass, class_name, 0);
+
+            if new_class.is_null() {
+                // Class might already exist
+                CLASS = class!(RustSCStreamOutput) as *const _ as *const AnyClass;
+                return;
+            }
+
+            // Add SCStreamOutput protocol
+            let protocol_name = b"SCStreamOutput\0".as_ptr() as *const i8;
+            let protocol = objc_getProtocol(protocol_name);
+            if !protocol.is_null() {
+                class_addProtocol(new_class, protocol);
+            }
+
+            // Add the stream:didOutputSampleBuffer:ofType: method
+            extern "C" fn stream_did_output_sample_buffer(
+                _this: &NSObject,
+                _cmd: Sel,
+                _stream: *mut AnyObject,
+                sample_buffer: CMSampleBufferRef,
+                output_type: i64,
+            ) {
+                // SCStreamOutputType: 0 = screen, 1 = audio
+                if output_type == 1 && !sample_buffer.is_null() {
+                    process_audio_buffer(sample_buffer);
+                }
+            }
+
+            let method_sel = sel!(stream:didOutputSampleBuffer:ofType:);
+            // v = void, @ = object (self), : = SEL, @ = object (stream), @ = object (sampleBuffer), q = int64 (type)
+            let method_types = b"v@:@@q\0".as_ptr() as *const i8;
+            class_addMethod(
+                new_class,
+                method_sel,
+                stream_did_output_sample_buffer as *const c_void,
+                method_types,
+            );
+
+            objc_registerClassPair(new_class);
+            CLASS = new_class as *const AnyClass;
+        }
+    });
+
+    unsafe { CLASS }
+}
+
+/// State for an active system audio capture session
+struct CaptureSession {
+    stream: Retained<AnyObject>,
+    /// Keep the delegate alive while capturing (prevents deallocation)
+    #[allow(dead_code)]
+    output_delegate: Retained<AnyObject>,
 }
 
 /// macOS system audio capture implementation using ScreenCaptureKit
 pub struct MacOSSystemAudioCapture {
     is_capturing: AtomicBool,
-    capture_state: Mutex<Option<CaptureState>>,
-    // Note: We don't store the SCStream directly due to thread safety constraints.
-    // Instead, we manage the capture lifecycle through the capture_state.
+    session: Mutex<Option<CaptureSession>>,
 }
 
 // Safety: MacOSSystemAudioCapture uses atomic operations and mutex for thread safety.
-// The SCStream is not stored directly to avoid Send/Sync issues with Objective-C objects.
 unsafe impl Send for MacOSSystemAudioCapture {}
 unsafe impl Sync for MacOSSystemAudioCapture {}
 
@@ -71,7 +260,7 @@ impl MacOSSystemAudioCapture {
     pub fn new() -> Self {
         Self {
             is_capturing: AtomicBool::new(false),
-            capture_state: Mutex::new(None),
+            session: Mutex::new(None),
         }
     }
 
@@ -191,24 +380,36 @@ impl MacOSSystemAudioCapture {
 
             // Enable audio capture
             let _: () = msg_send![config, setCapturesAudio: Bool::YES];
-            // Exclude our own app's audio
+            // Exclude our own app's audio to avoid feedback
             let _: () = msg_send![config, setExcludesCurrentProcessAudio: Bool::YES];
-            // Minimal video settings (we only want audio)
-            let _: () = msg_send![config, setWidth: 1_u32];
-            let _: () = msg_send![config, setHeight: 1_u32];
 
-            // Set audio configuration
+            // Video settings - use small but valid dimensions
+            // Some versions of ScreenCaptureKit don't like 1x1
+            let _: () = msg_send![config, setWidth: 2_u32];
+            let _: () = msg_send![config, setHeight: 2_u32];
+            let _: () = msg_send![config, setMinimumFrameInterval: 1.0_f64 / 1.0_f64]; // 1 FPS minimum
+            let _: () = msg_send![config, setShowsCursor: Bool::NO];
+
+            // Set audio configuration - use 48kHz stereo float
             let _: () = msg_send![config, setSampleRate: 48000_i32];
             let _: () = msg_send![config, setChannelCount: 2_i32];
+
+            eprintln!("ScreenCaptureKit: Created stream configuration");
 
             Retained::retain(config)
                 .ok_or_else(|| AudioError::PermissionDenied("Failed to retain config".to_string()))
         }
     }
 
-    /// Start the capture stream
-    fn start_stream(&self, filter: &AnyObject, config: &AnyObject) -> Result<(), AudioError> {
+    /// Create the stream output delegate and start capture
+    fn start_capture_session(
+        &self,
+        filter: &AnyObject,
+        config: &AnyObject,
+        output_path: PathBuf,
+    ) -> Result<CaptureSession, AudioError> {
         unsafe {
+            eprintln!("ScreenCaptureKit: Creating stream...");
             let stream_class = class!(SCStream);
 
             // Allocate and initialize the stream
@@ -221,7 +422,97 @@ impl MacOSSystemAudioCapture {
             ];
 
             if stream.is_null() {
+                eprintln!("ScreenCaptureKit: Failed to create stream");
                 return Err(AudioError::PermissionDenied("Failed to create stream".to_string()));
+            }
+            eprintln!("ScreenCaptureKit: Stream created successfully");
+
+            let stream = Retained::retain(stream)
+                .ok_or_else(|| AudioError::PermissionDenied("Failed to retain stream".to_string()))?;
+
+            // Create the output delegate
+            eprintln!("ScreenCaptureKit: Creating output delegate...");
+            let output_class = create_stream_output_class();
+            if output_class.is_null() {
+                eprintln!("ScreenCaptureKit: Failed to create output class");
+                return Err(AudioError::PermissionDenied(
+                    "Failed to create output class".to_string(),
+                ));
+            }
+
+            let output_delegate: *mut AnyObject = msg_send![output_class as *const AnyObject, new];
+            if output_delegate.is_null() {
+                eprintln!("ScreenCaptureKit: Failed to create output delegate instance");
+                return Err(AudioError::PermissionDenied(
+                    "Failed to create output delegate".to_string(),
+                ));
+            }
+            eprintln!("ScreenCaptureKit: Output delegate created");
+
+            let output_delegate = Retained::retain(output_delegate)
+                .ok_or_else(|| AudioError::PermissionDenied("Failed to retain delegate".to_string()))?;
+
+            // Create a dispatch queue for audio callbacks
+            let queue_label = b"com.note67.screencapture.audio\0".as_ptr() as *const i8;
+            extern "C" {
+                fn dispatch_queue_create(label: *const i8, attr: *const c_void) -> *mut c_void;
+            }
+            let queue = dispatch_queue_create(queue_label, std::ptr::null());
+            eprintln!("ScreenCaptureKit: Dispatch queue created");
+
+            // Add output to stream - SCStreamOutputType.audio = 1
+            eprintln!("ScreenCaptureKit: Adding stream output...");
+            let mut error: *mut NSError = std::ptr::null_mut();
+            let success: Bool = msg_send![
+                &*stream,
+                addStreamOutput: &*output_delegate,
+                type: 1_i64,  // SCStreamOutputType.audio
+                sampleHandlerQueue: queue,
+                error: &mut error
+            ];
+
+            if !success.as_bool() {
+                let error_msg = if !error.is_null() {
+                    let desc: *mut AnyObject = msg_send![error, localizedDescription];
+                    if !desc.is_null() {
+                        let utf8: *const i8 = msg_send![desc, UTF8String];
+                        if !utf8.is_null() {
+                            std::ffi::CStr::from_ptr(utf8).to_string_lossy().to_string()
+                        } else {
+                            "Unknown".to_string()
+                        }
+                    } else {
+                        "Unknown".to_string()
+                    }
+                } else {
+                    "Unknown".to_string()
+                };
+                eprintln!("ScreenCaptureKit: Failed to add stream output: {}", error_msg);
+                return Err(AudioError::PermissionDenied(
+                    format!("Failed to add stream output: {}", error_msg),
+                ));
+            }
+            eprintln!("ScreenCaptureKit: Stream output added successfully");
+
+            // Initialize the WAV writer
+            let spec = WavSpec {
+                channels: 2,
+                sample_rate: 48000,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+
+            let writer = WavWriter::create(&output_path, spec)
+                .map_err(|e| AudioError::IoError(std::io::Error::other(e.to_string())))?;
+
+            // Set up global audio writer state
+            {
+                let mut guard = get_audio_writer().lock().map_err(|_| AudioError::LockError)?;
+                *guard = Some(AudioWriterState {
+                    writer: Some(writer),
+                    output_path: output_path.clone(),
+                    is_active: true,
+                });
             }
 
             // Start capturing
@@ -232,19 +523,81 @@ impl MacOSSystemAudioCapture {
                 if error.is_null() {
                     let _ = tx.send(Ok(()));
                 } else {
-                    let _ = tx.send(Err(AudioError::PermissionDenied(
-                        "Failed to start capture".to_string(),
-                    )));
+                    // Get detailed error message
+                    let error_desc: *mut AnyObject = msg_send![error, localizedDescription];
+                    let error_msg = if !error_desc.is_null() {
+                        let utf8: *const i8 = msg_send![error_desc, UTF8String];
+                        if !utf8.is_null() {
+                            std::ffi::CStr::from_ptr(utf8)
+                                .to_string_lossy()
+                                .to_string()
+                        } else {
+                            "Unknown error".to_string()
+                        }
+                    } else {
+                        "Unknown error".to_string()
+                    };
+                    eprintln!("ScreenCaptureKit error: {}", error_msg);
+                    let _ = tx.send(Err(AudioError::PermissionDenied(format!(
+                        "Failed to start capture: {}",
+                        error_msg
+                    ))));
                 }
             });
 
-            let _: () = msg_send![stream, startCaptureWithCompletionHandler: &*block];
+            let _: () = msg_send![&*stream, startCaptureWithCompletionHandler: &*block];
 
             rx.recv_timeout(std::time::Duration::from_secs(10))
                 .map_err(|_| AudioError::PermissionDenied("Timeout starting capture".to_string()))??;
 
-            Ok(())
+            eprintln!("ScreenCaptureKit: Capture started successfully!");
+
+            Ok(CaptureSession {
+                stream,
+                output_delegate,
+            })
         }
+    }
+
+    /// Stop the capture session
+    fn stop_capture_session(&self) -> Result<Option<PathBuf>, AudioError> {
+        let session = {
+            let mut guard = self.session.lock().map_err(|_| AudioError::LockError)?;
+            guard.take()
+        };
+
+        let output_path = if let Some(session) = session {
+            unsafe {
+                // Stop the stream
+                use std::sync::mpsc;
+                let (tx, rx) = mpsc::channel();
+
+                let block = block2::RcBlock::new(move |error: *mut NSError| {
+                    let _ = tx.send(error.is_null());
+                });
+
+                let _: () = msg_send![&*session.stream, stopCaptureWithCompletionHandler: &*block];
+
+                // Wait for stop to complete
+                let _ = rx.recv_timeout(std::time::Duration::from_secs(5));
+            }
+
+            // Finalize WAV file and get path
+            let mut guard = get_audio_writer().lock().map_err(|_| AudioError::LockError)?;
+            if let Some(mut state) = guard.take() {
+                state.is_active = false;
+                if let Some(writer) = state.writer.take() {
+                    let _ = writer.finalize();
+                }
+                Some(state.output_path)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(output_path)
     }
 }
 
@@ -286,28 +639,14 @@ impl SystemAudioCapture for MacOSSystemAudioCapture {
         let filter = Self::create_audio_filter(&content)?;
         let config = Self::create_stream_config()?;
 
-        // Create WAV writer
-        let spec = WavSpec {
-            channels: 2,
-            sample_rate: 48000,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
+        // Start capture session with output delegate
+        let session = self.start_capture_session(&filter, &config, output_path)?;
 
-        let writer = WavWriter::create(&output_path, spec)
-            .map_err(|e| AudioError::IoError(std::io::Error::other(e.to_string())))?;
-
-        // Store capture state
+        // Store session
         {
-            let mut state = self.capture_state.lock().map_err(|_| AudioError::LockError)?;
-            *state = Some(CaptureState {
-                output_path: output_path.clone(),
-                writer: Some(writer),
-            });
+            let mut guard = self.session.lock().map_err(|_| AudioError::LockError)?;
+            *guard = Some(session);
         }
-
-        // Start the stream
-        self.start_stream(&filter, &config)?;
 
         self.is_capturing.store(true, Ordering::SeqCst);
         Ok(())
@@ -318,18 +657,7 @@ impl SystemAudioCapture for MacOSSystemAudioCapture {
             return Ok(None);
         }
 
-        // Finalize WAV file and get path
-        let output_path = {
-            let mut state = self.capture_state.lock().map_err(|_| AudioError::LockError)?;
-            if let Some(mut capture_state) = state.take() {
-                if let Some(writer) = capture_state.writer.take() {
-                    let _ = writer.finalize();
-                }
-                Some(capture_state.output_path)
-            } else {
-                None
-            }
-        };
+        let output_path = self.stop_capture_session()?;
 
         self.is_capturing.store(false, Ordering::SeqCst);
         Ok(output_path)

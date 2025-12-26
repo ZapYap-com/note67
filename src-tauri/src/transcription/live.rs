@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
-use crate::audio::RecordingState;
+use crate::audio::{take_system_audio_samples, RecordingState};
 use crate::transcription::{TranscriptionError, TranscriptionResult, TranscriptionSegment};
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
@@ -84,14 +84,22 @@ pub async fn start_live_transcription(
                 break;
             }
 
-            // Get audio buffer
-            let samples = recording_state_clone.take_audio_buffer();
-            if samples.is_empty() {
-                continue;
-            }
+            // Get audio buffers - both mic and system audio
+            let mic_samples = recording_state_clone.take_audio_buffer();
+            let system_samples = take_system_audio_samples();
 
-            let sample_rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
-            let channels = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
+            // Prefer system audio if available (captures meeting participants)
+            // Fall back to mic audio if system audio is empty
+            let (samples, sample_rate, channels) = if !system_samples.is_empty() {
+                // System audio is already at 16kHz mono
+                (system_samples, 16000_u32, 1_usize)
+            } else if !mic_samples.is_empty() {
+                let rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
+                let ch = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
+                (mic_samples, rate, ch)
+            } else {
+                continue;
+            };
 
             if sample_rate == 0 || channels == 0 {
                 continue;

@@ -9,6 +9,18 @@ pub use mixer::mix_wav_files;
 pub use recorder::{start_recording, stop_recording, RecordingState};
 pub use system_audio::{create_system_audio_capture, is_system_audio_available, SystemAudioCapture};
 
+// Re-export system audio buffer functions for live transcription
+#[cfg(target_os = "macos")]
+pub use macos::{clear_system_audio_buffer, take_system_audio_samples};
+
+#[cfg(not(target_os = "macos"))]
+pub fn take_system_audio_samples() -> Vec<f32> {
+    Vec::new()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn clear_system_audio_buffer() {}
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

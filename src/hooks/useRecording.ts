@@ -6,8 +6,9 @@ interface UseRecordingReturn {
   audioLevel: number;
   audioPath: string | null;
   error: string | null;
+  isDualRecording: boolean;
   startRecording: (meetingId: string) => Promise<void>;
-  stopRecording: () => Promise<string | null>;
+  stopRecording: (meetingId?: string) => Promise<string | null>;
 }
 
 export function useRecording(): UseRecordingReturn {
@@ -15,32 +16,74 @@ export function useRecording(): UseRecordingReturn {
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isDualRecording, setIsDualRecording] = useState(false);
   const levelIntervalRef = useRef<number | null>(null);
+  const currentMeetingIdRef = useRef<string | null>(null);
 
   const startRecording = useCallback(async (meetingId: string) => {
     try {
       setError(null);
-      const path = await audioApi.startRecording(meetingId);
-      setAudioPath(path);
+      currentMeetingIdRef.current = meetingId;
+
+      // Check if system audio is supported and has permission
+      const isSupported = await audioApi.isSystemAudioSupported();
+      const hasPermission = isSupported
+        ? await audioApi.hasSystemAudioPermission()
+        : false;
+
+      if (isSupported && hasPermission) {
+        // Use dual recording (mic + system audio)
+        console.log("Starting dual recording (mic + system audio)");
+        const result = await audioApi.startDualRecording(meetingId);
+        // Use the playback path if available, otherwise mic path
+        setAudioPath(result.playbackPath || result.micPath);
+        setIsDualRecording(true);
+      } else {
+        // Fall back to mic-only recording
+        console.log("Starting mic-only recording");
+        const path = await audioApi.startRecording(meetingId);
+        setAudioPath(path);
+        setIsDualRecording(false);
+      }
       setIsRecording(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
-  const stopRecording = useCallback(async (): Promise<string | null> => {
-    try {
-      setError(null);
-      const path = await audioApi.stopRecording();
-      setAudioPath(path);
-      setIsRecording(false);
-      setAudioLevel(0);
-      return path;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return null;
-    }
-  }, []);
+  const stopRecording = useCallback(
+    async (meetingId?: string): Promise<string | null> => {
+      try {
+        setError(null);
+        const id = meetingId || currentMeetingIdRef.current;
+
+        let path: string | null = null;
+
+        if (isDualRecording && id) {
+          // Stop dual recording
+          console.log("Stopping dual recording");
+          const result = await audioApi.stopDualRecording(id);
+          // Use the merged playback path, or fall back to mic path
+          path = result.playbackPath || result.micPath;
+        } else {
+          // Stop mic-only recording
+          console.log("Stopping mic-only recording");
+          path = await audioApi.stopRecording();
+        }
+
+        setAudioPath(path);
+        setIsRecording(false);
+        setIsDualRecording(false);
+        setAudioLevel(0);
+        currentMeetingIdRef.current = null;
+        return path;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        return null;
+      }
+    },
+    [isDualRecording]
+  );
 
   // Poll audio level while recording
   useEffect(() => {
@@ -77,6 +120,7 @@ export function useRecording(): UseRecordingReturn {
     audioLevel,
     audioPath,
     error,
+    isDualRecording,
     startRecording,
     stopRecording,
   };
