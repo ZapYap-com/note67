@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { TranscriptSegment } from "../types";
 
 function SpeakerLabel({ speaker }: { speaker: string | null }) {
   if (!speaker) return null;
 
-  const isYou = speaker === "You";
+  // "Me" or profile name are considered "you"
+  const isYou = speaker !== "Others";
   return (
     <span
       className="text-xs font-medium"
@@ -20,10 +21,24 @@ function SpeakerLabel({ speaker }: { speaker: string | null }) {
 interface TranscriptSearchProps {
   segments: TranscriptSegment[];
   onSegmentClick?: (segment: TranscriptSegment) => void;
+  isLive?: boolean;
 }
 
-export function TranscriptSearch({ segments, onSegmentClick }: TranscriptSearchProps) {
+export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: TranscriptSearchProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevSegmentCountRef = useRef(segments.length);
+
+  // Auto-scroll to bottom when new segments arrive (only in live mode)
+  useEffect(() => {
+    if (isLive && segments.length > prevSegmentCountRef.current) {
+      scrollContainerRef.current?.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+    prevSegmentCountRef.current = segments.length;
+  }, [segments.length, isLive]);
 
   const filteredSegments = useMemo(() => {
     if (!searchQuery.trim()) return segments;
@@ -113,7 +128,7 @@ export function TranscriptSearch({ segments, onSegmentClick }: TranscriptSearchP
       )}
 
       {/* Segments */}
-      <div className="space-y-2">
+      <div ref={scrollContainerRef} className="space-y-2 max-h-[60vh] overflow-y-auto">
         {filteredSegments.map((segment) => (
           <button
             key={segment.id}

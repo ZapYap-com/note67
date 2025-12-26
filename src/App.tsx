@@ -129,7 +129,7 @@ function App() {
     setActiveTab("transcript");
     await startRecording(meeting.id);
     // Start live transcription
-    await startLiveTranscription(meeting.id);
+    await startLiveTranscription(meeting.id, profile?.name || "Me");
   };
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
@@ -1079,7 +1079,7 @@ function MeetingView({
 
         {activeTab === "transcript" &&
           (transcript.length > 0 ? (
-            <TranscriptSearch segments={transcript} />
+            <TranscriptSearch segments={transcript} isLive={isRecording} />
           ) : (
             <div
               className="text-center py-12 text-sm"

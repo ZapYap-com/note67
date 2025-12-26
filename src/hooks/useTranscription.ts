@@ -128,11 +128,39 @@ export function useTranscription(): UseTranscriptionReturn {
   };
 }
 
+// Helper to merge consecutive segments from the same speaker
+function mergeConsecutiveSameSpeaker(
+  segments: TranscriptSegment[],
+  speaker: string
+): TranscriptSegment[] {
+  if (segments.length === 0) return [];
+
+  const result: TranscriptSegment[] = [];
+  let current = { ...segments[0] };
+
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.speaker === speaker && current.speaker === speaker) {
+      // Merge with current
+      current = {
+        ...current,
+        end_time: seg.end_time,
+        text: current.text + " " + seg.text,
+      };
+    } else {
+      result.push(current);
+      current = { ...seg };
+    }
+  }
+  result.push(current);
+  return result;
+}
+
 interface UseLiveTranscriptionReturn {
   isLiveTranscribing: boolean;
   liveSegments: TranscriptSegment[];
   error: string | null;
-  startLiveTranscription: (meetingId: string) => Promise<void>;
+  startLiveTranscription: (meetingId: string, speakerName?: string) => Promise<void>;
   stopLiveTranscription: (meetingId: string) => Promise<TranscriptionResult | null>;
 }
 
@@ -141,6 +169,7 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
   const [liveSegments, setLiveSegments] = useState<TranscriptSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const currentMeetingIdRef = useRef<string | null>(null);
+  const speakerNameRef = useRef<string>("Me");
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   // Set up event listener
@@ -154,18 +183,42 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
           // Only process events for the current meeting
           if (meeting_id !== currentMeetingIdRef.current) return;
 
-          // Convert to TranscriptSegment format and append
-          const newSegments: TranscriptSegment[] = segments.map((s, idx) => ({
-            id: Date.now() + idx,
-            meeting_id,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            text: s.text,
-            speaker: null,
-            created_at: new Date().toISOString(),
-          }));
+          const speaker = speakerNameRef.current;
 
-          setLiveSegments((prev) => [...prev, ...newSegments]);
+          setLiveSegments((prev) => {
+            // Convert new segments
+            const newSegments: TranscriptSegment[] = segments.map((s, idx) => ({
+              id: Date.now() + idx,
+              meeting_id,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              text: s.text,
+              speaker,
+              created_at: new Date().toISOString(),
+            }));
+
+            if (newSegments.length === 0) return prev;
+
+            // Merge with previous if same speaker
+            const lastPrev = prev[prev.length - 1];
+            const firstNew = newSegments[0];
+
+            if (lastPrev && lastPrev.speaker === firstNew.speaker) {
+              // Merge the first new segment with the last previous segment
+              const merged: TranscriptSegment = {
+                ...lastPrev,
+                end_time: firstNew.end_time,
+                text: lastPrev.text + " " + firstNew.text,
+              };
+              // Merge consecutive same-speaker segments in newSegments
+              const mergedNew = mergeConsecutiveSameSpeaker(newSegments.slice(1), speaker);
+              return [...prev.slice(0, -1), merged, ...mergedNew];
+            } else {
+              // Merge consecutive same-speaker segments in newSegments
+              const mergedNew = mergeConsecutiveSameSpeaker(newSegments, speaker);
+              return [...prev, ...mergedNew];
+            }
+          });
 
           if (is_final) {
             setIsLiveTranscribing(false);
@@ -183,11 +236,12 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
     };
   }, []);
 
-  const startLiveTranscription = useCallback(async (meetingId: string) => {
+  const startLiveTranscription = useCallback(async (meetingId: string, speakerName?: string) => {
     try {
       setError(null);
       setLiveSegments([]);
       currentMeetingIdRef.current = meetingId;
+      speakerNameRef.current = speakerName || "Me";
       await transcriptionApi.startLiveTranscription(meetingId);
       setIsLiveTranscribing(true);
     } catch (e) {
