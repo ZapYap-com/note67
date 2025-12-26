@@ -1260,13 +1260,13 @@ function NoteView({
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {activeTab === "notes" && (
-          <div>
+          <div className="h-full">
             <textarea
               value={descValue}
               onChange={(e) => setDescValue(e.target.value)}
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
-              className="w-full min-h-[300px] text-base leading-relaxed resize-none"
+              className="w-full h-full text-base leading-relaxed resize-none"
               style={{ color: "var(--color-text)" }}
             />
           </div>
