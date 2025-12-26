@@ -674,6 +674,7 @@ function App() {
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
             isRegenerating={isGeneratingSummaryTitle}
+            isTranscribing={isLiveTranscribing && recordingNoteId === selectedNote.id}
             summariesRefreshKey={summariesRefreshKey}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
@@ -1034,6 +1035,7 @@ interface NoteViewProps {
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
   isRegenerating: boolean;
+  isTranscribing: boolean;
   summariesRefreshKey: number;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
@@ -1056,6 +1058,7 @@ function NoteView({
   ollamaRunning,
   hasOllamaModel,
   isRegenerating,
+  isTranscribing,
   summariesRefreshKey,
   onTabChange,
   onEditTitle,
@@ -1292,6 +1295,7 @@ function NoteView({
             hasTranscript={transcript.length > 0}
             hasOllamaModel={hasOllamaModel}
             ollamaRunning={ollamaRunning}
+            isTranscribing={isTranscribing}
             onGenerate={(type: SummaryType, prompt?: string) =>
               generateSummary(type, prompt)
             }

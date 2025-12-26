@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Summary, SummaryType } from "../types";
 
@@ -9,6 +9,7 @@ interface SummaryPanelProps {
   hasTranscript: boolean;
   hasOllamaModel: boolean;
   ollamaRunning: boolean;
+  isTranscribing: boolean;
   onGenerate: (type: SummaryType, customPrompt?: string) => void;
   onGenerateAll: () => void;
   onDelete: (summaryId: number) => void;
@@ -22,14 +23,6 @@ const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
   { value: "key_decisions", label: "Key Decisions" },
 ];
 
-// Helper to compute expanded summaries - always expand latest (first) summary
-function getExpandedSummaries(summaries: Summary[]): Set<number> {
-  if (summaries.length > 0) {
-    return new Set([summaries[0].id]);
-  }
-  return new Set();
-}
-
 export function SummaryPanel({
   summaries,
   isGenerating,
@@ -37,6 +30,7 @@ export function SummaryPanel({
   hasTranscript,
   hasOllamaModel,
   ollamaRunning,
+  isTranscribing,
   onGenerate,
   onGenerateAll,
   onDelete,
@@ -45,36 +39,29 @@ export function SummaryPanel({
 }: SummaryPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustom, setShowCustom] = useState(false);
-  const [expandedSummaries, setExpandedSummaries] = useState<Set<number>>(() => getExpandedSummaries(summaries));
+  // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
+  const [expandState, setExpandState] = useState<Map<number, boolean>>(new Map());
 
-  // Auto-expand the newest summary when summaries change
-  useEffect(() => {
-    if (summaries.length > 0) {
-      const newestSummaryId = summaries[0].id;
-      setExpandedSummaries((prev) => {
-        // Add the newest summary to expanded set
-        const next = new Set(prev);
-        next.add(newestSummaryId);
-        return next;
-      });
-    }
-  }, [summaries]);
-
-  const toggleSummary = (id: number) => {
-    setExpandedSummaries((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+  const toggleSummary = (id: number, currentlyExpanded: boolean) => {
+    setExpandState((prev) => {
+      const next = new Map(prev);
+      next.set(id, !currentlyExpanded);
       return next;
     });
   };
 
-  const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating;
+  // A summary is expanded if explicitly set, or if newest (index 0) by default
+  const isSummaryExpanded = (summaryId: number, index: number) => {
+    const explicit = expandState.get(summaryId);
+    if (explicit !== undefined) return explicit;
+    // Default: newest is expanded, others are collapsed
+    return index === 0;
+  };
+
+  const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating && !isTranscribing;
 
   const getStatusMessage = () => {
+    if (isTranscribing) return "Waiting for transcription to complete...";
     if (!ollamaRunning) return "Ollama is not running. Start it first.";
     if (!hasOllamaModel) return "No AI model selected.";
     if (!hasTranscript) return "No transcript available.";
@@ -144,7 +131,17 @@ export function SummaryPanel({
               {/* Regenerate Summary & Title Button */}
               {onRegenerate && (
                 <button
-                  onClick={onRegenerate}
+                  onClick={() => {
+                    // Collapse all existing overview summaries before regenerating
+                    setExpandState((prev) => {
+                      const next = new Map(prev);
+                      summaries
+                        .filter((s) => s.summary_type === "overview")
+                        .forEach((s) => next.set(s.id, false));
+                      return next;
+                    });
+                    onRegenerate();
+                  }}
                   disabled={!canGenerate || isRegenerating}
                   className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
@@ -256,8 +253,8 @@ export function SummaryPanel({
       {/* Summaries List */}
       {summaries.length > 0 && (
         <div className="space-y-2">
-          {summaries.map((summary) => {
-            const isExpanded = expandedSummaries.has(summary.id);
+          {summaries.map((summary, index) => {
+            const isExpanded = isSummaryExpanded(summary.id, index);
             return (
               <div
                 key={summary.id}
@@ -270,7 +267,7 @@ export function SummaryPanel({
                 <div
                   className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
                   style={{ borderBottom: isExpanded ? "1px solid var(--color-border-subtle)" : "none" }}
-                  onClick={() => toggleSummary(summary.id)}
+                  onClick={() => toggleSummary(summary.id, isExpanded)}
                 >
                   <div className="flex items-center gap-3">
                     <svg
