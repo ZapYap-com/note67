@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export type RecordingStatus = "idle" | "recording" | "paused" | "processing";
 
-interface Meeting {
+interface Note {
   id: string;
   title: string;
   startedAt: Date;
@@ -12,7 +12,7 @@ interface Meeting {
 interface AppState {
   // Recording state
   recordingStatus: RecordingStatus;
-  currentMeeting: Meeting | null;
+  currentNote: Note | null;
   audioLevel: number;
 
   // Actions
@@ -26,16 +26,16 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   // Initial state
   recordingStatus: "idle",
-  currentMeeting: null,
+  currentNote: null,
   audioLevel: 0,
 
   // Actions
   startRecording: (title) =>
     set({
       recordingStatus: "recording",
-      currentMeeting: {
+      currentNote: {
         id: crypto.randomUUID(),
-        title: title || `Meeting ${new Date().toLocaleString()}`,
+        title: title || `Note ${new Date().toLocaleString()}`,
         startedAt: new Date(),
       },
     }),
@@ -43,8 +43,8 @@ export const useAppStore = create<AppState>((set) => ({
   stopRecording: () =>
     set((state) => ({
       recordingStatus: "processing",
-      currentMeeting: state.currentMeeting
-        ? { ...state.currentMeeting, endedAt: new Date() }
+      currentNote: state.currentNote
+        ? { ...state.currentNote, endedAt: new Date() }
         : null,
     })),
 

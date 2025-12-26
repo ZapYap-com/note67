@@ -1,13 +1,13 @@
-import { meetingsApi } from "../api/meetings";
+import { notesApi } from "../api/notes";
 import { transcriptionApi } from "../api/transcription";
 
-interface SampleMeeting {
+interface SampleNote {
   title: string;
   description: string;
   transcript: { start: number; end: number; text: string; speaker?: string }[];
 }
 
-const SAMPLE_MEETINGS: SampleMeeting[] = [
+const SAMPLE_NOTES: SampleNote[] = [
   {
     title: "Weekly Team Standup",
     description:
@@ -365,15 +365,15 @@ const SAMPLE_MEETINGS: SampleMeeting[] = [
   },
 ];
 
-export async function seedMeetings(): Promise<void> {
-  console.log("Seeding sample meetings with transcripts...");
+export async function seedNotes(): Promise<void> {
+  console.log("Seeding sample notes with transcripts...");
 
   let created = 0;
-  for (let i = 0; i < SAMPLE_MEETINGS.length; i++) {
-    const sample = SAMPLE_MEETINGS[i];
+  for (let i = 0; i < SAMPLE_NOTES.length; i++) {
+    const sample = SAMPLE_NOTES[i];
     try {
-      // Create meeting
-      const meeting = await meetingsApi.create({
+      // Create note
+      const note = await notesApi.create({
         title: sample.title,
         description: sample.description,
       });
@@ -381,7 +381,7 @@ export async function seedMeetings(): Promise<void> {
       // Add transcript segments
       for (const segment of sample.transcript) {
         await transcriptionApi.addTranscriptSegment(
-          meeting.id,
+          note.id,
           segment.start,
           segment.end,
           segment.text,
@@ -389,8 +389,8 @@ export async function seedMeetings(): Promise<void> {
         );
       }
 
-      // End the meeting (so it appears as completed)
-      await meetingsApi.end(meeting.id);
+      // End the note (so it appears as completed)
+      await notesApi.end(note.id);
 
       console.log(
         `Created: ${sample.title} (${sample.transcript.length} segments)`
@@ -401,9 +401,9 @@ export async function seedMeetings(): Promise<void> {
     }
   }
 
-  console.log(`Seeding complete! Created ${created} meetings with transcripts.`);
+  console.log(`Seeding complete! Created ${created} notes with transcripts.`);
 
-  // Reload the page to show new meetings
+  // Reload the page to show new notes
   if (created > 0) {
     console.log("Reloading page...");
     window.location.reload();
@@ -412,6 +412,6 @@ export async function seedMeetings(): Promise<void> {
 
 // Export to window for easy console access
 if (typeof window !== "undefined") {
-  (window as unknown as { seedMeetings: typeof seedMeetings }).seedMeetings =
-    seedMeetings;
+  (window as unknown as { seedNotes: typeof seedNotes }).seedNotes =
+    seedNotes;
 }

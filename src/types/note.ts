@@ -1,4 +1,4 @@
-export interface Meeting {
+export interface Note {
   id: string;
   title: string;
   description: string | null;
@@ -10,13 +10,13 @@ export interface Meeting {
   updated_at: string;
 }
 
-export interface NewMeeting {
+export interface NewNote {
   title: string;
   description?: string;
   participants?: string;
 }
 
-export interface UpdateMeeting {
+export interface UpdateNote {
   title?: string;
   description?: string;
   participants?: string;
@@ -24,8 +24,8 @@ export interface UpdateMeeting {
 
 export interface TranscriptSegment {
   id: number;
-  meeting_id: string;
-  start_time: number; // seconds from meeting start
+  note_id: string;
+  start_time: number; // seconds from note start
   end_time: number;
   text: string;
   speaker: string | null;
@@ -34,7 +34,7 @@ export interface TranscriptSegment {
 
 export interface Summary {
   id: number;
-  meeting_id: string;
+  note_id: string;
   summary_type: SummaryType;
   content: string;
   created_at: string;

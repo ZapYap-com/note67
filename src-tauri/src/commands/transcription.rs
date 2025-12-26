@@ -227,7 +227,7 @@ pub fn get_loaded_model(state: State<TranscriptionState>) -> Option<String> {
 #[tauri::command]
 pub async fn transcribe_audio(
     audio_path: String,
-    meeting_id: String,
+    note_id: String,
     speaker: Option<String>,
     state: State<'_, TranscriptionState>,
     db: State<'_, Database>,
@@ -265,7 +265,7 @@ pub async fn transcribe_audio(
     // Save segments to database (skip blank/noise segments)
     for segment in &result.segments {
         if !should_skip_segment(&segment.text) {
-            db.add_transcript_segment(&meeting_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
+            db.add_transcript_segment(&note_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -296,12 +296,12 @@ pub struct DualTranscriptionResult {
 ///
 /// - mic_path: Path to the microphone recording (labeled as "You")
 /// - system_path: Optional path to system audio recording (labeled as "Others")
-/// - meeting_id: The meeting ID to associate segments with
+/// - note_id: The note ID to associate segments with
 #[tauri::command]
 pub async fn transcribe_dual_audio(
     mic_path: String,
     system_path: Option<String>,
-    meeting_id: String,
+    note_id: String,
     state: State<'_, TranscriptionState>,
     db: State<'_, Database>,
 ) -> Result<DualTranscriptionResult, String> {
@@ -342,7 +342,7 @@ pub async fn transcribe_dual_audio(
     for segment in &mic_result.segments {
         if !should_skip_segment(&segment.text) {
             db.add_transcript_segment(
-                &meeting_id,
+                &note_id,
                 segment.start_time,
                 segment.end_time,
                 &segment.text,
@@ -364,7 +364,7 @@ pub async fn transcribe_dual_audio(
                 for segment in &result.segments {
                     if !should_skip_segment(&segment.text) {
                         db.add_transcript_segment(
-                            &meeting_id,
+                            &note_id,
                             segment.start_time,
                             segment.end_time,
                             &segment.text,
@@ -398,26 +398,26 @@ pub async fn transcribe_dual_audio(
     })
 }
 
-/// Get transcript segments for a meeting
+/// Get transcript segments for a note
 #[tauri::command]
 pub fn get_transcript(
-    meeting_id: String,
+    note_id: String,
     db: State<Database>,
 ) -> Result<Vec<crate::db::models::TranscriptSegment>, String> {
-    db.get_transcript_segments(&meeting_id).map_err(|e| e.to_string())
+    db.get_transcript_segments(&note_id).map_err(|e| e.to_string())
 }
 
 /// Add a transcript segment directly (for seeding/testing)
 #[tauri::command]
 pub fn add_transcript_segment(
-    meeting_id: String,
+    note_id: String,
     start_time: f64,
     end_time: f64,
     text: String,
     speaker: Option<String>,
     db: State<Database>,
 ) -> Result<i64, String> {
-    db.add_transcript_segment(&meeting_id, start_time, end_time, &text, speaker.as_deref())
+    db.add_transcript_segment(&note_id, start_time, end_time, &text, speaker.as_deref())
         .map_err(|e| e.to_string())
 }
 
@@ -425,7 +425,7 @@ pub fn add_transcript_segment(
 #[tauri::command]
 pub async fn start_live_transcription(
     app: AppHandle,
-    meeting_id: String,
+    note_id: String,
     state: State<'_, TranscriptionState>,
     audio_state: State<'_, AudioState>,
 ) -> Result<(), String> {
@@ -438,7 +438,7 @@ pub async fn start_live_transcription(
     let recording_state = audio_state.recording.clone();
     let live_state = state.live_state.clone();
 
-    live::start_live_transcription(app, meeting_id, recording_state, live_state, whisper_ctx)
+    live::start_live_transcription(app, note_id, recording_state, live_state, whisper_ctx)
         .await
         .map_err(|e| e.to_string())
 }
@@ -447,7 +447,7 @@ pub async fn start_live_transcription(
 #[tauri::command]
 pub async fn stop_live_transcription(
     app: AppHandle,
-    meeting_id: String,
+    note_id: String,
     state: State<'_, TranscriptionState>,
 ) -> Result<TranscriptionResult, String> {
     let live_state = state.live_state.clone();
@@ -457,7 +457,7 @@ pub async fn stop_live_transcription(
 
     // Emit final event (with empty segments - they were already sent in periodic updates)
     let event = crate::transcription::TranscriptionUpdateEvent {
-        meeting_id,
+        note_id,
         segments: vec![],
         is_final: true,
         audio_source: crate::transcription::AudioSource::Mic, // Default for final event

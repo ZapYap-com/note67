@@ -1,5 +1,5 @@
-export { MeetingEditor } from "./MeetingEditor";
-export { MeetingSearch } from "./MeetingSearch";
+export { NoteEditor } from "./NoteEditor";
+export { NoteSearch } from "./NoteSearch";
 export { ModelManager } from "./ModelManager";
 export { OllamaSettings } from "./OllamaSettings";
 export { Settings, useProfile } from "./Settings";

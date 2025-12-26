@@ -1,24 +1,24 @@
 import { useState, useEffect } from "react";
-import type { Meeting, UpdateMeeting } from "../types";
+import type { Note, UpdateNote } from "../types";
 
-interface MeetingEditorProps {
-  meeting: Meeting;
-  onSave: (update: UpdateMeeting) => Promise<void>;
+interface NoteEditorProps {
+  note: Note;
+  onSave: (update: UpdateNote) => Promise<void>;
   onClose: () => void;
 }
 
-export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) {
-  const [title, setTitle] = useState(meeting.title);
-  const [description, setDescription] = useState(meeting.description || "");
-  const [participants, setParticipants] = useState(meeting.participants || "");
+export function NoteEditor({ note, onSave, onClose }: NoteEditorProps) {
+  const [title, setTitle] = useState(note.title);
+  const [description, setDescription] = useState(note.description || "");
+  const [participants, setParticipants] = useState(note.participants || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitle(meeting.title);
-    setDescription(meeting.description || "");
-    setParticipants(meeting.participants || "");
-  }, [meeting]);
+    setTitle(note.title);
+    setDescription(note.description || "");
+    setParticipants(note.participants || "");
+  }, [note]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +62,7 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
           style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
         >
           <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
-            Edit Meeting
+            Edit Note
           </h2>
           <button
             onClick={onClose}
@@ -105,7 +105,7 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
                 color: "var(--color-text)",
                 border: "1px solid var(--color-border)",
               }}
-              placeholder="Meeting title..."
+              placeholder="Note title..."
             />
           </div>
 
@@ -128,7 +128,7 @@ export function MeetingEditor({ meeting, onSave, onClose }: MeetingEditorProps) 
                 color: "var(--color-text)",
                 border: "1px solid var(--color-border)",
               }}
-              placeholder="Meeting notes or description..."
+              placeholder="Notes or description..."
             />
           </div>
 

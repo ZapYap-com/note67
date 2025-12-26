@@ -44,7 +44,7 @@ impl Default for AudioState {
 pub fn start_recording(
     app: AppHandle,
     state: State<AudioState>,
-    meeting_id: String,
+    note_id: String,
 ) -> Result<String, String> {
     // Get app data directory for storing recordings
     let app_data_dir = app
@@ -55,7 +55,7 @@ pub fn start_recording(
     let recordings_dir = app_data_dir.join("recordings");
     std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
 
-    let filename = format!("{}.wav", meeting_id);
+    let filename = format!("{}.wav", note_id);
     let output_path = recordings_dir.join(&filename);
 
     audio::start_recording(state.recording.clone(), output_path.clone())
@@ -115,7 +115,7 @@ pub fn request_system_audio_permission(state: State<AudioState>) -> Result<bool,
 pub fn start_dual_recording(
     app: AppHandle,
     state: State<AudioState>,
-    meeting_id: String,
+    note_id: String,
 ) -> Result<DualRecordingResult, String> {
     // Get app data directory for storing recordings
     let app_data_dir = app
@@ -127,11 +127,11 @@ pub fn start_dual_recording(
     std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
 
     // Mic recording path
-    let mic_filename = format!("{}_mic.wav", meeting_id);
+    let mic_filename = format!("{}_mic.wav", note_id);
     let mic_path = recordings_dir.join(&mic_filename);
 
     // System audio recording path
-    let system_filename = format!("{}_system.wav", meeting_id);
+    let system_filename = format!("{}_system.wav", note_id);
     let system_path = recordings_dir.join(&system_filename);
 
     // Start mic recording
@@ -177,7 +177,7 @@ pub fn start_dual_recording(
 pub fn stop_dual_recording(
     app: AppHandle,
     state: State<AudioState>,
-    meeting_id: String,
+    note_id: String,
 ) -> Result<DualRecordingResult, String> {
     // Stop mic recording
     let mic_path = audio::stop_recording(&state.recording)
@@ -209,7 +209,7 @@ pub fn stop_dual_recording(
             .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
         let recordings_dir = app_data_dir.join("recordings");
-        let playback_filename = format!("{}.wav", meeting_id);
+        let playback_filename = format!("{}.wav", note_id);
         let playback_file = recordings_dir.join(&playback_filename);
 
         // Merge the two files

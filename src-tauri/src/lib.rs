@@ -94,11 +94,11 @@ pub fn run() {
 
             // Setup system tray menu
             let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
-            let new_meeting = MenuItem::with_id(app, "new_meeting", "New Meeting", true, None::<&str>)?;
+            let new_note = MenuItem::with_id(app, "new_note", "New Note", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
 
-            let menu = Menu::with_items(app, &[&open, &new_meeting, &settings, &exit])?;
+            let menu = Menu::with_items(app, &[&open, &new_note, &settings, &exit])?;
 
             let icon = Image::from_path("icons/icon.png").unwrap_or_else(|_| {
                 app.default_window_icon().unwrap().clone()
@@ -116,11 +116,11 @@ pub fn run() {
                             let _ = window.set_focus();
                         }
                     }
-                    "new_meeting" => {
+                    "new_note" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.set_focus();
-                            let _ = window.emit("tray-new-meeting", ());
+                            let _ = window.emit("tray-new-note", ());
                         }
                     }
                     "settings" => {
@@ -148,13 +148,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
-            commands::create_meeting,
-            commands::get_meeting,
-            commands::list_meetings,
-            commands::end_meeting,
-            commands::delete_meeting,
-            commands::update_meeting,
-            commands::search_meetings,
+            commands::create_note,
+            commands::get_note,
+            commands::list_notes,
+            commands::end_note,
+            commands::delete_note,
+            commands::update_note,
+            commands::search_notes,
             commands::start_recording,
             commands::stop_recording,
             commands::get_recording_status,
@@ -188,12 +188,12 @@ pub fn run() {
             commands::is_ai_generating,
             commands::generate_summary,
             commands::generate_summary_stream,
-            commands::get_meeting_summaries,
+            commands::get_note_summaries,
             commands::delete_summary,
             commands::generate_title,
             commands::generate_title_from_summary,
             // Export commands
-            commands::export_meeting_markdown,
+            commands::export_note_markdown,
             commands::save_export_to_file,
             commands::get_export_directory,
             // Settings commands

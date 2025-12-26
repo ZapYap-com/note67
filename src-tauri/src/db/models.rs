@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Meeting {
+pub struct Note {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
@@ -17,8 +17,8 @@ pub struct Meeting {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranscriptSegment {
     pub id: i64,
-    pub meeting_id: String,
-    pub start_time: f64,  // seconds from meeting start
+    pub note_id: String,
+    pub start_time: f64,  // seconds from note start
     pub end_time: f64,
     pub text: String,
     pub speaker: Option<String>,
@@ -28,7 +28,7 @@ pub struct TranscriptSegment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub id: i64,
-    pub meeting_id: String,
+    pub note_id: String,
     pub summary_type: SummaryType,
     pub content: String,
     pub created_at: DateTime<Utc>,
@@ -65,14 +65,14 @@ impl SummaryType {
 
 // Input types for creating new records
 #[derive(Debug, Deserialize)]
-pub struct NewMeeting {
+pub struct NewNote {
     pub title: String,
     pub description: Option<String>,
     pub participants: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UpdateMeeting {
+pub struct UpdateNote {
     pub title: Option<String>,
     pub description: Option<String>,
     pub participants: Option<String>,
@@ -80,7 +80,7 @@ pub struct UpdateMeeting {
 
 #[derive(Debug, Deserialize)]
 pub struct NewTranscriptSegment {
-    pub meeting_id: String,
+    pub note_id: String,
     pub start_time: f64,
     pub end_time: f64,
     pub text: String,

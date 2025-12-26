@@ -8,7 +8,7 @@ import {
 } from "./components";
 import { exportApi, aiApi } from "./api";
 import {
-  useMeetings,
+  useNotes,
   useModels,
   useOllama,
   useRecording,
@@ -17,21 +17,21 @@ import {
   useLiveTranscription,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
-import type { Meeting, SummaryType, TranscriptSegment } from "./types";
+import type { Note, SummaryType, TranscriptSegment } from "./types";
 
 // Import seeder for dev console access
 import "./utils/seeder";
 
 function App() {
   const {
-    meetings,
+    notes,
     loading,
-    refresh: refreshMeetings,
-    createMeeting,
-    updateMeeting,
-    endMeeting,
-    deleteMeeting,
-  } = useMeetings();
+    refresh: refreshNotes,
+    createNote,
+    updateNote,
+    endNote,
+    deleteNote,
+  } = useNotes();
   const { isRecording, audioLevel, startRecording, stopRecording } =
     useRecording();
   const { loadedModel } = useModels();
@@ -67,12 +67,12 @@ function App() {
     }
   }, [theme]);
 
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(
     null
   );
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "system" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates" | "disclaimer">("about");
-  const [meetingTranscripts, setMeetingTranscripts] = useState<
+  const [noteTranscripts, setNoteTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
   const [activeTab, setActiveTab] = useState<
@@ -81,8 +81,8 @@ function App() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
-  const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
+  const [recordingNoteId, setRecordingNoteId] = useState<string | null>(null);
   const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] = useState(false);
   const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
 
@@ -90,73 +90,73 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    type: "meeting" | "general";
-    meetingId?: string;
+    type: "note" | "general";
+    noteId?: string;
   } | null>(null);
 
-  const selectedMeeting =
-    meetings.find((m) => m.id === selectedMeetingId) || null;
-  const recordingMeeting =
-    meetings.find((m) => m.id === recordingMeetingId) || null;
+  const selectedNote =
+    notes.find((n) => n.id === selectedNoteId) || null;
+  const recordingNote =
+    notes.find((n) => n.id === recordingNoteId) || null;
   // Show live segments during recording, otherwise show saved transcript
-  const currentTranscript = selectedMeetingId
-    ? (isLiveTranscribing && recordingMeetingId === selectedMeetingId
+  const currentTranscript = selectedNoteId
+    ? (isLiveTranscribing && recordingNoteId === selectedNoteId
         ? liveSegments
-        : meetingTranscripts[selectedMeetingId] || [])
+        : noteTranscripts[selectedNoteId] || [])
     : [];
 
-  // Group meetings by date
-  const groupedMeetings = useMemo(() => {
-    const groups: { label: string; meetings: Meeting[] }[] = [];
+  // Group notes by date
+  const groupedNotes = useMemo(() => {
+    const groups: { label: string; notes: Note[] }[] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayMeetings: Meeting[] = [];
-    const olderGroups: Map<string, Meeting[]> = new Map();
+    const todayNotes: Note[] = [];
+    const olderGroups: Map<string, Note[]> = new Map();
 
-    meetings.forEach((meeting) => {
-      const date = new Date(meeting.started_at);
+    notes.forEach((note) => {
+      const date = new Date(note.started_at);
       date.setHours(0, 0, 0, 0);
       const diffDays = Math.floor(
         (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
       );
 
       if (diffDays === 0) {
-        todayMeetings.push(meeting);
+        todayNotes.push(note);
       } else {
         const label = diffDays === 1 ? "Yesterday" : `${diffDays} days ago`;
         if (!olderGroups.has(label)) {
           olderGroups.set(label, []);
         }
-        olderGroups.get(label)!.push(meeting);
+        olderGroups.get(label)!.push(note);
       }
     });
 
-    if (todayMeetings.length > 0) {
-      groups.push({ label: "Today", meetings: todayMeetings });
+    if (todayNotes.length > 0) {
+      groups.push({ label: "Today", notes: todayNotes });
     }
 
-    olderGroups.forEach((meetings, label) => {
-      groups.push({ label, meetings });
+    olderGroups.forEach((noteList, label) => {
+      groups.push({ label, notes: noteList });
     });
 
     return groups;
-  }, [meetings]);
+  }, [notes]);
 
   const handleNewNote = useCallback(async () => {
-    const meeting = await createMeeting("Untitled");
-    setSelectedMeetingId(meeting.id);
-  }, [createMeeting]);
+    const note = await createNote("Untitled");
+    setSelectedNoteId(note.id);
+  }, [createNote]);
 
-  const handleStartMeeting = useCallback(async () => {
-    const meeting = await createMeeting("Untitled");
-    setSelectedMeetingId(meeting.id);
-    setRecordingMeetingId(meeting.id);
+  const handleStartRecording = useCallback(async () => {
+    const note = await createNote("Untitled");
+    setSelectedNoteId(note.id);
+    setRecordingNoteId(note.id);
     setActiveTab("transcript");
-    await startRecording(meeting.id);
+    await startRecording(note.id);
     // Start live transcription
-    await startLiveTranscription(meeting.id, profile?.name || "Me");
-  }, [createMeeting, startRecording, startLiveTranscription, profile?.name]);
+    await startLiveTranscription(note.id, profile?.name || "Me");
+  }, [createNote, startRecording, startLiveTranscription, profile?.name]);
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
   useEffect(() => {
@@ -178,21 +178,21 @@ function App() {
         e.preventDefault();
         // Only start if not already recording and setup is complete
         if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
-          handleStartMeeting();
+          handleStartRecording();
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting]);
+  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartRecording]);
 
-  // Listen for tray "New Meeting" event
+  // Listen for tray "New Note" event
   useEffect(() => {
-    const unlisten = listen("tray-new-meeting", () => {
-      // Start a new meeting if not already recording and setup is complete
+    const unlisten = listen("tray-new-note", () => {
+      // Start a new note if not already recording and setup is complete
       if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
-        handleStartMeeting();
+        handleStartRecording();
       } else {
         // Just create a new note
         handleNewNote();
@@ -202,7 +202,7 @@ function App() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting, handleNewNote]);
+  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartRecording, handleNewNote]);
 
   // Listen for tray "Settings" event
   useEffect(() => {
@@ -224,18 +224,18 @@ function App() {
           setContextMenu(null);
         } else if (showDeleteConfirm) {
           setShowDeleteConfirm(false);
-          setMeetingToDelete(null);
+          setNoteToDelete(null);
         } else if (showSettings) {
           setShowSettings(false);
-        } else if (selectedMeetingId) {
-          setSelectedMeetingId(null);
+        } else if (selectedNoteId) {
+          setSelectedNoteId(null);
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [contextMenu, showDeleteConfirm, showSettings, selectedMeetingId]);
+  }, [contextMenu, showDeleteConfirm, showSettings, selectedNoteId]);
 
   // Keyboard shortcut: Cmd/Ctrl + , to toggle settings
   useEffect(() => {
@@ -273,10 +273,10 @@ function App() {
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      // Check if clicking on a meeting item (handled separately)
+      // Check if clicking on a note item (handled separately)
       const target = e.target as HTMLElement;
-      if (target.closest("[data-meeting-id]")) {
-        return; // Let the meeting-specific handler deal with it
+      if (target.closest("[data-note-id]")) {
+        return; // Let the note-specific handler deal with it
       }
       // Show general context menu
       setContextMenu({
@@ -298,24 +298,24 @@ function App() {
     };
   }, []);
 
-  // Handle meeting right-click
-  const handleMeetingContextMenu = (e: React.MouseEvent, meeting: Meeting) => {
+  // Handle note right-click
+  const handleNoteContextMenu = (e: React.MouseEvent, note: Note) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
-      type: "meeting",
-      meetingId: meeting.id,
+      type: "note",
+      noteId: note.id,
     });
   };
 
   // Context menu actions
   const handleContextMenuAction = (action: string) => {
-    if (action === "delete" && contextMenu?.meetingId) {
-      const meeting = meetings.find((m) => m.id === contextMenu.meetingId);
-      if (meeting) {
-        setMeetingToDelete(meeting);
+    if (action === "delete" && contextMenu?.noteId) {
+      const note = notes.find((n) => n.id === contextMenu.noteId);
+      if (note) {
+        setNoteToDelete(note);
         setShowDeleteConfirm(true);
       }
     } else if (action === "settings") {
@@ -332,20 +332,20 @@ function App() {
   };
 
   const handleStopRecording = async () => {
-    if (recordingMeetingId) {
-      const meetingId = recordingMeetingId;
+    if (recordingNoteId) {
+      const noteId = recordingNoteId;
       const audioPath = await stopRecording();
       // Stop live transcription and save segments to database
-      await stopLiveTranscription(meetingId);
-      await endMeeting(meetingId, audioPath ?? undefined);
-      // Store live segments as the meeting's transcript
+      await stopLiveTranscription(noteId);
+      await endNote(noteId, audioPath ?? undefined);
+      // Store live segments as the note's transcript
       if (liveSegments.length > 0) {
-        setMeetingTranscripts((prev) => ({
+        setNoteTranscripts((prev) => ({
           ...prev,
-          [meetingId]: liveSegments,
+          [noteId]: liveSegments,
         }));
       }
-      setRecordingMeetingId(null);
+      setRecordingNoteId(null);
 
       // Auto-generate summary and title if we have transcript
       if (liveSegments.length > 0) {
@@ -353,13 +353,13 @@ function App() {
         setIsGeneratingSummaryTitle(true);
         try {
           // Generate overview summary first
-          const summary = await aiApi.generateSummary(meetingId, "overview");
-          // Trigger summaries refresh in MeetingView
+          const summary = await aiApi.generateSummary(noteId, "overview");
+          // Trigger summaries refresh in NoteView
           setSummariesRefreshKey((k) => k + 1);
           // Generate title from summary content
-          await aiApi.generateTitleFromSummary(meetingId, summary.content);
-          // Refresh meeting list to show new title
-          await refreshMeetings();
+          await aiApi.generateTitleFromSummary(noteId, summary.content);
+          // Refresh note list to show new title
+          await refreshNotes();
         } catch (error) {
           console.error("Failed to auto-generate summary/title:", error);
         } finally {
@@ -369,20 +369,20 @@ function App() {
     }
   };
 
-  // Regenerate summary and title for the selected meeting
+  // Regenerate summary and title for the selected note
   const handleRegenerateSummaryTitle = async () => {
-    if (!selectedMeetingId) return;
+    if (!selectedNoteId) return;
 
     setIsGeneratingSummaryTitle(true);
     try {
       // Generate overview summary first
-      const summary = await aiApi.generateSummary(selectedMeetingId, "overview");
-      // Trigger summaries refresh in MeetingView
+      const summary = await aiApi.generateSummary(selectedNoteId, "overview");
+      // Trigger summaries refresh in NoteView
       setSummariesRefreshKey((k) => k + 1);
       // Generate title from summary content
-      await aiApi.generateTitleFromSummary(selectedMeetingId, summary.content);
-      // Refresh meeting list to show new title
-      await refreshMeetings();
+      await aiApi.generateTitleFromSummary(selectedNoteId, summary.content);
+      // Refresh note list to show new title
+      await refreshNotes();
     } catch (error) {
       console.error("Failed to regenerate summary/title:", error);
     } finally {
@@ -390,29 +390,29 @@ function App() {
     }
   };
 
-  const handleSelectMeeting = async (meeting: Meeting) => {
-    setSelectedMeetingId(meeting.id);
-    if (!meetingTranscripts[meeting.id]) {
-      const segments = await loadTranscript(meeting.id);
+  const handleSelectNote = async (note: Note) => {
+    setSelectedNoteId(note.id);
+    if (!noteTranscripts[note.id]) {
+      const segments = await loadTranscript(note.id);
       if (segments.length > 0) {
-        setMeetingTranscripts((prev) => ({
+        setNoteTranscripts((prev) => ({
           ...prev,
-          [meeting.id]: segments,
+          [note.id]: segments,
         }));
       }
     }
   };
 
   const handleUpdateTitle = async (title: string) => {
-    if (selectedMeeting && title.trim()) {
-      await updateMeeting(selectedMeeting.id, { title: title.trim() });
+    if (selectedNote && title.trim()) {
+      await updateNote(selectedNote.id, { title: title.trim() });
     }
     setEditingTitle(false);
   };
 
   const handleUpdateDescription = async (description: string) => {
-    if (selectedMeeting) {
-      await updateMeeting(selectedMeeting.id, {
+    if (selectedNote) {
+      await updateNote(selectedNote.id, {
         description: description.trim() || undefined,
       });
     }
@@ -443,7 +443,7 @@ function App() {
             className="text-base font-semibold"
             style={{ color: "var(--color-text)" }}
           >
-            Meetings
+            Notes
           </span>
           <button
             onClick={handleNewNote}
@@ -467,7 +467,7 @@ function App() {
           </button>
         </div>
 
-        {/* Meeting List */}
+        {/* Note List */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div
@@ -476,16 +476,16 @@ function App() {
             >
               Loading...
             </div>
-          ) : groupedMeetings.length === 0 ? (
+          ) : groupedNotes.length === 0 ? (
             <div
               className="px-4 py-8 text-center text-sm"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <p className="mb-3">No meetings yet</p>
+              <p className="mb-3">No notes yet</p>
               <button
                 onClick={async () => {
-                  const { seedMeetings } = await import("./utils/seeder");
-                  await seedMeetings();
+                  const { seedNotes } = await import("./utils/seeder");
+                  await seedNotes();
                 }}
                 className="text-xs underline"
                 style={{ color: "var(--color-accent)" }}
@@ -494,7 +494,7 @@ function App() {
               </button>
             </div>
           ) : (
-            groupedMeetings.map((group) => (
+            groupedNotes.map((group) => (
               <div key={group.label} className="mb-1">
                 <div
                   className="px-4 py-1.5 text-xs font-medium uppercase tracking-wider"
@@ -502,27 +502,27 @@ function App() {
                 >
                   {group.label}
                 </div>
-                {group.meetings.map((meeting) => (
+                {group.notes.map((note) => (
                   <button
-                    key={meeting.id}
-                    data-meeting-id={meeting.id}
-                    onClick={() => handleSelectMeeting(meeting)}
-                    onContextMenu={(e) => handleMeetingContextMenu(e, meeting)}
+                    key={note.id}
+                    data-note-id={note.id}
+                    onClick={() => handleSelectNote(note)}
+                    onContextMenu={(e) => handleNoteContextMenu(e, note)}
                     className="w-full px-4 py-2 text-left transition-colors"
                     style={{
                       backgroundColor:
-                        selectedMeetingId === meeting.id
+                        selectedNoteId === note.id
                           ? "var(--color-sidebar-selected)"
                           : "transparent",
                     }}
                     onMouseEnter={(e) => {
-                      if (selectedMeetingId !== meeting.id) {
+                      if (selectedNoteId !== note.id) {
                         e.currentTarget.style.backgroundColor =
                           "var(--color-sidebar-hover)";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (selectedMeetingId !== meeting.id) {
+                      if (selectedNoteId !== note.id) {
                         e.currentTarget.style.backgroundColor = "transparent";
                       }
                     }}
@@ -531,14 +531,14 @@ function App() {
                       className="text-sm font-medium truncate"
                       style={{ color: "var(--color-text)" }}
                     >
-                      {meeting.title}
+                      {note.title}
                     </div>
                     <div
                       className="text-xs"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
-                      {formatTime(meeting.started_at)}
-                      {isRecording && recordingMeetingId === meeting.id && (
+                      {formatTime(note.started_at)}
+                      {isRecording && recordingNoteId === note.id && (
                         <span
                           className="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
                           style={{
@@ -665,11 +665,11 @@ function App() {
         className="flex-1 flex flex-col relative"
         style={{ backgroundColor: "var(--color-bg)" }}
       >
-        {selectedMeeting ? (
-          <MeetingView
-            meeting={selectedMeeting}
+        {selectedNote ? (
+          <NoteView
+            meeting={selectedNote}
             transcript={currentTranscript}
-            isRecording={isRecording && recordingMeetingId === selectedMeeting.id}
+            isRecording={isRecording && recordingNoteId === selectedNote.id}
             audioLevel={audioLevel}
             activeTab={activeTab}
             editingTitle={editingTitle}
@@ -684,11 +684,11 @@ function App() {
             onStopRecording={handleStopRecording}
             onDelete={() => setShowDeleteConfirm(true)}
             onExport={async () => {
-              const data = await exportApi.exportMarkdown(selectedMeeting.id);
+              const data = await exportApi.exportMarkdown(selectedNote.id);
               await exportApi.saveToFile(data.markdown, data.filename);
             }}
             onCopy={async () => {
-              const data = await exportApi.exportMarkdown(selectedMeeting.id);
+              const data = await exportApi.exportMarkdown(selectedNote.id);
               await exportApi.copyToClipboard(data.markdown);
             }}
             onRegenerate={handleRegenerateSummaryTitle}
@@ -727,7 +727,7 @@ function App() {
                 Generating Summary
               </span>
             </div>
-          ) : isRecording && recordingMeeting ? (
+          ) : isRecording && recordingNote ? (
             <div
               className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
               style={{
@@ -740,11 +740,11 @@ function App() {
                 style={{ backgroundColor: "var(--color-accent)" }}
               />
               <button
-                onClick={() => setSelectedMeetingId(recordingMeetingId)}
+                onClick={() => setSelectedMeetingId(recordingNoteId)}
                 className="text-sm font-medium hover:underline"
                 style={{ color: "var(--color-text)" }}
               >
-                {recordingMeeting.title}
+                {recordingNote.title}
               </button>
               <button
                 onClick={handleStopRecording}
@@ -759,7 +759,7 @@ function App() {
             </div>
           ) : (
             <button
-              onClick={handleStartMeeting}
+              onClick={handleStartRecording}
               disabled={!loadedModel || !ollamaRunning || !ollamaModel}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-105"
               style={{
@@ -777,16 +777,16 @@ function App() {
 
       {/* Modals */}
       {showSettings && <Settings onClose={() => setShowSettings(false)} initialTab={settingsTab} />}
-      {showDeleteConfirm && (meetingToDelete || selectedMeeting) && (
+      {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Meeting"
-          message={`Are you sure you want to delete "${(meetingToDelete || selectedMeeting)!.title}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${(noteToDelete || selectedNote)!.title}"? This action cannot be undone.`}
           confirmLabel="Delete"
           onConfirm={() => {
-            const meeting = meetingToDelete || selectedMeeting;
+            const meeting = noteToDelete || selectedNote;
             if (meeting) {
-              deleteMeeting(meeting.id);
-              if (selectedMeetingId === meeting.id) {
+              deleteNote(meeting.id);
+              if (selectedNoteId === meeting.id) {
                 setSelectedMeetingId(null);
               }
             }
@@ -1026,8 +1026,8 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
   );
 }
 
-interface MeetingViewProps {
-  meeting: Meeting;
+interface NoteViewProps {
+  note: Note;
   transcript: TranscriptSegment[];
   isRecording: boolean;
   audioLevel: number;
@@ -1048,7 +1048,7 @@ interface MeetingViewProps {
   onRegenerate: () => void;
 }
 
-function MeetingView({
+function NoteView({
   meeting,
   transcript,
   isRecording,
@@ -1068,7 +1068,7 @@ function MeetingView({
   onExport,
   onCopy,
   onRegenerate,
-}: MeetingViewProps) {
+}: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(meeting.title);
   const [descValue, setDescValue] = useState(meeting.description || "");
 

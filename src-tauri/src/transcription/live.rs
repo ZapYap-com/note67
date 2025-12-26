@@ -108,7 +108,7 @@ pub enum AudioSource {
 /// Event payload for transcription updates
 #[derive(Clone, serde::Serialize)]
 pub struct TranscriptionUpdateEvent {
-    pub meeting_id: String,
+    pub note_id: String,
     pub segments: Vec<TranscriptionSegment>,
     pub is_final: bool,
     /// The source of the audio (mic or system)
@@ -119,7 +119,7 @@ pub struct TranscriptionUpdateEvent {
 /// Runs every 5 seconds, transcribes accumulated audio, saves to DB, emits events
 pub async fn start_live_transcription(
     app: AppHandle,
-    meeting_id: String,
+    note_id: String,
     recording_state: Arc<RecordingState>,
     live_state: Arc<LiveTranscriptionState>,
     whisper_ctx: Arc<WhisperContext>,
@@ -138,7 +138,7 @@ pub async fn start_live_transcription(
     clear_reference_buffer();
 
     let app_clone = app.clone();
-    let meeting_id_clone = meeting_id.clone();
+    let note_id_clone = note_id.clone();
     let recording_state_clone = recording_state.clone();
     let live_state_clone = live_state.clone();
     let whisper_ctx_clone = whisper_ctx.clone();
@@ -258,7 +258,7 @@ pub async fn start_live_transcription(
                                 let db = app_clone.state::<Database>();
                                 for segment in &valid_segments {
                                     if let Err(e) = db.add_transcript_segment(
-                                        &meeting_id_clone,
+                                        &note_id_clone,
                                         segment.start_time,
                                         segment.end_time,
                                         &segment.text,
@@ -277,7 +277,7 @@ pub async fn start_live_transcription(
 
                                 // Emit event with audio source
                                 let event = TranscriptionUpdateEvent {
-                                    meeting_id: meeting_id_clone.clone(),
+                                    note_id: note_id_clone.clone(),
                                     segments: valid_segments,
                                     is_final: false,
                                     audio_source,

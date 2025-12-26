@@ -49,38 +49,38 @@ export const transcriptionApi = {
   // Transcription
   transcribeAudio: (
     audioPath: string,
-    meetingId: string,
+    noteId: string,
     speaker?: string
   ): Promise<TranscriptionResult> => {
-    return invoke("transcribe_audio", { audioPath, meetingId, speaker });
+    return invoke("transcribe_audio", { audioPath, noteId, speaker });
   },
 
   /** Transcribe dual audio files (mic and system) with speaker labels */
   transcribeDualAudio: (
     micPath: string,
     systemPath: string | null,
-    meetingId: string
+    noteId: string
   ): Promise<DualTranscriptionResult> => {
-    return invoke("transcribe_dual_audio", { micPath, systemPath, meetingId });
+    return invoke("transcribe_dual_audio", { micPath, systemPath, noteId });
   },
 
   isTranscribing: (): Promise<boolean> => {
     return invoke("is_transcribing");
   },
 
-  getTranscript: (meetingId: string): Promise<TranscriptSegment[]> => {
-    return invoke("get_transcript", { meetingId });
+  getTranscript: (noteId: string): Promise<TranscriptSegment[]> => {
+    return invoke("get_transcript", { noteId });
   },
 
   addTranscriptSegment: (
-    meetingId: string,
+    noteId: string,
     startTime: number,
     endTime: number,
     text: string,
     speaker?: string
   ): Promise<number> => {
     return invoke("add_transcript_segment", {
-      meetingId,
+      noteId,
       startTime,
       endTime,
       text,
@@ -89,12 +89,12 @@ export const transcriptionApi = {
   },
 
   // Live transcription
-  startLiveTranscription: (meetingId: string): Promise<void> => {
-    return invoke("start_live_transcription", { meetingId });
+  startLiveTranscription: (noteId: string): Promise<void> => {
+    return invoke("start_live_transcription", { noteId });
   },
 
-  stopLiveTranscription: (meetingId: string): Promise<TranscriptionResult> => {
-    return invoke("stop_live_transcription", { meetingId });
+  stopLiveTranscription: (noteId: string): Promise<TranscriptionResult> => {
+    return invoke("stop_live_transcription", { noteId });
   },
 
   isLiveTranscribing: (): Promise<boolean> => {

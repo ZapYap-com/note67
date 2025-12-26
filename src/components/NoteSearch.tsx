@@ -1,18 +1,18 @@
 import { useState, useCallback } from "react";
 
-interface MeetingSearchProps {
+interface NoteSearchProps {
   searchQuery: string;
   isSearching: boolean;
   onSearch: (query: string) => Promise<void>;
   onClear: () => void;
 }
 
-export function MeetingSearch({
+export function NoteSearch({
   searchQuery,
   isSearching,
   onSearch,
   onClear,
-}: MeetingSearchProps) {
+}: NoteSearchProps) {
   const [inputValue, setInputValue] = useState(searchQuery);
 
   const handleSubmit = useCallback(
@@ -70,7 +70,7 @@ export function MeetingSearch({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search meetings..."
+          placeholder="Search notes..."
           className="flex-1 bg-transparent outline-none text-sm"
           style={{ color: "var(--color-text)" }}
         />

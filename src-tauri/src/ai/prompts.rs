@@ -1,11 +1,11 @@
-/// Prompt templates for meeting summaries
+/// Prompt templates for note summaries
 pub struct SummaryPrompts;
 
 impl SummaryPrompts {
-    /// Generate a meeting overview summary
+    /// Generate a note overview summary
     pub fn overview(transcript: &str) -> String {
         format!(
-            r#"You are a professional meeting summarizer. Analyze the following meeting transcript and provide a clear, concise summary in markdown format.
+            r#"You are a professional note summarizer. Analyze the following transcript and provide a clear, concise summary in markdown format.
 
 TRANSCRIPT:
 {}
@@ -13,7 +13,7 @@ TRANSCRIPT:
 Provide a professional summary that includes:
 - Main topics discussed
 - Key points and conclusions
-- Overall meeting outcome
+- Overall outcome
 
 Rules:
 - Use markdown formatting (headings, bullet points, bold for emphasis)
@@ -30,7 +30,7 @@ SUMMARY:"#,
     /// Extract action items from the transcript
     pub fn action_items(transcript: &str) -> String {
         format!(
-            r#"You are a professional meeting analyst. Extract all action items from the following meeting transcript.
+            r#"You are a professional note analyst. Extract all action items from the following transcript.
 
 TRANSCRIPT:
 {}
@@ -55,7 +55,7 @@ ACTION ITEMS:"#,
     /// Extract key decisions from the transcript
     pub fn key_decisions(transcript: &str) -> String {
         format!(
-            r#"You are a professional meeting analyst. Extract all key decisions from the following meeting transcript.
+            r#"You are a professional note analyst. Extract all key decisions from the following transcript.
 
 TRANSCRIPT:
 {}
@@ -77,10 +77,10 @@ KEY DECISIONS:"#,
         )
     }
 
-    /// Generate a short, descriptive title for the meeting
+    /// Generate a short, descriptive title for the note
     pub fn title(transcript: &str) -> String {
         format!(
-            r#"Generate a concise meeting title based on this transcript.
+            r#"Generate a concise title based on this transcript.
 
 TRANSCRIPT:
 {}
@@ -90,7 +90,7 @@ Rules:
 - Capture the main topic or purpose
 - Be specific and informative
 - No quotes around the title
-- No prefixes like "Meeting:" or "Title:"
+- No prefixes like "Note:" or "Title:"
 - No emojis
 
 Respond with ONLY the title, nothing else.
@@ -100,10 +100,10 @@ TITLE:"#,
         )
     }
 
-    /// Generate a short, descriptive title based on the meeting summary
+    /// Generate a short, descriptive title based on the note summary
     pub fn title_from_summary(summary: &str) -> String {
         format!(
-            r#"Generate a concise meeting title based on this summary.
+            r#"Generate a concise title based on this summary.
 
 SUMMARY:
 {}
@@ -113,7 +113,7 @@ Rules:
 - Capture the main topic or purpose
 - Be specific and informative
 - No quotes around the title
-- No prefixes like "Meeting:" or "Title:"
+- No prefixes like "Note:" or "Title:"
 - No emojis
 
 Respond with ONLY the title, nothing else.
@@ -126,7 +126,7 @@ TITLE:"#,
     /// Generate a custom summary based on user prompt
     pub fn custom(transcript: &str, user_prompt: &str) -> String {
         format!(
-            r#"You are a professional meeting analyst. Analyze the following meeting transcript based on the user's request.
+            r#"You are a professional note analyst. Analyze the following transcript based on the user's request.
 
 TRANSCRIPT:
 {}

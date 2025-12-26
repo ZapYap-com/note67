@@ -11,33 +11,33 @@ pub struct ExportData {
 }
 
 #[tauri::command]
-pub fn export_meeting_markdown(
+pub fn export_note_markdown(
     db: State<Database>,
-    meeting_id: String,
+    note_id: String,
 ) -> Result<ExportData, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Get meeting
-    let meeting: (String, Option<String>, Option<String>, String, Option<String>) = conn
+    // Get note
+    let note: (String, Option<String>, Option<String>, String, Option<String>) = conn
         .query_row(
-            "SELECT title, description, participants, started_at, ended_at FROM meetings WHERE id = ?1",
-            [&meeting_id],
+            "SELECT title, description, participants, started_at, ended_at FROM notes WHERE id = ?1",
+            [&note_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .map_err(|e| e.to_string())?;
 
-    let (title, description, participants, started_at, ended_at) = meeting;
+    let (title, description, participants, started_at, ended_at) = note;
 
     // Get transcripts
     let mut stmt = conn
         .prepare(
             "SELECT start_time, end_time, text FROM transcript_segments
-             WHERE meeting_id = ?1 ORDER BY start_time ASC",
+             WHERE note_id = ?1 ORDER BY start_time ASC",
         )
         .map_err(|e| e.to_string())?;
 
     let transcripts: Vec<(f64, f64, String)> = stmt
-        .query_map([&meeting_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .query_map([&note_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
@@ -46,12 +46,12 @@ pub fn export_meeting_markdown(
     let mut stmt = conn
         .prepare(
             "SELECT summary_type, content, created_at FROM summaries
-             WHERE meeting_id = ?1 ORDER BY created_at DESC",
+             WHERE note_id = ?1 ORDER BY created_at DESC",
         )
         .map_err(|e| e.to_string())?;
 
     let summaries: Vec<(String, String, String)> = stmt
-        .query_map([&meeting_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .query_map([&note_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();

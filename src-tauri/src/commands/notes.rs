@@ -2,17 +2,17 @@ use chrono::Utc;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::db::models::{Meeting, NewMeeting, UpdateMeeting};
+use crate::db::models::{Note, NewNote, UpdateNote};
 use crate::db::Database;
 
 #[tauri::command]
-pub fn create_meeting(db: State<Database>, input: NewMeeting) -> Result<Meeting, String> {
+pub fn create_note(db: State<Database>, input: NewNote) -> Result<Note, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
     let id = Uuid::new_v4().to_string();
 
     conn.execute(
-        "INSERT INTO meetings (id, title, description, participants, started_at, created_at, updated_at)
+        "INSERT INTO notes (id, title, description, participants, started_at, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         (
             &id,
@@ -26,7 +26,7 @@ pub fn create_meeting(db: State<Database>, input: NewMeeting) -> Result<Meeting,
     )
     .map_err(|e| e.to_string())?;
 
-    Ok(Meeting {
+    Ok(Note {
         id,
         title: input.title,
         description: input.description,
@@ -40,15 +40,15 @@ pub fn create_meeting(db: State<Database>, input: NewMeeting) -> Result<Meeting,
 }
 
 #[tauri::command]
-pub fn get_meeting(db: State<Database>, id: String) -> Result<Option<Meeting>, String> {
+pub fn get_note(db: State<Database>, id: String) -> Result<Option<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
         "SELECT id, title, description, participants, started_at, ended_at, audio_path, created_at, updated_at
-         FROM meetings WHERE id = ?1",
+         FROM notes WHERE id = ?1",
         [&id],
         |row| {
-            Ok(Meeting {
+            Ok(Note {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 description: row.get(2)?,
@@ -63,26 +63,26 @@ pub fn get_meeting(db: State<Database>, id: String) -> Result<Option<Meeting>, S
     );
 
     match result {
-        Ok(meeting) => Ok(Some(meeting)),
+        Ok(note) => Ok(Some(note)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
 }
 
 #[tauri::command]
-pub fn list_meetings(db: State<Database>) -> Result<Vec<Meeting>, String> {
+pub fn list_notes(db: State<Database>) -> Result<Vec<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
         .prepare(
             "SELECT id, title, description, participants, started_at, ended_at, audio_path, created_at, updated_at
-             FROM meetings ORDER BY started_at DESC",
+             FROM notes ORDER BY started_at DESC",
         )
         .map_err(|e| e.to_string())?;
 
-    let meetings = stmt
+    let notes = stmt
         .query_map([], |row| {
-            Ok(Meeting {
+            Ok(Note {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 description: row.get(2)?,
@@ -98,15 +98,15 @@ pub fn list_meetings(db: State<Database>) -> Result<Vec<Meeting>, String> {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    Ok(meetings)
+    Ok(notes)
 }
 
 #[tauri::command]
-pub fn update_meeting(
+pub fn update_note(
     db: State<Database>,
     id: String,
-    update: UpdateMeeting,
-) -> Result<Meeting, String> {
+    update: UpdateNote,
+) -> Result<Note, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
 
@@ -135,7 +135,7 @@ pub fn update_meeting(
     }
 
     let sql = format!(
-        "UPDATE meetings SET {} WHERE id = ?{}",
+        "UPDATE notes SET {} WHERE id = ?{}",
         updates.join(", "),
         param_idx
     );
@@ -165,13 +165,13 @@ pub fn update_meeting(
     }
     .map_err(|e| e.to_string())?;
 
-    // Return updated meeting
+    // Return updated note
     drop(conn);
-    get_meeting(db, id)?.ok_or_else(|| "Meeting not found".to_string())
+    get_note(db, id)?.ok_or_else(|| "Note not found".to_string())
 }
 
 #[tauri::command]
-pub fn search_meetings(db: State<Database>, query: String) -> Result<Vec<Meeting>, String> {
+pub fn search_notes(db: State<Database>, query: String) -> Result<Vec<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Use FTS5 search with fallback to LIKE for simple queries
@@ -185,17 +185,17 @@ pub fn search_meetings(db: State<Database>, query: String) -> Result<Vec<Meeting
         .prepare(
             "SELECT m.id, m.title, m.description, m.participants, m.started_at, m.ended_at,
                     m.audio_path, m.created_at, m.updated_at
-             FROM meetings m
-             JOIN meetings_fts fts ON m.rowid = fts.rowid
-             WHERE meetings_fts MATCH ?1
+             FROM notes m
+             JOIN notes_fts fts ON m.rowid = fts.rowid
+             WHERE notes_fts MATCH ?1
              ORDER BY m.started_at DESC
              LIMIT 50",
         )
         .map_err(|e| e.to_string())?;
 
-    let meetings = stmt
+    let notes = stmt
         .query_map([&search_query], |row| {
-            Ok(Meeting {
+            Ok(Note {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 description: row.get(2)?,
@@ -211,11 +211,11 @@ pub fn search_meetings(db: State<Database>, query: String) -> Result<Vec<Meeting
         .filter_map(|r| r.ok())
         .collect();
 
-    Ok(meetings)
+    Ok(notes)
 }
 
 #[tauri::command]
-pub fn end_meeting(
+pub fn end_note(
     db: State<Database>,
     id: String,
     audio_path: Option<String>,
@@ -224,7 +224,7 @@ pub fn end_meeting(
     let now = Utc::now();
 
     conn.execute(
-        "UPDATE meetings SET ended_at = ?1, updated_at = ?2, audio_path = ?3 WHERE id = ?4",
+        "UPDATE notes SET ended_at = ?1, updated_at = ?2, audio_path = ?3 WHERE id = ?4",
         (now.to_rfc3339(), now.to_rfc3339(), &audio_path, &id),
     )
     .map_err(|e| e.to_string())?;
@@ -233,20 +233,20 @@ pub fn end_meeting(
 }
 
 #[tauri::command]
-pub fn delete_meeting(db: State<Database>, id: String) -> Result<(), String> {
+pub fn delete_note(db: State<Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // First, get the audio path before deleting
     let audio_path: Option<String> = conn
         .query_row(
-            "SELECT audio_path FROM meetings WHERE id = ?1",
+            "SELECT audio_path FROM notes WHERE id = ?1",
             [&id],
             |row| row.get(0),
         )
         .ok();
 
-    // Delete the meeting record
-    conn.execute("DELETE FROM meetings WHERE id = ?1", [&id])
+    // Delete the note record
+    conn.execute("DELETE FROM notes WHERE id = ?1", [&id])
         .map_err(|e| e.to_string())?;
 
     // Delete the audio file if it exists

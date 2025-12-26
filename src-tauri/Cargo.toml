@@ -1,7 +1,7 @@
 [package]
 name = "note67"
 version = "0.1.0"
-description = "A private, local meeting notes assistant"
+description = "A private, local notes assistant"
 authors = ["you"]
 edition = "2021"
 

@@ -1,7 +1,7 @@
 export type {
-  Meeting,
-  NewMeeting,
-  UpdateMeeting,
+  Note,
+  NewNote,
+  UpdateNote,
   TranscriptSegment,
   Summary,
   SummaryType,
@@ -11,4 +11,4 @@ export type {
   TranscriptionResult,
   OllamaModel,
   OllamaStatus,
-} from "./meeting";
+} from "./note";

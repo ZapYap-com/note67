@@ -11,7 +11,7 @@ import type {
 } from "../types";
 
 interface TranscriptionUpdateEvent {
-  meeting_id: string;
+  note_id: string;
   segments: Array<{
     start_time: number;
     end_time: number;
@@ -66,14 +66,14 @@ interface UseTranscriptionReturn {
   isTranscribing: boolean;
   transcript: TranscriptSegment[];
   error: string | null;
-  transcribe: (audioPath: string, meetingId: string) => Promise<TranscriptionResult | null>;
+  transcribe: (audioPath: string, noteId: string) => Promise<TranscriptionResult | null>;
   /** Transcribe dual audio files (mic + system) with speaker labels */
   transcribeDual: (
     micPath: string,
     systemPath: string | null,
-    meetingId: string
+    noteId: string
   ) => Promise<DualTranscriptionResult | null>;
-  loadTranscript: (meetingId: string) => Promise<TranscriptSegment[]>;
+  loadTranscript: (noteId: string) => Promise<TranscriptSegment[]>;
 }
 
 export function useTranscription(): UseTranscriptionReturn {
@@ -82,15 +82,15 @@ export function useTranscription(): UseTranscriptionReturn {
   const [error, setError] = useState<string | null>(null);
 
   const transcribe = useCallback(
-    async (audioPath: string, meetingId: string): Promise<TranscriptionResult | null> => {
+    async (audioPath: string, noteId: string): Promise<TranscriptionResult | null> => {
       try {
         setError(null);
         setIsTranscribing(true);
-        const result = await transcriptionApi.transcribeAudio(audioPath, meetingId);
+        const result = await transcriptionApi.transcribeAudio(audioPath, noteId);
         // Convert result segments to TranscriptSegment format
         const segments: TranscriptSegment[] = result.segments.map((s, idx) => ({
           id: idx,
-          meeting_id: meetingId,
+          note_id: noteId,
           start_time: s.start_time,
           end_time: s.end_time,
           text: s.text,
@@ -113,7 +113,7 @@ export function useTranscription(): UseTranscriptionReturn {
     async (
       micPath: string,
       systemPath: string | null,
-      meetingId: string
+      noteId: string
     ): Promise<DualTranscriptionResult | null> => {
       try {
         setError(null);
@@ -121,11 +121,11 @@ export function useTranscription(): UseTranscriptionReturn {
         const result = await transcriptionApi.transcribeDualAudio(
           micPath,
           systemPath,
-          meetingId
+          noteId
         );
 
         // Load the transcript from database (includes both "You" and "Others" segments)
-        const segments = await transcriptionApi.getTranscript(meetingId);
+        const segments = await transcriptionApi.getTranscript(noteId);
         setTranscript(segments);
 
         return result;
@@ -139,10 +139,10 @@ export function useTranscription(): UseTranscriptionReturn {
     []
   );
 
-  const loadTranscript = useCallback(async (meetingId: string): Promise<TranscriptSegment[]> => {
+  const loadTranscript = useCallback(async (noteId: string): Promise<TranscriptSegment[]> => {
     try {
       setError(null);
-      const segments = await transcriptionApi.getTranscript(meetingId);
+      const segments = await transcriptionApi.getTranscript(noteId);
       setTranscript(segments);
       return segments;
     } catch (e) {
@@ -198,15 +198,15 @@ interface UseLiveTranscriptionReturn {
   isLiveTranscribing: boolean;
   liveSegments: TranscriptSegment[];
   error: string | null;
-  startLiveTranscription: (meetingId: string, speakerName?: string) => Promise<void>;
-  stopLiveTranscription: (meetingId: string) => Promise<TranscriptionResult | null>;
+  startLiveTranscription: (noteId: string, speakerName?: string) => Promise<void>;
+  stopLiveTranscription: (noteId: string) => Promise<TranscriptionResult | null>;
 }
 
 export function useLiveTranscription(): UseLiveTranscriptionReturn {
   const [isLiveTranscribing, setIsLiveTranscribing] = useState(false);
   const [liveSegments, setLiveSegments] = useState<TranscriptSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const currentMeetingIdRef = useRef<string | null>(null);
+  const currentNoteIdRef = useRef<string | null>(null);
   const speakerNameRef = useRef<string>("Me");
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
@@ -222,10 +222,10 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
           // Ignore events if effect was cleaned up (StrictMode double-mount)
           if (cancelled) return;
 
-          const { meeting_id, segments, is_final, audio_source } = event.payload;
+          const { note_id, segments, is_final, audio_source } = event.payload;
 
-          // Only process events for the current meeting
-          if (meeting_id !== currentMeetingIdRef.current) return;
+          // Only process events for the current note
+          if (note_id !== currentNoteIdRef.current) return;
 
           // Set speaker based on audio source: mic = user's name, system = "Others"
           const speaker = audio_source === "system" ? "Others" : speakerNameRef.current;
@@ -234,7 +234,7 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
             // Convert new segments
             const newSegments: TranscriptSegment[] = segments.map((s, idx) => ({
               id: Date.now() + idx,
-              meeting_id,
+              note_id,
               start_time: s.start_time,
               end_time: s.end_time,
               text: s.text,
@@ -290,26 +290,26 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
     };
   }, []);
 
-  const startLiveTranscription = useCallback(async (meetingId: string, speakerName?: string) => {
+  const startLiveTranscription = useCallback(async (noteId: string, speakerName?: string) => {
     try {
       setError(null);
       setLiveSegments([]);
-      currentMeetingIdRef.current = meetingId;
+      currentNoteIdRef.current = noteId;
       speakerNameRef.current = speakerName || "Me";
-      await transcriptionApi.startLiveTranscription(meetingId);
+      await transcriptionApi.startLiveTranscription(noteId);
       setIsLiveTranscribing(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      currentMeetingIdRef.current = null;
+      currentNoteIdRef.current = null;
     }
   }, []);
 
-  const stopLiveTranscription = useCallback(async (meetingId: string): Promise<TranscriptionResult | null> => {
+  const stopLiveTranscription = useCallback(async (noteId: string): Promise<TranscriptionResult | null> => {
     try {
       setError(null);
-      const result = await transcriptionApi.stopLiveTranscription(meetingId);
+      const result = await transcriptionApi.stopLiveTranscription(noteId);
       setIsLiveTranscribing(false);
-      currentMeetingIdRef.current = null;
+      currentNoteIdRef.current = null;
       return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

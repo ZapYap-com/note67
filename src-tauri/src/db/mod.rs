@@ -40,7 +40,7 @@ impl Database {
     /// Add a transcript segment to the database
     pub fn add_transcript_segment(
         &self,
-        meeting_id: &str,
+        note_id: &str,
         start_time: f64,
         end_time: f64,
         text: &str,
@@ -50,30 +50,30 @@ impl Database {
         let now = Utc::now();
 
         conn.execute(
-            "INSERT INTO transcript_segments (meeting_id, start_time, end_time, text, speaker, created_at)
+            "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![meeting_id, start_time, end_time, text, speaker, now.to_rfc3339()],
+            params![note_id, start_time, end_time, text, speaker, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
     }
 
-    /// Get all transcript segments for a meeting
-    pub fn get_transcript_segments(&self, meeting_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
+    /// Get all transcript segments for a note
+    pub fn get_transcript_segments(&self, note_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, meeting_id, start_time, end_time, text, speaker, created_at
+            "SELECT id, note_id, start_time, end_time, text, speaker, created_at
              FROM transcript_segments
-             WHERE meeting_id = ?1
+             WHERE note_id = ?1
              ORDER BY start_time ASC",
         )?;
 
         let segments = stmt
-            .query_map([meeting_id], |row| {
+            .query_map([note_id], |row| {
                 Ok(TranscriptSegment {
                     id: row.get(0)?,
-                    meeting_id: row.get(1)?,
+                    note_id: row.get(1)?,
                     start_time: row.get(2)?,
                     end_time: row.get(3)?,
                     text: row.get(4)?,
@@ -87,12 +87,12 @@ impl Database {
         Ok(segments)
     }
 
-    /// Delete all transcript segments for a meeting
-    pub fn delete_transcript_segments(&self, meeting_id: &str) -> anyhow::Result<()> {
+    /// Delete all transcript segments for a note
+    pub fn delete_transcript_segments(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute(
-            "DELETE FROM transcript_segments WHERE meeting_id = ?1",
-            [meeting_id],
+            "DELETE FROM transcript_segments WHERE note_id = ?1",
+            [note_id],
         )?;
         Ok(())
     }
@@ -100,7 +100,7 @@ impl Database {
     /// Add a summary to the database
     pub fn add_summary(
         &self,
-        meeting_id: &str,
+        note_id: &str,
         summary_type: &SummaryType,
         content: &str,
     ) -> anyhow::Result<i64> {
@@ -108,9 +108,9 @@ impl Database {
         let now = Utc::now();
 
         conn.execute(
-            "INSERT INTO summaries (meeting_id, summary_type, content, created_at)
+            "INSERT INTO summaries (note_id, summary_type, content, created_at)
              VALUES (?1, ?2, ?3, ?4)",
-            params![meeting_id, summary_type.as_str(), content, now.to_rfc3339()],
+            params![note_id, summary_type.as_str(), content, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
@@ -121,7 +121,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, meeting_id, summary_type, content, created_at
+            "SELECT id, note_id, summary_type, content, created_at
              FROM summaries WHERE id = ?1",
         )?;
 
@@ -129,7 +129,7 @@ impl Database {
             .query_row([id], |row| {
                 Ok(Summary {
                     id: row.get(0)?,
-                    meeting_id: row.get(1)?,
+                    note_id: row.get(1)?,
                     summary_type: SummaryType::from_str(&row.get::<_, String>(2)?),
                     content: row.get(3)?,
                     created_at: row.get::<_, String>(4)?.parse().unwrap_or_else(|_| Utc::now()),
@@ -140,22 +140,22 @@ impl Database {
         Ok(summary)
     }
 
-    /// Get all summaries for a meeting
-    pub fn get_summaries(&self, meeting_id: &str) -> anyhow::Result<Vec<Summary>> {
+    /// Get all summaries for a note
+    pub fn get_summaries(&self, note_id: &str) -> anyhow::Result<Vec<Summary>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, meeting_id, summary_type, content, created_at
+            "SELECT id, note_id, summary_type, content, created_at
              FROM summaries
-             WHERE meeting_id = ?1
+             WHERE note_id = ?1
              ORDER BY created_at DESC",
         )?;
 
         let summaries = stmt
-            .query_map([meeting_id], |row| {
+            .query_map([note_id], |row| {
                 Ok(Summary {
                     id: row.get(0)?,
-                    meeting_id: row.get(1)?,
+                    note_id: row.get(1)?,
                     summary_type: SummaryType::from_str(&row.get::<_, String>(2)?),
                     content: row.get(3)?,
                     created_at: row.get::<_, String>(4)?.parse().unwrap_or_else(|_| Utc::now()),
@@ -174,10 +174,10 @@ impl Database {
         Ok(())
     }
 
-    /// Delete all summaries for a meeting
-    pub fn delete_meeting_summaries(&self, meeting_id: &str) -> anyhow::Result<()> {
+    /// Delete all summaries for a note
+    pub fn delete_note_summaries(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute("DELETE FROM summaries WHERE meeting_id = ?1", [meeting_id])?;
+        conn.execute("DELETE FROM summaries WHERE note_id = ?1", [note_id])?;
         Ok(())
     }
 

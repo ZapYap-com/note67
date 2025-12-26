@@ -34,7 +34,7 @@ pub struct OllamaStatus {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenerateSummaryRequest {
-    pub meeting_id: String,
+    pub note_id: String,
     pub summary_type: String,
     pub custom_prompt: Option<String>,
 }
@@ -106,10 +106,10 @@ pub fn is_ai_generating(state: State<'_, AiState>) -> bool {
     state.is_generating.load(Ordering::SeqCst)
 }
 
-/// Generate a summary for a meeting
+/// Generate a summary for a note
 #[tauri::command]
 pub async fn generate_summary(
-    meeting_id: String,
+    note_id: String,
     summary_type: String,
     custom_prompt: Option<String>,
     ai_state: State<'_, AiState>,
@@ -135,11 +135,11 @@ pub async fn generate_summary(
 
     // Get transcript from database
     let segments = db
-        .get_transcript_segments(&meeting_id)
+        .get_transcript_segments(&note_id)
         .map_err(|e| e.to_string())?;
 
     if segments.is_empty() {
-        return Err("No transcript found for this meeting. Please transcribe the audio first.".to_string());
+        return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
     }
 
     // Combine segments into full transcript, filtering out blank audio markers
@@ -163,7 +163,7 @@ pub async fn generate_summary(
         SummaryType::ActionItems => SummaryPrompts::action_items(&transcript),
         SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript),
         SummaryType::Custom => {
-            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this meeting.".to_string());
+            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
             SummaryPrompts::custom(&transcript, &user_prompt)
         }
     };
@@ -180,7 +180,7 @@ pub async fn generate_summary(
 
     // Save to database
     let summary_id = db
-        .add_summary(&meeting_id, &stype, &clean_response)
+        .add_summary(&note_id, &stype, &clean_response)
         .map_err(|e| e.to_string())?;
 
     // Fetch the saved summary
@@ -195,16 +195,16 @@ pub async fn generate_summary(
 /// Event payload for streaming summary updates
 #[derive(Clone, Serialize)]
 pub struct SummaryStreamEvent {
-    pub meeting_id: String,
+    pub note_id: String,
     pub chunk: String,
     pub is_done: bool,
 }
 
-/// Generate a summary for a meeting with streaming
+/// Generate a summary for a note with streaming
 #[tauri::command]
 pub async fn generate_summary_stream(
     app: AppHandle,
-    meeting_id: String,
+    note_id: String,
     summary_type: String,
     custom_prompt: Option<String>,
     ai_state: State<'_, AiState>,
@@ -230,11 +230,11 @@ pub async fn generate_summary_stream(
 
     // Get transcript from database
     let segments = db
-        .get_transcript_segments(&meeting_id)
+        .get_transcript_segments(&note_id)
         .map_err(|e| e.to_string())?;
 
     if segments.is_empty() {
-        return Err("No transcript found for this meeting. Please transcribe the audio first.".to_string());
+        return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
     }
 
     // Combine segments into full transcript, filtering out blank audio markers
@@ -258,7 +258,7 @@ pub async fn generate_summary_stream(
         SummaryType::ActionItems => SummaryPrompts::action_items(&transcript),
         SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript),
         SummaryType::Custom => {
-            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this meeting.".to_string());
+            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
             SummaryPrompts::custom(&transcript, &user_prompt)
         }
     };
@@ -266,13 +266,13 @@ pub async fn generate_summary_stream(
     // Create channel for streaming
     let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
     let app_clone = app.clone();
-    let meeting_id_clone = meeting_id.clone();
+    let note_id_clone = note_id.clone();
 
     // Spawn task to receive chunks and emit events
     tokio::spawn(async move {
         while let Some(chunk) = rx.recv().await {
             let event = SummaryStreamEvent {
-                meeting_id: meeting_id_clone.clone(),
+                note_id: note_id_clone.clone(),
                 chunk,
                 is_done: false,
             };
@@ -289,7 +289,7 @@ pub async fn generate_summary_stream(
 
     // Emit done event
     let done_event = SummaryStreamEvent {
-        meeting_id: meeting_id.clone(),
+        note_id: note_id.clone(),
         chunk: String::new(),
         is_done: true,
     };
@@ -300,7 +300,7 @@ pub async fn generate_summary_stream(
 
     // Save to database
     let summary_id = db
-        .add_summary(&meeting_id, &stype, &clean_response)
+        .add_summary(&note_id, &stype, &clean_response)
         .map_err(|e| e.to_string())?;
 
     // Fetch the saved summary
@@ -312,13 +312,13 @@ pub async fn generate_summary_stream(
     Ok(summary)
 }
 
-/// Get all summaries for a meeting
+/// Get all summaries for a note
 #[tauri::command]
-pub fn get_meeting_summaries(
-    meeting_id: String,
+pub fn get_note_summaries(
+    note_id: String,
     db: State<'_, Database>,
 ) -> Result<Vec<Summary>, String> {
-    db.get_summaries(&meeting_id).map_err(|e| e.to_string())
+    db.get_summaries(&note_id).map_err(|e| e.to_string())
 }
 
 /// Delete a summary
@@ -327,10 +327,10 @@ pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), St
     db.delete_summary(summary_id).map_err(|e| e.to_string())
 }
 
-/// Generate a title for a meeting based on its transcript
+/// Generate a title for a note based on its transcript
 #[tauri::command]
 pub async fn generate_title(
-    meeting_id: String,
+    note_id: String,
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<String, String> {
@@ -344,11 +344,11 @@ pub async fn generate_title(
 
     // Get transcript from database
     let segments = db
-        .get_transcript_segments(&meeting_id)
+        .get_transcript_segments(&note_id)
         .map_err(|e| e.to_string())?;
 
     if segments.is_empty() {
-        return Err("No transcript found for this meeting.".to_string());
+        return Err("No transcript found for this note.".to_string());
     }
 
     // Combine segments, filtering out blank audio markers (limit to ~2000 chars)
@@ -386,13 +386,13 @@ pub async fn generate_title(
         .trim_matches('\'')
         .to_string();
 
-    // Update meeting title in database
+    // Update note title in database
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let now = chrono::Utc::now();
         conn.execute(
-            "UPDATE meetings SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            rusqlite::params![&title, now.to_rfc3339(), &meeting_id],
+            "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![&title, now.to_rfc3339(), &note_id],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -400,10 +400,10 @@ pub async fn generate_title(
     Ok(title)
 }
 
-/// Generate a title for a meeting based on a summary content
+/// Generate a title for a note based on a summary content
 #[tauri::command]
 pub async fn generate_title_from_summary(
-    meeting_id: String,
+    note_id: String,
     summary_content: String,
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
@@ -440,13 +440,13 @@ pub async fn generate_title_from_summary(
         .trim_matches('\'')
         .to_string();
 
-    // Update meeting title in database
+    // Update note title in database
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let now = chrono::Utc::now();
         conn.execute(
-            "UPDATE meetings SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            rusqlite::params![&title, now.to_rfc3339(), &meeting_id],
+            "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![&title, now.to_rfc3339(), &note_id],
         )
         .map_err(|e| e.to_string())?;
     }

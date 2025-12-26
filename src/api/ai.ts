@@ -25,12 +25,12 @@ export const aiApi = {
 
   // Summary generation
   generateSummary: (
-    meetingId: string,
+    noteId: string,
     summaryType: SummaryType,
     customPrompt?: string
   ): Promise<Summary> => {
     return invoke("generate_summary", {
-      meetingId,
+      noteId,
       summaryType,
       customPrompt: customPrompt ?? null,
     });
@@ -38,19 +38,19 @@ export const aiApi = {
 
   // Summary generation with streaming
   generateSummaryStream: (
-    meetingId: string,
+    noteId: string,
     summaryType: SummaryType,
     customPrompt?: string
   ): Promise<Summary> => {
     return invoke("generate_summary_stream", {
-      meetingId,
+      noteId,
       summaryType,
       customPrompt: customPrompt ?? null,
     });
   },
 
-  getMeetingSummaries: (meetingId: string): Promise<Summary[]> => {
-    return invoke("get_meeting_summaries", { meetingId });
+  getNoteSummaries: (noteId: string): Promise<Summary[]> => {
+    return invoke("get_note_summaries", { noteId });
   },
 
   deleteSummary: (summaryId: number): Promise<void> => {
@@ -58,12 +58,12 @@ export const aiApi = {
   },
 
   // Title generation
-  generateTitle: (meetingId: string): Promise<string> => {
-    return invoke("generate_title", { meetingId });
+  generateTitle: (noteId: string): Promise<string> => {
+    return invoke("generate_title", { noteId });
   },
 
   // Title generation from summary content
-  generateTitleFromSummary: (meetingId: string, summaryContent: string): Promise<string> => {
-    return invoke("generate_title_from_summary", { meetingId, summaryContent });
+  generateTitleFromSummary: (noteId: string, summaryContent: string): Promise<string> => {
+    return invoke("generate_title_from_summary", { noteId, summaryContent });
   },
 };

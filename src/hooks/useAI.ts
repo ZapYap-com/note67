@@ -5,7 +5,7 @@ import { useOllamaStore } from "../stores/ollamaStore";
 import type { Summary, SummaryType } from "../types";
 
 interface SummaryStreamEvent {
-  meeting_id: string;
+  note_id: string;
   chunk: string;
   is_done: boolean;
 }
@@ -35,13 +35,13 @@ export function useOllama() {
   };
 }
 
-export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
+export function useSummaries(noteId: string | null, refreshKey: number = 0) {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
-  const currentMeetingIdRef = useRef<string | null>(null);
+  const currentNoteIdRef = useRef<string | null>(null);
 
   // Set up streaming event listener
   useEffect(() => {
@@ -49,10 +49,10 @@ export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
       unlistenRef.current = await listen<SummaryStreamEvent>(
         "summary-stream",
         (event) => {
-          const { meeting_id, chunk, is_done } = event.payload;
+          const { note_id, chunk, is_done } = event.payload;
 
-          // Only process events for the current meeting
-          if (meeting_id !== currentMeetingIdRef.current) return;
+          // Only process events for the current note
+          if (note_id !== currentNoteIdRef.current) return;
 
           if (is_done) {
             setStreamingContent("");
@@ -73,27 +73,27 @@ export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
   }, []);
 
   const loadSummaries = useCallback(async () => {
-    if (!meetingId) {
+    if (!noteId) {
       setSummaries([]);
       return;
     }
     try {
-      const data = await aiApi.getMeetingSummaries(meetingId);
+      const data = await aiApi.getNoteSummaries(noteId);
       setSummaries(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [meetingId]);
+  }, [noteId]);
 
-  // Reload summaries when meetingId or refreshKey changes
+  // Reload summaries when noteId or refreshKey changes
   useEffect(() => {
     loadSummaries();
   }, [loadSummaries, refreshKey]);
 
   const generateSummary = useCallback(
     async (summaryType: SummaryType, customPrompt?: string) => {
-      if (!meetingId) {
-        setError("No meeting selected");
+      if (!noteId) {
+        setError("No note selected");
         return null;
       }
 
@@ -101,11 +101,11 @@ export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
         setIsGenerating(true);
         setStreamingContent("");
         setError(null);
-        currentMeetingIdRef.current = meetingId;
+        currentNoteIdRef.current = noteId;
 
         // Use streaming API
         const summary = await aiApi.generateSummaryStream(
-          meetingId,
+          noteId,
           summaryType,
           customPrompt
         );
@@ -118,10 +118,10 @@ export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
         return null;
       } finally {
         setIsGenerating(false);
-        currentMeetingIdRef.current = null;
+        currentNoteIdRef.current = null;
       }
     },
-    [meetingId]
+    [noteId]
   );
 
   const deleteSummary = useCallback(async (summaryId: number) => {

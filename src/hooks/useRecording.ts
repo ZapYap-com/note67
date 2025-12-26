@@ -7,8 +7,8 @@ interface UseRecordingReturn {
   audioPath: string | null;
   error: string | null;
   isDualRecording: boolean;
-  startRecording: (meetingId: string) => Promise<void>;
-  stopRecording: (meetingId?: string) => Promise<string | null>;
+  startRecording: (noteId: string) => Promise<void>;
+  stopRecording: (noteId?: string) => Promise<string | null>;
 }
 
 export function useRecording(): UseRecordingReturn {
@@ -18,12 +18,12 @@ export function useRecording(): UseRecordingReturn {
   const [error, setError] = useState<string | null>(null);
   const [isDualRecording, setIsDualRecording] = useState(false);
   const levelIntervalRef = useRef<number | null>(null);
-  const currentMeetingIdRef = useRef<string | null>(null);
+  const currentNoteIdRef = useRef<string | null>(null);
 
-  const startRecording = useCallback(async (meetingId: string) => {
+  const startRecording = useCallback(async (noteId: string) => {
     try {
       setError(null);
-      currentMeetingIdRef.current = meetingId;
+      currentNoteIdRef.current = noteId;
 
       // Check if system audio is supported and has permission
       const isSupported = await audioApi.isSystemAudioSupported();
@@ -34,14 +34,14 @@ export function useRecording(): UseRecordingReturn {
       if (isSupported && hasPermission) {
         // Use dual recording (mic + system audio)
         console.log("Starting dual recording (mic + system audio)");
-        const result = await audioApi.startDualRecording(meetingId);
+        const result = await audioApi.startDualRecording(noteId);
         // Use the playback path if available, otherwise mic path
         setAudioPath(result.playbackPath || result.micPath);
         setIsDualRecording(true);
       } else {
         // Fall back to mic-only recording
         console.log("Starting mic-only recording");
-        const path = await audioApi.startRecording(meetingId);
+        const path = await audioApi.startRecording(noteId);
         setAudioPath(path);
         setIsDualRecording(false);
       }
@@ -52,10 +52,10 @@ export function useRecording(): UseRecordingReturn {
   }, []);
 
   const stopRecording = useCallback(
-    async (meetingId?: string): Promise<string | null> => {
+    async (noteId?: string): Promise<string | null> => {
       try {
         setError(null);
-        const id = meetingId || currentMeetingIdRef.current;
+        const id = noteId || currentNoteIdRef.current;
 
         let path: string | null = null;
 
@@ -75,7 +75,7 @@ export function useRecording(): UseRecordingReturn {
         setIsRecording(false);
         setIsDualRecording(false);
         setAudioLevel(0);
-        currentMeetingIdRef.current = null;
+        currentNoteIdRef.current = null;
         return path;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
