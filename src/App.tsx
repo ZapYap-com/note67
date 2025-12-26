@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ModelManager, TranscriptViewer } from "./components";
+import { ModelManager, TranscriptSearch } from "./components";
 import { useMeetings, useModels, useRecording, useTranscription } from "./hooks";
 import type { Meeting, TranscriptSegment } from "./types";
 
@@ -313,13 +313,25 @@ function MeetingCard({
         </div>
       </div>
 
+      {/* Transcription in progress */}
+      {isTranscribing && (
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-purple-50 dark:bg-purple-900/20">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-300 border-t-purple-600" />
+            <span className="text-sm text-purple-700 dark:text-purple-300">
+              Transcribing audio...
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Transcript Section */}
-      {isExpanded && transcript.length > 0 && (
+      {isExpanded && transcript.length > 0 && !isTranscribing && (
         <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Transcript
           </h4>
-          <TranscriptViewer segments={transcript} />
+          <TranscriptSearch segments={transcript} />
         </div>
       )}
     </div>
