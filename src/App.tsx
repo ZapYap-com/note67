@@ -204,6 +204,17 @@ function App() {
     };
   }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartMeeting, handleNewNote]);
 
+  // Listen for tray "Settings" event
+  useEffect(() => {
+    const unlisten = listen("tray-open-settings", () => {
+      setShowSettings(true);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // Keyboard shortcut: ESC to close modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

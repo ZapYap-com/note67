@@ -36,25 +36,21 @@ pub fn run() {
             app.manage(transcription_state);
 
             // Setup system tray menu
-            let show_hide = MenuItem::with_id(app, "show_hide", "Show/Hide", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
             let new_meeting = MenuItem::with_id(app, "new_meeting", "New Meeting", true, None::<&str>)?;
-            let separator = MenuItem::with_id(app, "sep", "─────────", false, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Note67", true, None::<&str>)?;
+            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
 
-            let menu = Menu::with_items(app, &[&show_hide, &new_meeting, &separator, &quit])?;
+            let menu = Menu::with_items(app, &[&open, &new_meeting, &settings, &exit])?;
 
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show_hide" => {
+                    "open" => {
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
                     }
                     "new_meeting" => {
@@ -64,7 +60,14 @@ pub fn run() {
                             let _ = window.emit("tray-new-meeting", ());
                         }
                     }
-                    "quit" => {
+                    "settings" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.emit("tray-open-settings", ());
+                        }
+                    }
+                    "exit" => {
                         app.exit(0);
                     }
                     _ => {}
