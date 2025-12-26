@@ -430,22 +430,11 @@ pub async fn stop_live_transcription(
     app: AppHandle,
     meeting_id: String,
     state: State<'_, TranscriptionState>,
-    db: State<'_, Database>,
 ) -> Result<TranscriptionResult, String> {
     let live_state = state.live_state.clone();
     let result = live::stop_live_transcription(live_state).await;
 
-    // Save segments to database
-    for segment in &result.segments {
-        db.add_transcript_segment(
-            &meeting_id,
-            segment.start_time,
-            segment.end_time,
-            &segment.text,
-            None,
-        )
-        .map_err(|e| e.to_string())?;
-    }
+    // Segments are already saved to database during live transcription with speaker labels
 
     // Emit final event (with empty segments - they were already sent in periodic updates)
     let event = crate::transcription::TranscriptionUpdateEvent {

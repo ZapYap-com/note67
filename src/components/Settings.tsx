@@ -1146,7 +1146,7 @@ function WhisperModelCard({
               disabled={isDownloading}
               className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
               style={{
-                backgroundColor: "var(--color-text)",
+                backgroundColor: "#374151",
                 color: "white",
               }}
             >

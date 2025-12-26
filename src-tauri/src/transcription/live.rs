@@ -7,7 +7,9 @@ use tokio::sync::Mutex;
 use tokio::time::interval;
 
 use crate::audio::{take_system_audio_samples, RecordingState};
+use crate::db::Database;
 use crate::transcription::{TranscriptionError, TranscriptionResult, TranscriptionSegment};
+use tauri::Manager;
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
@@ -60,7 +62,7 @@ pub struct TranscriptionUpdateEvent {
 }
 
 /// Start live transcription
-/// Runs every 10 seconds, transcribes accumulated audio, emits events
+/// Runs every 5 seconds, transcribes accumulated audio, saves to DB, emits events
 pub async fn start_live_transcription(
     app: AppHandle,
     meeting_id: String,
@@ -149,7 +151,27 @@ pub async fn start_live_transcription(
                                 }
                             }
 
-                            // Store segments
+                            // Determine speaker based on audio source
+                            let speaker = match audio_source {
+                                AudioSource::Mic => Some("You"),
+                                AudioSource::System => Some("Others"),
+                            };
+
+                            // Save segments to database with speaker
+                            let db = app_clone.state::<Database>();
+                            for segment in &transcription.segments {
+                                if let Err(e) = db.add_transcript_segment(
+                                    &meeting_id_clone,
+                                    segment.start_time,
+                                    segment.end_time,
+                                    &segment.text,
+                                    speaker,
+                                ) {
+                                    eprintln!("Failed to save transcript segment: {}", e);
+                                }
+                            }
+
+                            // Store segments in memory (for final result)
                             live_state_clone
                                 .segments
                                 .lock()

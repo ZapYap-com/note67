@@ -115,7 +115,7 @@ export function SummaryPanel({
               disabled={!canGenerate}
               className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: canGenerate ? "var(--color-text)" : "var(--color-bg-subtle)",
+                backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
                 color: canGenerate ? "white" : "var(--color-text-tertiary)",
               }}
             >
@@ -171,7 +171,7 @@ export function SummaryPanel({
                 disabled={!canGenerate || !customPrompt.trim()}
                 className="px-5 py-3 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: "var(--color-text)",
+                  backgroundColor: "#374151",
                   color: "white",
                 }}
               >
