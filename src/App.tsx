@@ -134,6 +134,27 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNewNote]);
 
+  // Keyboard shortcut: ESC to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (contextMenu) {
+          setContextMenu(null);
+        } else if (showDeleteConfirm) {
+          setShowDeleteConfirm(false);
+          setMeetingToDelete(null);
+        } else if (showSettings) {
+          setShowSettings(false);
+        } else if (selectedMeetingId) {
+          setSelectedMeetingId(null);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contextMenu, showDeleteConfirm, showSettings, selectedMeetingId]);
+
   // Global right-click handler - prevent default and show custom menu
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
