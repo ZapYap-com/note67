@@ -8,9 +8,9 @@ use commands::{init_transcription_state, AiState, AudioState};
 use db::Database;
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder},
     tray::TrayIconBuilder,
-    Emitter, Manager,
+    Emitter, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -35,6 +35,62 @@ pub fn run() {
             app.manage(AiState::default());
             let transcription_state = init_transcription_state(app.handle());
             app.manage(transcription_state);
+
+            // Create custom application menu (macOS) with Hide instead of Quit on Cmd+Q
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::PredefinedMenuItem;
+
+                let hide_window = MenuItem::with_id(app, "hide_window", "Hide Window", true, Some("CmdOrCtrl+Q"))?;
+                let quit = MenuItem::with_id(app, "quit_app", "Quit Note67", true, Some("CmdOrCtrl+Shift+Q"))?;
+
+                let app_submenu = SubmenuBuilder::new(app, "Note67")
+                    .item(&PredefinedMenuItem::about(app, Some("About Note67"), None)?)
+                    .separator()
+                    .item(&hide_window)
+                    .item(&quit)
+                    .build()?;
+
+                let edit_submenu = SubmenuBuilder::new(app, "Edit")
+                    .item(&PredefinedMenuItem::undo(app, None)?)
+                    .item(&PredefinedMenuItem::redo(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::cut(app, None)?)
+                    .item(&PredefinedMenuItem::copy(app, None)?)
+                    .item(&PredefinedMenuItem::paste(app, None)?)
+                    .item(&PredefinedMenuItem::select_all(app, None)?)
+                    .build()?;
+
+                let window_submenu = SubmenuBuilder::new(app, "Window")
+                    .item(&PredefinedMenuItem::minimize(app, None)?)
+                    .item(&PredefinedMenuItem::maximize(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::close_window(app, None)?)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_submenu)
+                    .item(&edit_submenu)
+                    .item(&window_submenu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+
+                // Handle custom menu events
+                app.on_menu_event(move |app_handle, event| {
+                    match event.id().as_ref() {
+                        "hide_window" => {
+                            if let Some(window) = app_handle.get_webview_window("main") {
+                                let _ = window.hide();
+                            }
+                        }
+                        "quit_app" => {
+                            app_handle.exit(0);
+                        }
+                        _ => {}
+                    }
+                });
+            }
 
             // Setup system tray menu
             let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
@@ -82,6 +138,13 @@ pub fn run() {
                 .build(app)?;
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Hide window instead of closing when user clicks the close button
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -132,6 +195,16 @@ pub fn run() {
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Prevent app from exiting when Cmd+Q is pressed (hide window instead)
+            if let RunEvent::ExitRequested { api, .. } = event {
+                api.prevent_exit();
+                // Hide all windows
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+        });
 }
