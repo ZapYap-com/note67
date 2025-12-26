@@ -61,4 +61,9 @@ export const aiApi = {
   generateTitle: (meetingId: string): Promise<string> => {
     return invoke("generate_title", { meetingId });
   },
+
+  // Title generation from summary content
+  generateTitleFromSummary: (meetingId: string, summaryContent: string): Promise<string> => {
+    return invoke("generate_title_from_summary", { meetingId, summaryContent });
+  },
 };

@@ -60,6 +60,7 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
   const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
+  const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] = useState(false);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -248,17 +249,39 @@ function App() {
       // Auto-generate summary and title if we have transcript
       if (liveSegments.length > 0) {
         setActiveTab("summary");
+        setIsGeneratingSummaryTitle(true);
         try {
-          // Generate overview summary
-          await aiApi.generateSummary(meetingId, "overview");
-          // Generate and update title
-          await aiApi.generateTitle(meetingId);
+          // Generate overview summary first
+          const summary = await aiApi.generateSummary(meetingId, "overview");
+          // Generate title from summary content
+          await aiApi.generateTitleFromSummary(meetingId, summary.content);
           // Refresh meeting list to show new title
           await refreshMeetings();
         } catch (error) {
           console.error("Failed to auto-generate summary/title:", error);
+        } finally {
+          setIsGeneratingSummaryTitle(false);
         }
       }
+    }
+  };
+
+  // Regenerate summary and title for the selected meeting
+  const handleRegenerateSummaryTitle = async () => {
+    if (!selectedMeetingId) return;
+
+    setIsGeneratingSummaryTitle(true);
+    try {
+      // Generate overview summary first
+      const summary = await aiApi.generateSummary(selectedMeetingId, "overview");
+      // Generate title from summary content
+      await aiApi.generateTitleFromSummary(selectedMeetingId, summary.content);
+      // Refresh meeting list to show new title
+      await refreshMeetings();
+    } catch (error) {
+      console.error("Failed to regenerate summary/title:", error);
+    } finally {
+      setIsGeneratingSummaryTitle(false);
     }
   };
 
@@ -547,6 +570,7 @@ function App() {
             editingTitle={editingTitle}
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
+            isRegenerating={isGeneratingSummaryTitle}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
             onUpdateTitle={handleUpdateTitle}
@@ -561,6 +585,7 @@ function App() {
               const data = await exportApi.exportMarkdown(selectedMeeting.id);
               await exportApi.copyToClipboard(data.markdown);
             }}
+            onRegenerate={handleRegenerateSummaryTitle}
           />
         ) : (
           <EmptyState
@@ -572,9 +597,31 @@ function App() {
           />
         )}
 
-        {/* Start Listening Button or Recording Indicator */}
+        {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          {isRecording && recordingMeeting ? (
+          {isGeneratingSummaryTitle ? (
+            <div
+              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <div
+                className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                style={{
+                  borderColor: "var(--color-accent)",
+                  borderTopColor: "transparent",
+                }}
+              />
+              <span
+                className="text-sm font-medium"
+                style={{ color: "var(--color-text)" }}
+              >
+                Generating summary & title...
+              </span>
+            </div>
+          ) : isRecording && recordingMeeting ? (
             <div
               className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
               style={{
@@ -817,6 +864,7 @@ interface MeetingViewProps {
   editingTitle: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
+  isRegenerating: boolean;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
@@ -825,6 +873,7 @@ interface MeetingViewProps {
   onDelete: () => void;
   onExport: () => void;
   onCopy: () => void;
+  onRegenerate: () => void;
 }
 
 function MeetingView({
@@ -836,6 +885,7 @@ function MeetingView({
   editingTitle,
   ollamaRunning,
   hasOllamaModel,
+  isRegenerating,
   onTabChange,
   onEditTitle,
   onUpdateTitle,
@@ -844,6 +894,7 @@ function MeetingView({
   onDelete,
   onExport,
   onCopy,
+  onRegenerate,
 }: MeetingViewProps) {
   const [titleValue, setTitleValue] = useState(meeting.title);
   const [descValue, setDescValue] = useState(meeting.description || "");
@@ -1074,6 +1125,8 @@ function MeetingView({
               generateSummary(type, prompt)
             }
             onDelete={deleteSummary}
+            onRegenerate={onRegenerate}
+            isRegenerating={isRegenerating}
           />
         )}
       </div>

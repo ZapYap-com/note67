@@ -384,6 +384,60 @@ pub async fn generate_title(
     Ok(title)
 }
 
+/// Generate a title for a meeting based on a summary content
+#[tauri::command]
+pub async fn generate_title_from_summary(
+    meeting_id: String,
+    summary_content: String,
+    ai_state: State<'_, AiState>,
+    db: State<'_, Database>,
+) -> Result<String, String> {
+    // Get selected model
+    let model = ai_state
+        .selected_model
+        .lock()
+        .await
+        .clone()
+        .ok_or("No model selected. Please select a model first.")?;
+
+    // Truncate summary if too long
+    let truncated = if summary_content.len() > 2000 {
+        format!("{}...", &summary_content[..2000])
+    } else {
+        summary_content
+    };
+
+    // Build prompt
+    let prompt = SummaryPrompts::title_from_summary(&truncated);
+
+    // Generate with Ollama (low temperature for consistent output)
+    let response = ai_state
+        .client
+        .generate(&model, &prompt, 0.3, Some(100))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Clean up the response - remove thinking tags, quotes, and trim
+    let title = strip_thinking_tags(&response)
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_string();
+
+    // Update meeting title in database
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now();
+        conn.execute(
+            "UPDATE meetings SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![&title, now.to_rfc3339(), &meeting_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(title)
+}
+
 /// Strip thinking tags from LLM responses (used by reasoning models like DeepSeek)
 /// Handles: <think>, <thinking>, and variations with different casing
 fn strip_thinking_tags(text: &str) -> String {

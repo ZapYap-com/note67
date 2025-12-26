@@ -100,6 +100,29 @@ TITLE:"#,
         )
     }
 
+    /// Generate a short, descriptive title based on the meeting summary
+    pub fn title_from_summary(summary: &str) -> String {
+        format!(
+            r#"Generate a concise meeting title based on this summary.
+
+SUMMARY:
+{}
+
+Rules:
+- 2-6 words only
+- Capture the main topic or purpose
+- Be specific and informative
+- No quotes around the title
+- No prefixes like "Meeting:" or "Title:"
+- No emojis
+
+Respond with ONLY the title, nothing else.
+
+TITLE:"#,
+            summary
+        )
+    }
+
     /// Generate a custom summary based on user prompt
     pub fn custom(transcript: &str, user_prompt: &str) -> String {
         format!(
