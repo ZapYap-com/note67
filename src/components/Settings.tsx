@@ -747,13 +747,21 @@ function SystemTab() {
     }
   };
 
-  const handleRequestSystemAudioPermission = async () => {
+  const handleOpenSystemSettings = async () => {
+    try {
+      await invoke("open_screen_recording_settings");
+    } catch (err) {
+      console.error("Failed to open Screen Recording settings:", err);
+    }
+  };
+
+  const handleCheckPermission = async () => {
     setRequestingPermission(true);
     try {
-      const granted = await invoke<boolean>("request_system_audio_permission");
+      const granted = await invoke<boolean>("has_system_audio_permission");
       setSystemAudioPermission(granted);
     } catch (err) {
-      console.error("Failed to request system audio permission:", err);
+      console.error("Failed to check permission:", err);
     } finally {
       setRequestingPermission(false);
     }
@@ -908,17 +916,30 @@ function SystemTab() {
                 </div>
               </div>
               {!systemAudioLoading && !systemAudioPermission && (
-                <button
-                  onClick={handleRequestSystemAudioPermission}
-                  disabled={requestingPermission}
-                  className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                  style={{
-                    backgroundColor: "var(--color-accent)",
-                    color: "white",
-                  }}
-                >
-                  {requestingPermission ? "Requesting..." : "Grant Access"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCheckPermission}
+                    disabled={requestingPermission}
+                    className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                    style={{
+                      backgroundColor: "var(--color-bg-elevated)",
+                      color: "var(--color-text-secondary)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                  >
+                    {requestingPermission ? "Checking..." : "Refresh"}
+                  </button>
+                  <button
+                    onClick={handleOpenSystemSettings}
+                    className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                    style={{
+                      backgroundColor: "var(--color-accent)",
+                      color: "white",
+                    }}
+                  >
+                    Open Settings
+                  </button>
+                </div>
               )}
               {!systemAudioLoading && systemAudioPermission && (
                 <span
@@ -942,12 +963,16 @@ function SystemTab() {
                 }}
               >
                 <p className="mb-2">
-                  <strong>Why is this needed?</strong>
+                  <strong>How to enable:</strong>
                 </p>
-                <p>
-                  To distinguish between your voice and other meeting participants,
-                  Note67 captures system audio separately from your microphone.
-                  This requires Screen Recording permission on macOS.
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Click "Open Settings" to open System Settings</li>
+                  <li>Find Note67 in the list and toggle it on</li>
+                  <li>Restart Note67 if prompted</li>
+                  <li>Click "Refresh" to verify permission</li>
+                </ol>
+                <p className="mt-2" style={{ color: "var(--color-text-tertiary)" }}>
+                  This allows Note67 to capture system audio to distinguish your voice from other meeting participants.
                 </p>
               </div>
             )}

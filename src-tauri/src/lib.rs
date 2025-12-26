@@ -201,6 +201,7 @@ pub fn run() {
             commands::set_theme_preference,
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
+            commands::open_screen_recording_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

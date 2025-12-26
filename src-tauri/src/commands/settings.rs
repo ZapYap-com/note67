@@ -3,6 +3,23 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::db::Database;
 
+/// Open the macOS Screen Recording privacy settings
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn open_screen_recording_settings() -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn open_screen_recording_settings() -> Result<(), String> {
+    Err("Screen recording settings are only available on macOS".to_string())
+}
+
 /// Get the theme preference from settings
 #[tauri::command]
 pub fn get_theme_preference(db: State<'_, Database>) -> Result<String, String> {
