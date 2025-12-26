@@ -52,7 +52,7 @@ export const transcriptionApi = {
     noteId: string,
     speaker?: string
   ): Promise<TranscriptionResult> => {
-    return invoke("transcribe_audio", { audio_path: audioPath, note_id: noteId, speaker });
+    return invoke("transcribe_audio", { audioPath, noteId, speaker });
   },
 
   /** Transcribe dual audio files (mic and system) with speaker labels */
@@ -61,7 +61,7 @@ export const transcriptionApi = {
     systemPath: string | null,
     noteId: string
   ): Promise<DualTranscriptionResult> => {
-    return invoke("transcribe_dual_audio", { mic_path: micPath, system_path: systemPath, note_id: noteId });
+    return invoke("transcribe_dual_audio", { micPath, systemPath, noteId });
   },
 
   isTranscribing: (): Promise<boolean> => {
@@ -69,7 +69,7 @@ export const transcriptionApi = {
   },
 
   getTranscript: (noteId: string): Promise<TranscriptSegment[]> => {
-    return invoke("get_transcript", { note_id: noteId });
+    return invoke("get_transcript", { noteId });
   },
 
   addTranscriptSegment: (
@@ -80,9 +80,9 @@ export const transcriptionApi = {
     speaker?: string
   ): Promise<number> => {
     return invoke("add_transcript_segment", {
-      note_id: noteId,
-      start_time: startTime,
-      end_time: endTime,
+      noteId,
+      startTime,
+      endTime,
       text,
       speaker,
     });
@@ -90,11 +90,11 @@ export const transcriptionApi = {
 
   // Live transcription
   startLiveTranscription: (noteId: string): Promise<void> => {
-    return invoke("start_live_transcription", { note_id: noteId });
+    return invoke("start_live_transcription", { noteId });
   },
 
   stopLiveTranscription: (noteId: string): Promise<TranscriptionResult> => {
-    return invoke("stop_live_transcription", { note_id: noteId });
+    return invoke("stop_live_transcription", { noteId });
   },
 
   isLiveTranscribing: (): Promise<boolean> => {

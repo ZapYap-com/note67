@@ -23,7 +23,7 @@ export const notesApi = {
   },
 
   end: (id: string, audioPath?: string): Promise<void> => {
-    return invoke("end_note", { id, audio_path: audioPath });
+    return invoke("end_note", { id, audioPath });
   },
 
   delete: (id: string): Promise<void> => {

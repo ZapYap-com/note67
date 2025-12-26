@@ -13,7 +13,7 @@ export interface DualRecordingResult {
 export const audioApi = {
   // Basic recording (mic only)
   startRecording: (noteId: string): Promise<string> => {
-    return invoke("start_recording", { note_id: noteId });
+    return invoke("start_recording", { noteId });
   },
 
   stopRecording: (): Promise<string | null> => {
@@ -47,12 +47,12 @@ export const audioApi = {
   // Dual recording (mic + system audio)
   /** Start recording both mic and system audio */
   startDualRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("start_dual_recording", { note_id: noteId });
+    return invoke("start_dual_recording", { noteId });
   },
 
   /** Stop dual recording and merge files for playback */
   stopDualRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("stop_dual_recording", { note_id: noteId });
+    return invoke("stop_dual_recording", { noteId });
   },
 
   /** Check if dual recording is currently active */

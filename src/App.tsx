@@ -19,8 +19,6 @@ import {
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, SummaryType, TranscriptSegment } from "./types";
 
-// Import seeder for dev console access
-import "./utils/seeder";
 
 function App() {
   const {
@@ -485,7 +483,7 @@ function App() {
               <button
                 onClick={async () => {
                   const { seedNotes } = await import("./utils/seeder");
-                  await seedNotes();
+                  await seedNotes(refreshNotes);
                 }}
                 className="text-xs underline"
                 style={{ color: "var(--color-accent)" }}
