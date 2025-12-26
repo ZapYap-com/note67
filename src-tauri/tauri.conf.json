@@ -30,7 +30,7 @@
     "targets": "all",
     "icon": ["icons/icon.png"],
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements.plist",
       "infoPlist": "Info.plist"
     }
   }
