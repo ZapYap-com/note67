@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Summary, SummaryType } from "../types";
 
@@ -35,6 +35,19 @@ export function SummaryPanel({
 }: SummaryPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const [expandedSummaries, setExpandedSummaries] = useState<Set<number>>(new Set());
+
+  const toggleSummary = (id: number) => {
+    setExpandedSummaries((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating;
 
@@ -201,68 +214,89 @@ export function SummaryPanel({
 
       {/* Summaries List */}
       {summaries.length > 0 && (
-        <div className="space-y-4">
-          {summaries.map((summary) => (
-            <div
-              key={summary.id}
-              className="rounded-xl overflow-hidden"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+        <div className="space-y-2">
+          {summaries.map((summary) => {
+            const isExpanded = expandedSummaries.has(summary.id);
+            return (
               <div
-                className="flex items-center justify-between px-4 py-3"
-                style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+                key={summary.id}
+                className="rounded-xl overflow-hidden"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  boxShadow: "var(--shadow-sm)",
+                }}
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className="text-sm font-medium px-2.5 py-1 rounded-lg"
-                    style={{
-                      backgroundColor: "var(--color-bg-subtle)",
-                      color: "var(--color-text-secondary)",
+                <div
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
+                  style={{ borderBottom: isExpanded ? "1px solid var(--color-border-subtle)" : "none" }}
+                  onClick={() => toggleSummary(summary.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <svg
+                      className="w-4 h-4 transition-transform"
+                      style={{
+                        color: "var(--color-text-tertiary)",
+                        transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                      }}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span
+                      className="text-sm font-medium px-2.5 py-1 rounded-lg"
+                      style={{
+                        backgroundColor: "var(--color-bg-subtle)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      {getSummaryTypeLabel(summary.summary_type)}
+                    </span>
+                    <span className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
+                      {formatDate(summary.created_at)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(summary.id);
                     }}
+                    className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
+                    style={{ color: "var(--color-text-tertiary)" }}
+                    title="Delete"
                   >
-                    {getSummaryTypeLabel(summary.summary_type)}
-                  </span>
-                  <span className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
-                    {formatDate(summary.created_at)}
-                  </span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  onClick={() => onDelete(summary.id)}
-                  className="p-1.5 rounded-lg transition-colors hover:bg-black/5"
-                  style={{ color: "var(--color-text-tertiary)" }}
-                  title="Delete"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                {/* AI-generated content with markdown rendering - collapsible */}
+                {isExpanded && (
+                  <div
+                    className="px-4 py-4 prose prose-sm max-w-none"
+                    style={{ color: "var(--color-text-ai)" }}
+                  >
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                        p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
+                        code: ({ children }) => <code className="px-1 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                      }}
+                    >
+                      {summary.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
-              {/* AI-generated content with markdown rendering */}
-              <div
-                className="px-4 py-4 prose prose-sm max-w-none"
-                style={{ color: "var(--color-text-ai)" }}
-              >
-                <ReactMarkdown
-                  components={{
-                    h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h3>,
-                    p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
-                    code: ({ children }) => <code className="px-1 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
-                  }}
-                >
-                  {summary.content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
