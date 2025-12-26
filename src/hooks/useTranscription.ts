@@ -18,6 +18,7 @@ interface TranscriptionUpdateEvent {
     text: string;
   }>;
   is_final: boolean;
+  audio_source?: "mic" | "system";
 }
 
 interface UseModelsReturn {

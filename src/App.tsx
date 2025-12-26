@@ -667,7 +667,7 @@ function App() {
       >
         {selectedNote ? (
           <NoteView
-            meeting={selectedNote}
+            note={selectedNote}
             transcript={currentTranscript}
             isRecording={isRecording && recordingNoteId === selectedNote.id}
             audioLevel={audioLevel}
@@ -740,7 +740,7 @@ function App() {
                 style={{ backgroundColor: "var(--color-accent)" }}
               />
               <button
-                onClick={() => setSelectedMeetingId(recordingNoteId)}
+                onClick={() => setSelectedNoteId(recordingNoteId)}
                 className="text-sm font-medium hover:underline"
                 style={{ color: "var(--color-text)" }}
               >
@@ -779,23 +779,23 @@ function App() {
       {showSettings && <Settings onClose={() => setShowSettings(false)} initialTab={settingsTab} />}
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
-          title="Delete Meeting"
+          title="Delete Note"
           message={`Are you sure you want to delete "${(noteToDelete || selectedNote)!.title}"? This action cannot be undone.`}
           confirmLabel="Delete"
           onConfirm={() => {
-            const meeting = noteToDelete || selectedNote;
-            if (meeting) {
-              deleteNote(meeting.id);
-              if (selectedNoteId === meeting.id) {
-                setSelectedMeetingId(null);
+            const note = noteToDelete || selectedNote;
+            if (note) {
+              deleteNote(note.id);
+              if (selectedNoteId === note.id) {
+                setSelectedNoteId(null);
               }
             }
             setShowDeleteConfirm(false);
-            setMeetingToDelete(null);
+            setNoteToDelete(null);
           }}
           onCancel={() => {
             setShowDeleteConfirm(false);
-            setMeetingToDelete(null);
+            setNoteToDelete(null);
           }}
         />
       )}
@@ -906,7 +906,7 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
           </text>
         </svg>
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Select a meeting or start a new one
+          Select a note or start a new one
         </p>
         <div
           className="mt-4 flex flex-col items-start gap-2 text-xs mx-auto w-fit"
@@ -952,7 +952,7 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
             >
               R
             </kbd>
-            <span>start meeting</span>
+            <span>start recording</span>
           </div>
           <div className="flex items-center gap-2">
             <kbd
@@ -1049,7 +1049,7 @@ interface NoteViewProps {
 }
 
 function NoteView({
-  meeting,
+  note,
   transcript,
   isRecording,
   audioLevel,
@@ -1069,11 +1069,11 @@ function NoteView({
   onCopy,
   onRegenerate,
 }: NoteViewProps) {
-  const [titleValue, setTitleValue] = useState(meeting.title);
-  const [descValue, setDescValue] = useState(meeting.description || "");
+  const [titleValue, setTitleValue] = useState(note.title);
+  const [descValue, setDescValue] = useState(note.description || "");
 
   const { summaries, isGenerating, streamingContent, generateSummary, deleteSummary } =
-    useSummaries(meeting.id, summariesRefreshKey);
+    useSummaries(note.id, summariesRefreshKey);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1099,7 +1099,7 @@ function NoteView({
               className="text-xl font-semibold cursor-text"
               style={{ color: "var(--color-text)" }}
             >
-              {meeting.title}
+              {note.title}
             </h1>
           )}
         </div>
@@ -1114,7 +1114,7 @@ function NoteView({
               Stop
             </button>
           )}
-          {!isRecording && meeting.ended_at && (
+          {!isRecording && note.ended_at && (
             <>
               <button
                 onClick={onExport}
@@ -1280,8 +1280,8 @@ function NoteView({
               className="text-center py-12 text-sm"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              {meeting.audio_path
-                ? "Transcribe this meeting to see the transcript"
+              {note.audio_path
+                ? "Transcribe this note to see the transcript"
                 : "No audio recorded"}
             </div>
           ))}
@@ -1377,7 +1377,7 @@ function ConfirmDialog({
 interface ContextMenuProps {
   x: number;
   y: number;
-  type: "meeting" | "general";
+  type: "note" | "general";
   onAction: (action: string) => void;
 }
 
@@ -1396,7 +1396,7 @@ function ContextMenu({ x, y, type, onAction }: ContextMenuProps) {
   };
 
   const menuItems =
-    type === "meeting"
+    type === "note"
       ? [
           {
             id: "delete",

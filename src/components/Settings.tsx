@@ -861,7 +861,7 @@ function SystemTab() {
               className="text-sm mb-4"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              Capture audio from meeting participants via system audio.
+              Capture audio from other participants via system audio.
             </p>
           </div>
 
@@ -911,7 +911,7 @@ function SystemTab() {
                       ? "Checking..."
                       : systemAudioPermission
                       ? "Granted - System audio capture enabled"
-                      : "Required to capture meeting participants' audio"}
+                      : "Required to capture other participants' audio"}
                   </p>
                 </div>
               </div>
@@ -972,7 +972,7 @@ function SystemTab() {
                   <li>Click "Refresh" to verify permission</li>
                 </ol>
                 <p className="mt-2" style={{ color: "var(--color-text-tertiary)" }}>
-                  This allows Note67 to capture system audio to distinguish your voice from other meeting participants.
+                  This allows Note67 to capture system audio to distinguish your voice from other participants.
                 </p>
               </div>
             )}
@@ -1188,7 +1188,7 @@ function PrivacyTab() {
           className="text-sm mb-4"
           style={{ color: "var(--color-text-secondary)" }}
         >
-          When recording meetings with other participants, follow these
+          When recording conversations with other participants, follow these
           guidelines to ensure ethical and legal use.
         </p>
       </div>
@@ -1500,7 +1500,7 @@ function AboutTab() {
         style={{ backgroundColor: "var(--color-bg-subtle)" }}
       >
         <p className="text-sm" style={{ color: "var(--color-text)" }}>
-          A privacy-focused meeting notes app with local AI transcription and
+          A privacy-focused notes app with local AI transcription and
           summarization.
         </p>
       </div>
@@ -1644,7 +1644,7 @@ function UpdatesTab() {
         "Initial release",
         "Local Whisper transcription",
         "Ollama integration for AI summaries",
-        "Meeting management with notes",
+        "Note management and organization",
         "Export to Markdown",
         "Privacy-focused design",
       ],
