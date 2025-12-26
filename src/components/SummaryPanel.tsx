@@ -94,28 +94,13 @@ export function SummaryPanel({
             <button
               onClick={onRegenerate}
               disabled={!canGenerate || isRegenerating}
-              className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: "var(--color-accent)",
                 color: "white",
               }}
             >
-              {isRegenerating ? (
-                <>
-                  <div
-                    className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                    style={{ borderColor: "white", borderTopColor: "transparent" }}
-                  />
-                  Regenerating...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Regenerate
-                </>
-              )}
+              {isRegenerating ? "Regenerating..." : "Regenerate"}
             </button>
           )}
         </div>
