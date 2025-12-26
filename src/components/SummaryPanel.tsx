@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Summary, SummaryType } from "../types";
 
@@ -43,19 +43,20 @@ export function SummaryPanel({
 }: SummaryPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustom, setShowCustom] = useState(false);
-  const prevFirstSummaryId = useRef<number | null>(null);
-
-  // Track which summaries are expanded - derived from summaries prop
-  const firstSummaryId = summaries.length > 0 ? summaries[0].id : null;
   const [expandedSummaries, setExpandedSummaries] = useState<Set<number>>(() => getExpandedSummaries(summaries));
 
-  // Update expanded summaries when a new summary is added (first summary ID changes)
-  if (firstSummaryId !== prevFirstSummaryId.current) {
-    prevFirstSummaryId.current = firstSummaryId;
-    if (firstSummaryId !== null) {
-      setExpandedSummaries(new Set([firstSummaryId]));
+  // Auto-expand the newest summary when summaries change
+  useEffect(() => {
+    if (summaries.length > 0) {
+      const newestSummaryId = summaries[0].id;
+      setExpandedSummaries((prev) => {
+        // Add the newest summary to expanded set
+        const next = new Set(prev);
+        next.add(newestSummaryId);
+        return next;
+      });
     }
-  }
+  }, [summaries]);
 
   const toggleSummary = (id: number) => {
     setExpandedSummaries((prev) => {
