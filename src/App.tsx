@@ -390,6 +390,7 @@ function App() {
 
   const handleSelectNote = async (note: Note) => {
     setSelectedNoteId(note.id);
+    setActiveTab("summary");
     if (!noteTranscripts[note.id]) {
       const segments = await loadTranscript(note.id);
       if (segments.length > 0) {
