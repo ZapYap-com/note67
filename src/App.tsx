@@ -15,6 +15,7 @@ import {
   useTranscription,
   useLiveTranscription,
 } from "./hooks";
+import { useThemeStore, applyTheme } from "./stores/themeStore";
 import type { Meeting, SummaryType, TranscriptSegment } from "./types";
 
 // Import seeder for dev console access
@@ -43,12 +44,26 @@ function App() {
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
   const { profile } = useProfile();
+  const theme = useThemeStore((state) => state.theme);
+
+  // Apply theme on mount and when theme changes
+  useEffect(() => {
+    applyTheme(theme);
+
+    // Listen for system preference changes when theme is set to "system"
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = () => applyTheme("system");
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+  }, [theme]);
 
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(
     null
   );
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"profile" | "whisper" | "ollama" | "privacy" | "about" | "updates">("profile");
+  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates">("profile");
   const [meetingTranscripts, setMeetingTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
