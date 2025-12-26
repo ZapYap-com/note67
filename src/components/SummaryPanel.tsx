@@ -6,13 +6,7 @@ interface SummaryPanelProps {
   summaries: Summary[];
   isGenerating: boolean;
   streamingContent: string;
-  hasTranscript: boolean;
-  hasOllamaModel: boolean;
-  ollamaRunning: boolean;
-  isTranscribing: boolean;
-  onGenerate: () => void;
   onDelete: (summaryId: number) => void;
-  isRegenerating?: boolean;
 }
 
 const SUMMARY_TYPE_LABELS: Record<SummaryType, string> = {
@@ -26,13 +20,7 @@ export function SummaryPanel({
   summaries,
   isGenerating,
   streamingContent,
-  hasTranscript,
-  hasOllamaModel,
-  ollamaRunning,
-  isTranscribing,
-  onGenerate,
   onDelete,
-  isRegenerating,
 }: SummaryPanelProps) {
   // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
   const [expandState, setExpandState] = useState<Map<number, boolean>>(new Map());
@@ -53,18 +41,6 @@ export function SummaryPanel({
     return index === 0;
   };
 
-  const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating && !isTranscribing;
-
-  const getStatusMessage = () => {
-    if (isTranscribing) return "Waiting for transcription to complete...";
-    if (!ollamaRunning) return "Ollama is not running. Start it first.";
-    if (!hasOllamaModel) return "No AI model selected.";
-    if (!hasTranscript) return "No transcript available.";
-    return null;
-  };
-
-  const statusMessage = getStatusMessage();
-
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -76,44 +52,6 @@ export function SummaryPanel({
 
   return (
     <div className="space-y-5">
-      {/* Status Message */}
-      {statusMessage && (
-        <div
-          className="px-4 py-3 rounded-xl"
-          style={{
-            backgroundColor: "rgba(245, 158, 11, 0.08)",
-            color: "#b45309",
-          }}
-        >
-          {statusMessage}
-        </div>
-      )}
-
-      {/* Generate/Regenerate Button */}
-      <button
-        onClick={() => {
-          if (summaries.length > 0) {
-            // Collapse all existing overview summaries before regenerating
-            setExpandState((prev) => {
-              const next = new Map(prev);
-              summaries
-                .filter((s) => s.summary_type === "overview")
-                .forEach((s) => next.set(s.id, false));
-              return next;
-            });
-          }
-          onGenerate();
-        }}
-        disabled={!canGenerate || isRegenerating}
-        className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{
-          backgroundColor: canGenerate && !isRegenerating ? "#374151" : "var(--color-bg-subtle)",
-          color: canGenerate && !isRegenerating ? "white" : "var(--color-text-tertiary)",
-        }}
-      >
-        {isRegenerating ? "Generating..." : summaries.length === 0 ? "Generate" : "Regenerate"}
-      </button>
-
       {/* Generating Indicator with Streaming Content */}
       {isGenerating && (
         <div
@@ -253,9 +191,9 @@ export function SummaryPanel({
       )}
 
       {/* Empty State */}
-      {summaries.length === 0 && !isGenerating && canGenerate && (
+      {summaries.length === 0 && !isGenerating && (
         <p className="text-center py-6" style={{ color: "var(--color-text-tertiary)" }}>
-          Generate a summary using the button above.
+          No summaries yet.
         </p>
       )}
     </div>

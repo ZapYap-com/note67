@@ -1256,6 +1256,26 @@ function NoteView({
             )}
           </button>
         ))}
+        {/* Generate/Regenerate button - only show on summary tab when ready */}
+        {activeTab === "summary" &&
+          !isRecording &&
+          !isTranscribing &&
+          !isGenerating &&
+          !isRegenerating &&
+          transcript.length > 0 &&
+          hasOllamaModel &&
+          ollamaRunning && (
+            <button
+              onClick={onRegenerate}
+              className="ml-auto my-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
+              style={{
+                backgroundColor: "#374151",
+                color: "white",
+              }}
+            >
+              {summaries.length === 0 ? "Generate" : "Regenerate"}
+            </button>
+          )}
       </div>
 
       {/* Content */}
@@ -1292,13 +1312,7 @@ function NoteView({
             summaries={summaries}
             isGenerating={isGenerating}
             streamingContent={streamingContent}
-            hasTranscript={transcript.length > 0}
-            hasOllamaModel={hasOllamaModel}
-            ollamaRunning={ollamaRunning}
-            isTranscribing={isTranscribing}
-            onGenerate={onRegenerate}
             onDelete={deleteSummary}
-            isRegenerating={isRegenerating}
           />
         )}
       </div>
