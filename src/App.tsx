@@ -57,6 +57,7 @@ function App() {
   const [editingDescription, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
+  const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -68,6 +69,8 @@ function App() {
 
   const selectedMeeting =
     meetings.find((m) => m.id === selectedMeetingId) || null;
+  const recordingMeeting =
+    meetings.find((m) => m.id === recordingMeetingId) || null;
   const currentTranscript = selectedMeetingId
     ? meetingTranscripts[selectedMeetingId] || []
     : [];
@@ -118,6 +121,7 @@ function App() {
   const handleStartMeeting = async () => {
     const meeting = await createMeeting("Untitled");
     setSelectedMeetingId(meeting.id);
+    setRecordingMeetingId(meeting.id);
     await startRecording(meeting.id);
   };
 
@@ -218,9 +222,10 @@ function App() {
   };
 
   const handleStopRecording = async () => {
-    if (selectedMeeting) {
+    if (recordingMeetingId) {
       await stopRecording();
-      await endMeeting(selectedMeeting.id);
+      await endMeeting(recordingMeetingId);
+      setRecordingMeetingId(null);
     }
   };
 
@@ -395,7 +400,7 @@ function App() {
                       style={{ color: "var(--color-text-secondary)" }}
                     >
                       {formatTime(meeting.started_at)}
-                      {isRecording && selectedMeetingId === meeting.id && (
+                      {isRecording && recordingMeetingId === meeting.id && (
                         <span
                           className="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
                           style={{
@@ -526,7 +531,7 @@ function App() {
           <MeetingView
             meeting={selectedMeeting}
             transcript={currentTranscript}
-            isRecording={isRecording && !selectedMeeting.ended_at}
+            isRecording={isRecording && recordingMeetingId === selectedMeeting.id}
             isTranscribing={isTranscribing}
             audioLevel={audioLevel}
             activeTab={activeTab}
@@ -562,9 +567,39 @@ function App() {
           />
         )}
 
-        {/* Start Listening Button */}
-        {!isRecording && (
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+        {/* Start Listening Button or Recording Indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+          {isRecording && recordingMeeting ? (
+            <div
+              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
+              style={{
+                backgroundColor: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full animate-pulse"
+                style={{ backgroundColor: "var(--color-accent)" }}
+              />
+              <button
+                onClick={() => setSelectedMeetingId(recordingMeetingId)}
+                className="text-sm font-medium hover:underline"
+                style={{ color: "var(--color-text)" }}
+              >
+                {recordingMeeting.title}
+              </button>
+              <button
+                onClick={handleStopRecording}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors"
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
+              >
+                Stop
+              </button>
+            </div>
+          ) : (
             <button
               onClick={handleStartMeeting}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
@@ -576,8 +611,8 @@ function App() {
               <span className="w-2 h-2 rounded-full bg-white" />
               Start listening
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {/* Modals */}
