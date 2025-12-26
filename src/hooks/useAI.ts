@@ -35,7 +35,7 @@ export function useOllama() {
   };
 }
 
-export function useSummaries(meetingId: string | null) {
+export function useSummaries(meetingId: string | null, refreshKey: number = 0) {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
@@ -85,9 +85,10 @@ export function useSummaries(meetingId: string | null) {
     }
   }, [meetingId]);
 
+  // Reload summaries when meetingId or refreshKey changes
   useEffect(() => {
     loadSummaries();
-  }, [loadSummaries]);
+  }, [loadSummaries, refreshKey]);
 
   const generateSummary = useCallback(
     async (summaryType: SummaryType, customPrompt?: string) => {

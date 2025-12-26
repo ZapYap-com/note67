@@ -61,6 +61,7 @@ function App() {
   const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
   const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
   const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] = useState(false);
+  const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -253,6 +254,8 @@ function App() {
         try {
           // Generate overview summary first
           const summary = await aiApi.generateSummary(meetingId, "overview");
+          // Trigger summaries refresh in MeetingView
+          setSummariesRefreshKey((k) => k + 1);
           // Generate title from summary content
           await aiApi.generateTitleFromSummary(meetingId, summary.content);
           // Refresh meeting list to show new title
@@ -274,6 +277,8 @@ function App() {
     try {
       // Generate overview summary first
       const summary = await aiApi.generateSummary(selectedMeetingId, "overview");
+      // Trigger summaries refresh in MeetingView
+      setSummariesRefreshKey((k) => k + 1);
       // Generate title from summary content
       await aiApi.generateTitleFromSummary(selectedMeetingId, summary.content);
       // Refresh meeting list to show new title
@@ -571,6 +576,7 @@ function App() {
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
             isRegenerating={isGeneratingSummaryTitle}
+            summariesRefreshKey={summariesRefreshKey}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
             onUpdateTitle={handleUpdateTitle}
@@ -865,6 +871,7 @@ interface MeetingViewProps {
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
   isRegenerating: boolean;
+  summariesRefreshKey: number;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
@@ -886,6 +893,7 @@ function MeetingView({
   ollamaRunning,
   hasOllamaModel,
   isRegenerating,
+  summariesRefreshKey,
   onTabChange,
   onEditTitle,
   onUpdateTitle,
@@ -900,7 +908,7 @@ function MeetingView({
   const [descValue, setDescValue] = useState(meeting.description || "");
 
   const { summaries, isGenerating, streamingContent, generateSummary, deleteSummary } =
-    useSummaries(meeting.id);
+    useSummaries(meeting.id, summariesRefreshKey);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
