@@ -236,8 +236,27 @@ pub fn end_meeting(
 pub fn delete_meeting(db: State<Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
+    // First, get the audio path before deleting
+    let audio_path: Option<String> = conn
+        .query_row(
+            "SELECT audio_path FROM meetings WHERE id = ?1",
+            [&id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    // Delete the meeting record
     conn.execute("DELETE FROM meetings WHERE id = ?1", [&id])
         .map_err(|e| e.to_string())?;
+
+    // Delete the audio file if it exists
+    if let Some(path) = audio_path {
+        if !path.is_empty() {
+            if let Err(e) = std::fs::remove_file(&path) {
+                eprintln!("Failed to delete audio file {}: {}", path, e);
+            }
+        }
+    }
 
     Ok(())
 }

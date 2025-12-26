@@ -1,9 +1,11 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import type { Summary, SummaryType } from "../types";
 
 interface SummaryPanelProps {
   summaries: Summary[];
   isGenerating: boolean;
+  streamingContent: string;
   hasTranscript: boolean;
   hasOllamaModel: boolean;
   ollamaRunning: boolean;
@@ -20,6 +22,7 @@ const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
 export function SummaryPanel({
   summaries,
   isGenerating,
+  streamingContent,
   hasTranscript,
   hasOllamaModel,
   ollamaRunning,
@@ -128,22 +131,53 @@ export function SummaryPanel({
         </div>
       </div>
 
-      {/* Generating Indicator */}
+      {/* Generating Indicator with Streaming Content */}
       {isGenerating && (
         <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{ backgroundColor: "var(--color-bg-elevated)" }}
+          className="rounded-xl overflow-hidden"
+          style={{
+            backgroundColor: "var(--color-bg-elevated)",
+            boxShadow: "var(--shadow-sm)",
+          }}
         >
           <div
-            className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
-            style={{
-              borderColor: "var(--color-text-tertiary)",
-              borderTopColor: "transparent",
-            }}
-          />
-          <span style={{ color: "var(--color-text-secondary)" }}>
-            Generating...
-          </span>
+            className="flex items-center gap-3 px-4 py-3"
+            style={{ borderBottom: streamingContent ? "1px solid var(--color-border-subtle)" : "none" }}
+          >
+            <div
+              className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0"
+              style={{
+                borderColor: "var(--color-text-tertiary)",
+                borderTopColor: "transparent",
+              }}
+            />
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              Generating summary...
+            </span>
+          </div>
+          {streamingContent && (
+            <div
+              className="px-4 py-4 prose prose-sm max-w-none"
+              style={{ color: "var(--color-text-ai)" }}
+            >
+              <ReactMarkdown
+                components={{
+                  h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                  p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                  strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
+                  code: ({ children }) => <code className="px-1 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                }}
+              >
+                {streamingContent}
+              </ReactMarkdown>
+              <span className="inline-block w-2 h-4 ml-0.5 animate-pulse" style={{ backgroundColor: "var(--color-text-tertiary)" }} />
+            </div>
+          )}
         </div>
       )}
 
@@ -188,12 +222,26 @@ export function SummaryPanel({
                   </svg>
                 </button>
               </div>
-              {/* AI-generated content in gray per Granola style */}
+              {/* AI-generated content with markdown rendering */}
               <div
-                className="px-4 py-4 leading-relaxed whitespace-pre-wrap"
+                className="px-4 py-4 prose prose-sm max-w-none"
                 style={{ color: "var(--color-text-ai)" }}
               >
-                {summary.content}
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                    p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
+                    code: ({ children }) => <code className="px-1 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                  }}
+                >
+                  {summary.content}
+                </ReactMarkdown>
               </div>
             </div>
           ))}

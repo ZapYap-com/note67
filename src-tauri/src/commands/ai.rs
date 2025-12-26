@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts};
@@ -169,6 +169,118 @@ pub async fn generate_summary(
         .generate(&model, &prompt, 0.7, Some(4096))
         .await
         .map_err(|e| e.to_string())?;
+
+    // Save to database
+    let summary_id = db
+        .add_summary(&meeting_id, &stype, &response)
+        .map_err(|e| e.to_string())?;
+
+    // Fetch the saved summary
+    let summary = db
+        .get_summary(summary_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Failed to retrieve saved summary")?;
+
+    Ok(summary)
+}
+
+/// Event payload for streaming summary updates
+#[derive(Clone, Serialize)]
+pub struct SummaryStreamEvent {
+    pub meeting_id: String,
+    pub chunk: String,
+    pub is_done: bool,
+}
+
+/// Generate a summary for a meeting with streaming
+#[tauri::command]
+pub async fn generate_summary_stream(
+    app: AppHandle,
+    meeting_id: String,
+    summary_type: String,
+    custom_prompt: Option<String>,
+    ai_state: State<'_, AiState>,
+    db: State<'_, Database>,
+) -> Result<Summary, String> {
+    // Check if already generating
+    if ai_state.is_generating.swap(true, Ordering::SeqCst) {
+        return Err("Already generating a summary".to_string());
+    }
+
+    // Ensure we reset the flag when done
+    let _guard = scopeguard::guard((), |_| {
+        ai_state.is_generating.store(false, Ordering::SeqCst);
+    });
+
+    // Get selected model
+    let model = ai_state
+        .selected_model
+        .lock()
+        .await
+        .clone()
+        .ok_or("No model selected. Please select a model first.")?;
+
+    // Get transcript from database
+    let segments = db
+        .get_transcript_segments(&meeting_id)
+        .map_err(|e| e.to_string())?;
+
+    if segments.is_empty() {
+        return Err("No transcript found for this meeting. Please transcribe the audio first.".to_string());
+    }
+
+    // Combine segments into full transcript
+    let transcript = segments
+        .iter()
+        .map(|s| s.text.clone())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // Parse summary type
+    let stype = SummaryType::from_str(&summary_type);
+
+    // Build prompt based on summary type
+    let prompt = match stype {
+        SummaryType::Overview => SummaryPrompts::overview(&transcript),
+        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript),
+        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript),
+        SummaryType::Custom => {
+            let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this meeting.".to_string());
+            SummaryPrompts::custom(&transcript, &user_prompt)
+        }
+    };
+
+    // Create channel for streaming
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+    let app_clone = app.clone();
+    let meeting_id_clone = meeting_id.clone();
+
+    // Spawn task to receive chunks and emit events
+    tokio::spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            let event = SummaryStreamEvent {
+                meeting_id: meeting_id_clone.clone(),
+                chunk,
+                is_done: false,
+            };
+            let _ = app_clone.emit("summary-stream", event);
+        }
+    });
+
+    // Generate with Ollama streaming
+    let response = ai_state
+        .client
+        .generate_stream(&model, &prompt, 0.7, Some(4096), tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Emit done event
+    let done_event = SummaryStreamEvent {
+        meeting_id: meeting_id.clone(),
+        chunk: String::new(),
+        is_done: true,
+    };
+    let _ = app.emit("summary-stream", done_event);
 
     // Save to database
     let summary_id = db

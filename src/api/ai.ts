@@ -36,6 +36,19 @@ export const aiApi = {
     });
   },
 
+  // Summary generation with streaming
+  generateSummaryStream: (
+    meetingId: string,
+    summaryType: SummaryType,
+    customPrompt?: string
+  ): Promise<Summary> => {
+    return invoke("generate_summary_stream", {
+      meetingId,
+      summaryType,
+      customPrompt: customPrompt ?? null,
+    });
+  },
+
   getMeetingSummaries: (meetingId: string): Promise<Summary[]> => {
     return invoke("get_meeting_summaries", { meetingId });
   },

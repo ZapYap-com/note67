@@ -332,10 +332,10 @@ pub async fn stop_live_transcription(
         .map_err(|e| e.to_string())?;
     }
 
-    // Emit final event
+    // Emit final event (with empty segments - they were already sent in periodic updates)
     let event = crate::transcription::TranscriptionUpdateEvent {
         meeting_id,
-        segments: result.segments.clone(),
+        segments: vec![],
         is_final: true,
     };
     let _ = app.emit("transcription-update", event);

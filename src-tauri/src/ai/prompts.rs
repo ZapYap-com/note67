@@ -5,17 +5,22 @@ impl SummaryPrompts {
     /// Generate a meeting overview summary
     pub fn overview(transcript: &str) -> String {
         format!(
-            r#"You are an expert meeting summarizer. Analyze the following meeting transcript and provide a clear, concise summary.
+            r#"You are a professional meeting summarizer. Analyze the following meeting transcript and provide a clear, concise summary in markdown format.
 
 TRANSCRIPT:
 {}
 
-Please provide a summary that includes:
-1. Main topics discussed
-2. Key points and conclusions
-3. Overall meeting outcome
+Provide a professional summary that includes:
+- Main topics discussed
+- Key points and conclusions
+- Overall meeting outcome
 
-Keep the summary professional and to the point. Use bullet points where appropriate.
+Rules:
+- Use markdown formatting (headings, bullet points, bold for emphasis)
+- Be concise and professional
+- Do NOT use emojis
+- Focus on factual information
+- Use clear, formal language
 
 SUMMARY:"#,
             transcript
@@ -25,17 +30,22 @@ SUMMARY:"#,
     /// Extract action items from the transcript
     pub fn action_items(transcript: &str) -> String {
         format!(
-            r#"You are an expert at identifying action items from meetings. Analyze the following meeting transcript and extract all action items.
+            r#"You are a professional meeting analyst. Extract all action items from the following meeting transcript.
 
 TRANSCRIPT:
 {}
 
-Extract all action items mentioned in the meeting. For each action item, identify:
-- The task to be done
-- Who is responsible (if mentioned)
-- Any deadline (if mentioned)
+For each action item, identify:
+- The specific task to be completed
+- Responsible person (if mentioned)
+- Deadline or timeline (if mentioned)
 
-Format as a numbered list. If no action items are found, respond with "No action items identified."
+Rules:
+- Use markdown formatting with numbered lists
+- Be specific and actionable
+- Do NOT use emojis
+- If no action items are found, state "No action items identified."
+- Use professional, clear language
 
 ACTION ITEMS:"#,
             transcript
@@ -45,17 +55,22 @@ ACTION ITEMS:"#,
     /// Extract key decisions from the transcript
     pub fn key_decisions(transcript: &str) -> String {
         format!(
-            r#"You are an expert at identifying key decisions from meetings. Analyze the following meeting transcript and extract all decisions that were made.
+            r#"You are a professional meeting analyst. Extract all key decisions from the following meeting transcript.
 
 TRANSCRIPT:
 {}
 
-Identify all decisions made during the meeting. Include:
+For each decision, include:
 - What was decided
-- Any context or reasoning mentioned
+- Context or reasoning (if provided)
 - Who made or approved the decision (if mentioned)
 
-Format as a numbered list. If no decisions were made, respond with "No key decisions identified."
+Rules:
+- Use markdown formatting with numbered lists
+- Be specific and clear
+- Do NOT use emojis
+- If no decisions were made, state "No key decisions identified."
+- Use professional, formal language
 
 KEY DECISIONS:"#,
             transcript
@@ -65,17 +80,18 @@ KEY DECISIONS:"#,
     /// Generate a short, descriptive title for the meeting
     pub fn title(transcript: &str) -> String {
         format!(
-            r#"You are an expert at creating concise meeting titles. Based on the following meeting transcript, generate a short, descriptive title.
+            r#"Generate a concise meeting title based on this transcript.
 
 TRANSCRIPT:
 {}
 
-Requirements:
-- Title should be 2-6 words
-- Capture the main topic or purpose of the meeting
+Rules:
+- 2-6 words only
+- Capture the main topic or purpose
 - Be specific and informative
-- Do not use quotes around the title
-- Do not include prefixes like "Meeting:" or "Title:"
+- No quotes around the title
+- No prefixes like "Meeting:" or "Title:"
+- No emojis
 
 Respond with ONLY the title, nothing else.
 
@@ -87,7 +103,7 @@ TITLE:"#,
     /// Generate a custom summary based on user prompt
     pub fn custom(transcript: &str, user_prompt: &str) -> String {
         format!(
-            r#"You are an expert meeting analyst. Analyze the following meeting transcript based on the user's specific request.
+            r#"You are a professional meeting analyst. Analyze the following meeting transcript based on the user's request.
 
 TRANSCRIPT:
 {}
@@ -95,7 +111,12 @@ TRANSCRIPT:
 USER REQUEST:
 {}
 
-Provide a response that directly addresses the user's request based on the transcript content.
+Rules:
+- Use markdown formatting where appropriate
+- Be professional and concise
+- Do NOT use emojis
+- Directly address the user's request
+- Use clear, formal language
 
 RESPONSE:"#,
             transcript, user_prompt

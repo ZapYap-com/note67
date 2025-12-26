@@ -61,6 +61,7 @@ pub fn run() {
             commands::get_selected_model,
             commands::is_ai_generating,
             commands::generate_summary,
+            commands::generate_summary_stream,
             commands::get_meeting_summaries,
             commands::delete_summary,
             commands::generate_title,

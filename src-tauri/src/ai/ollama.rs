@@ -1,5 +1,7 @@
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 
@@ -163,6 +165,84 @@ impl OllamaClient {
             .map_err(|e| OllamaError::InvalidResponse(e.to_string()))?;
 
         Ok(gen_response.response)
+    }
+
+    /// Generate text using a model with streaming
+    pub async fn generate_stream(
+        &self,
+        model: &str,
+        prompt: &str,
+        temperature: f32,
+        context_length: Option<u32>,
+        tx: mpsc::Sender<String>,
+    ) -> Result<String, OllamaError> {
+        let url = format!("{}/api/generate", self.base_url);
+
+        let request = GenerateRequest {
+            model: model.to_string(),
+            prompt: prompt.to_string(),
+            stream: true,
+            options: Some(GenerateOptions {
+                temperature,
+                num_ctx: context_length,
+            }),
+        };
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_connect() {
+                    OllamaError::NotRunning
+                } else {
+                    OllamaError::RequestFailed(e.to_string())
+                }
+            })?;
+
+        if response.status().as_u16() == 404 {
+            return Err(OllamaError::ModelNotFound(model.to_string()));
+        }
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(OllamaError::RequestFailed(format!(
+                "Status: {}, Body: {}",
+                status, body
+            )));
+        }
+
+        let mut full_response = String::new();
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(bytes) => {
+                    // Parse each line (newline-delimited JSON)
+                    let text = String::from_utf8_lossy(&bytes);
+                    for line in text.lines() {
+                        if line.is_empty() {
+                            continue;
+                        }
+                        if let Ok(gen_response) = serde_json::from_str::<GenerateResponse>(line) {
+                            if !gen_response.response.is_empty() {
+                                full_response.push_str(&gen_response.response);
+                                // Send chunk to channel
+                                let _ = tx.send(gen_response.response).await;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(OllamaError::RequestFailed(e.to_string()));
+                }
+            }
+        }
+
+        Ok(full_response)
     }
 
     /// Pull (download) a model

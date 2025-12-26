@@ -848,7 +848,7 @@ function MeetingView({
   const [titleValue, setTitleValue] = useState(meeting.title);
   const [descValue, setDescValue] = useState(meeting.description || "");
 
-  const { summaries, isGenerating, generateSummary, deleteSummary } =
+  const { summaries, isGenerating, streamingContent, generateSummary, deleteSummary } =
     useSummaries(meeting.id);
 
   return (
@@ -1066,6 +1066,7 @@ function MeetingView({
           <SummaryPanel
             summaries={summaries}
             isGenerating={isGenerating}
+            streamingContent={streamingContent}
             hasTranscript={transcript.length > 0}
             hasOllamaModel={hasOllamaModel}
             ollamaRunning={ollamaRunning}
