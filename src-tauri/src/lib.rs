@@ -1,6 +1,8 @@
+mod audio;
 mod commands;
 mod db;
 
+use commands::AudioState;
 use db::Database;
 use tauri::Manager;
 
@@ -16,6 +18,7 @@ pub fn run() {
         .setup(|app| {
             let db = Database::new(app.handle())?;
             app.manage(db);
+            app.manage(AudioState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -25,6 +28,10 @@ pub fn run() {
             commands::list_meetings,
             commands::end_meeting,
             commands::delete_meeting,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::get_recording_status,
+            commands::get_audio_level,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
