@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  ModelManager,
-  OllamaSettings,
+  Settings,
   SummaryPanel,
   TranscriptSearch,
+  useProfile,
 } from "./components";
 import { exportApi } from "./api";
 import {
@@ -40,11 +40,12 @@ function App() {
     useTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
+  const { profile } = useProfile();
+
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(
     null
   );
-  const [showModelManager, setShowModelManager] = useState(false);
-  const [showOllamaSettings, setShowOllamaSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [meetingTranscripts, setMeetingTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
@@ -322,77 +323,80 @@ function App() {
           className="px-3 py-2.5 border-t"
           style={{ borderColor: "var(--color-border)" }}
         >
-          <div className="flex items-center justify-between">
-            <div
-              className="flex flex-wrap items-center gap-1.5 text-xs"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              {loadedModel && (
-                <span
-                  className="px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: "var(--color-sidebar-hover)" }}
-                >
-                  {loadedModel}
-                </span>
-              )}
-              {ollamaRunning && ollamaModel && (
-                <span
-                  className="px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: "var(--color-sidebar-hover)" }}
-                >
-                  {ollamaModel.split(":")[0]}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setShowOllamaSettings(true)}
-                className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"
-                title="AI Settings"
+          {/* Model badges */}
+          <div
+            className="flex flex-wrap items-center gap-1.5 text-xs mb-2"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            {loadedModel && (
+              <span
+                className="px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
               >
-                <svg
-                  className="w-4 h-4"
-                  style={{ color: "var(--color-text-secondary)" }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                  />
-                </svg>
-              </button>
-              <button
-                onClick={() => setShowModelManager(true)}
-                className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"
-                title="Whisper Models"
+                {loadedModel}
+              </span>
+            )}
+            {ollamaRunning && ollamaModel && (
+              <span
+                className="px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
               >
-                <svg
-                  className="w-4 h-4"
-                  style={{ color: "var(--color-text-secondary)" }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </button>
-            </div>
+                {ollamaModel.split(":")[0]}
+              </span>
+            )}
           </div>
+
+          {/* User profile */}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-black/5 transition-colors"
+          >
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0"
+              style={{
+                backgroundColor: profile.avatar ? "var(--color-accent-light)" : "var(--color-sidebar-hover)",
+                color: profile.avatar ? "var(--color-text)" : "var(--color-text-secondary)",
+              }}
+            >
+              {profile.avatar || (profile.name ? profile.name[0].toUpperCase() : "?")}
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <div
+                className="text-sm font-medium truncate"
+                style={{ color: "var(--color-text)" }}
+              >
+                {profile.name || "Set up profile"}
+              </div>
+              {profile.email && (
+                <div
+                  className="text-xs truncate"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {profile.email}
+                </div>
+              )}
+            </div>
+            <svg
+              className="w-4 h-4 shrink-0"
+              style={{ color: "var(--color-text-tertiary)" }}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </button>
         </div>
       </aside>
 
@@ -457,12 +461,7 @@ function App() {
       </main>
 
       {/* Modals */}
-      {showModelManager && (
-        <ModelManager onClose={() => setShowModelManager(false)} />
-      )}
-      {showOllamaSettings && (
-        <OllamaSettings onClose={() => setShowOllamaSettings(false)} />
-      )}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
