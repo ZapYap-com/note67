@@ -2,6 +2,29 @@ import { create } from "zustand";
 import { transcriptionApi } from "../api";
 import type { ModelInfo, ModelSize } from "../types";
 
+const STORAGE_KEY = "note67_whisper_model";
+
+function getSavedModel(): ModelSize | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved as ModelSize | null;
+  } catch {
+    return null;
+  }
+}
+
+function saveModel(model: ModelSize | null): void {
+  try {
+    if (model) {
+      localStorage.setItem(STORAGE_KEY, model);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface WhisperState {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
@@ -9,6 +32,7 @@ interface WhisperState {
   downloadProgress: number;
   error: string | null;
   progressInterval: number | null;
+  initialized: boolean;
 
   // Actions
   refreshModels: () => Promise<void>;
@@ -25,6 +49,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
   downloadProgress: 0,
   error: null,
   progressInterval: null,
+  initialized: false,
 
   refreshModels: async () => {
     try {
@@ -33,6 +58,20 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
         transcriptionApi.getLoadedModel(),
       ]);
       set({ models: modelList, loadedModel: loaded, error: null });
+
+      // Auto-load saved model on first init if no model is loaded
+      const { initialized } = get();
+      if (!initialized) {
+        set({ initialized: true });
+        const savedModel = getSavedModel();
+        if (savedModel && !loaded) {
+          // Check if saved model is downloaded
+          const savedModelInfo = modelList.find((m) => m.size === savedModel);
+          if (savedModelInfo?.downloaded) {
+            get().loadModel(savedModel);
+          }
+        }
+      }
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
@@ -81,6 +120,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
       set({ error: null });
       await transcriptionApi.loadModel(size);
       set({ loadedModel: size });
+      saveModel(size);
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }

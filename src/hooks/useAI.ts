@@ -4,29 +4,27 @@ import { useOllamaStore } from "../stores/ollamaStore";
 import type { Summary, SummaryType } from "../types";
 
 export function useOllama() {
-  const store = useOllamaStore();
+  // Subscribe to specific state values for proper reactivity
+  const status = useOllamaStore((state) => state.status);
+  const loading = useOllamaStore((state) => state.loading);
+  const error = useOllamaStore((state) => state.error);
+  const checkStatus = useOllamaStore((state) => state.checkStatus);
+  const selectModel = useOllamaStore((state) => state.selectModel);
 
-  // Initialize on first mount
+  // Initialize on first mount - checkStatus will auto-restore saved model
   useEffect(() => {
-    if (store.status === null && !store.loading) {
-      store.checkStatus();
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    store.checkStatus();
+    checkStatus();
   }, []);
 
   return {
-    status: store.status,
-    loading: store.loading,
-    error: store.error,
-    isRunning: store.isRunning(),
-    models: store.models(),
-    selectedModel: store.selectedModel(),
-    checkStatus: store.checkStatus,
-    selectModel: store.selectModel,
+    status,
+    loading,
+    error,
+    isRunning: status?.running ?? false,
+    models: status?.models ?? [],
+    selectedModel: status?.selected_model ?? null,
+    checkStatus,
+    selectModel,
   };
 }
 

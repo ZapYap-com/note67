@@ -21,23 +21,32 @@ interface UseModelsReturn {
 }
 
 export function useModels(): UseModelsReturn {
-  const store = useWhisperStore();
+  // Subscribe to specific state values for proper reactivity
+  const models = useWhisperStore((state) => state.models);
+  const loadedModel = useWhisperStore((state) => state.loadedModel);
+  const isDownloading = useWhisperStore((state) => state.isDownloading);
+  const downloadProgress = useWhisperStore((state) => state.downloadProgress);
+  const error = useWhisperStore((state) => state.error);
+  const refreshModels = useWhisperStore((state) => state.refreshModels);
+  const downloadModel = useWhisperStore((state) => state.downloadModel);
+  const deleteModel = useWhisperStore((state) => state.deleteModel);
+  const loadModel = useWhisperStore((state) => state.loadModel);
 
-  // Initialize on first mount
+  // Initialize on first mount - refreshModels will auto-load saved model
   useEffect(() => {
-    store.refreshModels();
+    refreshModels();
   }, []);
 
   return {
-    models: store.models,
-    loadedModel: store.loadedModel,
-    isDownloading: store.isDownloading,
-    downloadProgress: store.downloadProgress,
-    error: store.error,
-    refreshModels: store.refreshModels,
-    downloadModel: store.downloadModel,
-    deleteModel: store.deleteModel,
-    loadModel: store.loadModel,
+    models,
+    loadedModel,
+    isDownloading,
+    downloadProgress,
+    error,
+    refreshModels,
+    downloadModel,
+    deleteModel,
+    loadModel,
   };
 }
 

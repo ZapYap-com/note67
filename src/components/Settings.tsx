@@ -1,44 +1,13 @@
 import { useState, useEffect } from "react";
 import { useModels, useOllama } from "../hooks";
+import { useProfileStore } from "../stores/profileStore";
 import type { ModelInfo, ModelSize } from "../types";
 
-export interface UserProfile {
-  name: string;
-  email: string;
-  avatar: string; // initials or emoji
-}
-
-const DEFAULT_PROFILE: UserProfile = {
-  name: "",
-  email: "",
-  avatar: "",
-};
-
-function loadProfile(): UserProfile {
-  try {
-    const saved = localStorage.getItem("note67_profile");
-    if (saved) {
-      return { ...DEFAULT_PROFILE, ...JSON.parse(saved) };
-    }
-  } catch (e) {
-    console.error("Failed to load profile:", e);
-  }
-  return DEFAULT_PROFILE;
-}
-
-function saveProfile(profile: UserProfile): void {
-  localStorage.setItem("note67_profile", JSON.stringify(profile));
-}
+export type { UserProfile } from "../stores/profileStore";
 
 export function useProfile() {
-  const [profile, setProfile] = useState<UserProfile>(loadProfile);
-
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    const newProfile = { ...profile, ...updates };
-    setProfile(newProfile);
-    saveProfile(newProfile);
-  };
-
+  const profile = useProfileStore((state) => state.profile);
+  const updateProfile = useProfileStore((state) => state.updateProfile);
   return { profile, updateProfile };
 }
 
@@ -318,6 +287,7 @@ function ProfileTab() {
   const [name, setName] = useState(profile.name);
   const [email, setEmail] = useState(profile.email);
   const [avatar, setAvatar] = useState(profile.avatar);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setName(profile.name);
@@ -325,8 +295,15 @@ function ProfileTab() {
     setAvatar(profile.avatar);
   }, [profile]);
 
+  const hasChanges =
+    name !== profile.name ||
+    email !== profile.email ||
+    avatar !== profile.avatar;
+
   const handleSave = () => {
     updateProfile({ name, email, avatar });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   const avatarOptions = ["😊", "🎯", "💼", "🎨", "🚀", "💡", "🎵", "📚"];
@@ -344,10 +321,7 @@ function ProfileTab() {
           {avatarOptions.map((emoji) => (
             <button
               key={emoji}
-              onClick={() => {
-                setAvatar(emoji);
-                updateProfile({ avatar: emoji });
-              }}
+              onClick={() => setAvatar(emoji)}
               className="w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all"
               style={{
                 backgroundColor:
@@ -377,7 +351,6 @@ function ProfileTab() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onBlur={handleSave}
           placeholder="Your name"
           className="w-full px-3 py-2 rounded-lg text-sm"
           style={{
@@ -399,7 +372,6 @@ function ProfileTab() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          onBlur={handleSave}
           placeholder="your@email.com"
           className="w-full px-3 py-2 rounded-lg text-sm"
           style={{
@@ -410,9 +382,22 @@ function ProfileTab() {
         />
       </div>
 
-      <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-        Your profile is stored locally on this device.
-      </p>
+      <div className="flex items-center justify-between pt-2">
+        <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+          Your profile is stored locally on this device.
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={!hasChanges}
+          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40"
+          style={{
+            backgroundColor: saved ? "#22c55e" : "var(--color-accent)",
+            color: "white",
+          }}
+        >
+          {saved ? "Saved!" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }
