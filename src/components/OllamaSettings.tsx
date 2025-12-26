@@ -15,6 +15,13 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
     return `${mb.toFixed(0)} MB`;
   };
 
+  // Filter out embedding models (not useful for text generation)
+  const isEmbeddingModel = (name: string) => {
+    const lower = name.toLowerCase();
+    return lower.includes("embed") || lower.includes("minilm");
+  };
+  const generativeModels = models.filter((model) => !isEmbeddingModel(model.name));
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -121,7 +128,7 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
                 Available Models
               </h3>
 
-              {models.length === 0 ? (
+              {generativeModels.length === 0 ? (
                 <div
                   className="p-4 rounded-xl text-center"
                   style={{ backgroundColor: "var(--color-bg-subtle)" }}
@@ -135,7 +142,7 @@ export function OllamaSettings({ onClose }: OllamaSettingsProps) {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {models.map((model) => (
+                  {generativeModels.map((model) => (
                     <button
                       key={model.name}
                       onClick={() => selectModel(model.name)}
