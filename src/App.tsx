@@ -207,6 +207,7 @@ function App() {
   // Listen for tray "Settings" event
   useEffect(() => {
     const unlisten = listen("tray-open-settings", () => {
+      setSettingsTab("about");
       setShowSettings(true);
     });
 
@@ -241,7 +242,13 @@ function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setShowSettings((prev) => !prev);
+        setShowSettings((prev) => {
+          if (!prev) {
+            // Opening settings - reset to About tab
+            setSettingsTab("about");
+          }
+          return !prev;
+        });
       }
     };
 
@@ -312,7 +319,7 @@ function App() {
         setShowDeleteConfirm(true);
       }
     } else if (action === "settings") {
-      setSettingsTab("profile");
+      setSettingsTab("about");
       setShowSettings(true);
     } else if (action === "privacy") {
       setSettingsTab("privacy");

@@ -85,7 +85,7 @@ pub fn run() {
                             }
                         }
                         "quit_app" => {
-                            app_handle.exit(0);
+                            std::process::exit(0);
                         }
                         _ => {}
                     }
@@ -131,7 +131,7 @@ pub fn run() {
                         }
                     }
                     "exit" => {
-                        app.exit(0);
+                        std::process::exit(0);
                     }
                     _ => {}
                 })
