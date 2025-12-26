@@ -1,6 +1,11 @@
 pub mod recorder;
+pub mod system_audio;
+
+#[cfg(target_os = "macos")]
+pub mod macos;
 
 pub use recorder::{start_recording, stop_recording, RecordingState};
+pub use system_audio::{create_system_audio_capture, is_system_audio_available, SystemAudioCapture};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
