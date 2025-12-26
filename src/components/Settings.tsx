@@ -42,7 +42,7 @@ export function useProfile() {
   return { profile, updateProfile };
 }
 
-type SettingsTab = "profile" | "whisper" | "ollama";
+type SettingsTab = "profile" | "whisper" | "ollama" | "privacy";
 
 interface SettingsProps {
   onClose: () => void;
@@ -94,6 +94,16 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      ),
+    },
+    {
+      id: "privacy",
+      label: "Privacy",
+      warning: false,
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
       ),
     },
@@ -171,6 +181,7 @@ export function Settings({ onClose, initialTab = "profile" }: SettingsProps) {
             {activeTab === "profile" && <ProfileTab />}
             {activeTab === "whisper" && <WhisperTab />}
             {activeTab === "ollama" && <OllamaTab />}
+            {activeTab === "privacy" && <PrivacyTab />}
           </div>
         </div>
       </div>
@@ -430,6 +441,125 @@ function WhisperModelCard({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function PrivacyTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--color-text)" }}>
+          Best Practices for Recording
+        </h3>
+        <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
+          When recording meetings with other participants, follow these guidelines to ensure ethical and legal use.
+        </p>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex gap-3">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5"
+            style={{ color: "#22c55e" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+              Always Get Consent
+            </h4>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              Inform all participants before recording begins. Get explicit verbal or written consent. Some jurisdictions require all-party consent.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex gap-3">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5"
+            style={{ color: "#3b82f6" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+              State the Purpose
+            </h4>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              Clearly explain why you're recording and how the recording will be used. Mention if AI transcription or summarization will be applied.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex gap-3">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5"
+            style={{ color: "#f59e0b" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <div>
+            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+              Secure Your Data
+            </h4>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              All recordings and transcripts are stored locally on your device. Delete recordings when no longer needed.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex gap-3">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5"
+            style={{ color: "#8b5cf6" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+          </svg>
+          <div>
+            <h4 className="text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>
+              Know the Law
+            </h4>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              Recording laws vary by location. Some regions require one-party consent, others require all-party consent. Check local regulations.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+        Note67 processes everything locally. No audio or transcripts are sent to external servers.
+      </p>
     </div>
   );
 }
