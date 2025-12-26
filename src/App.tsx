@@ -685,7 +685,7 @@ function App() {
             onExport={async () => {
               try {
                 const data = await exportApi.exportMarkdown(selectedNote.id);
-                await exportApi.saveToFileWithDialog(data.markdown, data.filename);
+                await exportApi.savePdfWithDialog(data.markdown, data.filename);
               } catch (error) {
                 console.error("Export failed:", error);
               }

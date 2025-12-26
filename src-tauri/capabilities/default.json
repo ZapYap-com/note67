@@ -12,6 +12,7 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "dialog:allow-save",
-    "fs:allow-write-text-file"
+    "fs:allow-write-text-file",
+    "fs:allow-write-file"
   ]
 }
