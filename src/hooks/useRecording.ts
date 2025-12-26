@@ -7,7 +7,7 @@ interface UseRecordingReturn {
   audioPath: string | null;
   error: string | null;
   startRecording: (meetingId: string) => Promise<void>;
-  stopRecording: () => Promise<void>;
+  stopRecording: () => Promise<string | null>;
 }
 
 export function useRecording(): UseRecordingReturn {
@@ -28,15 +28,17 @@ export function useRecording(): UseRecordingReturn {
     }
   }, []);
 
-  const stopRecording = useCallback(async () => {
+  const stopRecording = useCallback(async (): Promise<string | null> => {
     try {
       setError(null);
       const path = await audioApi.stopRecording();
       setAudioPath(path);
       setIsRecording(false);
       setAudioLevel(0);
+      return path;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return null;
     }
   }, []);
 
