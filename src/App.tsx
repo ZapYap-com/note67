@@ -79,7 +79,7 @@ function App() {
     "notes" | "transcript" | "summary"
   >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
-  const [_editingDescription, setEditingDescription] = useState(false);
+  const [, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
   const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null);
