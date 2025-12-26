@@ -49,6 +49,17 @@ export function SummaryPanel({
     });
   };
 
+  // Always expand the latest summary (first in the list)
+  useEffect(() => {
+    if (summaries.length > 0) {
+      setExpandedSummaries((prev) => {
+        const next = new Set(prev);
+        next.add(summaries[0].id);
+        return next;
+      });
+    }
+  }, [summaries]);
+
   const canGenerate = hasTranscript && hasOllamaModel && ollamaRunning && !isGenerating;
 
   const getStatusMessage = () => {
