@@ -10,18 +10,18 @@ interface SummaryPanelProps {
   hasOllamaModel: boolean;
   ollamaRunning: boolean;
   isTranscribing: boolean;
-  onGenerate: (type: SummaryType, customPrompt?: string) => void;
-  onGenerateAll: () => void;
+  onGenerate: () => void;
   onDelete: (summaryId: number) => void;
   onRegenerate?: () => void;
   isRegenerating?: boolean;
 }
 
-const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
-  { value: "overview", label: "Overview" },
-  { value: "action_items", label: "Action Items" },
-  { value: "key_decisions", label: "Key Decisions" },
-];
+const SUMMARY_TYPE_LABELS: Record<SummaryType, string> = {
+  overview: "Overview",
+  action_items: "Action Items",
+  key_decisions: "Key Decisions",
+  custom: "Custom",
+};
 
 export function SummaryPanel({
   summaries,
@@ -32,13 +32,10 @@ export function SummaryPanel({
   ollamaRunning,
   isTranscribing,
   onGenerate,
-  onGenerateAll,
   onDelete,
   onRegenerate,
   isRegenerating,
 }: SummaryPanelProps) {
-  const [customPrompt, setCustomPrompt] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
   // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
   const [expandState, setExpandState] = useState<Map<number, boolean>>(new Map());
 
@@ -76,8 +73,7 @@ export function SummaryPanel({
   };
 
   const getSummaryTypeLabel = (type: SummaryType) => {
-    const found = SUMMARY_TYPES.find((t) => t.value === type);
-    return found?.label ?? type;
+    return SUMMARY_TYPE_LABELS[type] ?? type;
   };
 
   return (
@@ -96,12 +92,25 @@ export function SummaryPanel({
       )}
 
       {/* Generate Buttons */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-3">
-          {summaries.length === 0 ? (
-            /* Single Generate button when no summaries exist */
+      <div className="flex flex-wrap gap-3">
+        {summaries.length === 0 ? (
+          /* Single Generate button when no summaries exist */
+          <button
+            onClick={onGenerate}
+            disabled={!canGenerate}
+            className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
+              color: canGenerate ? "white" : "var(--color-text-tertiary)",
+            }}
+          >
+            Generate
+          </button>
+        ) : (
+          /* Overview and Regenerate buttons when summaries exist */
+          <>
             <button
-              onClick={onGenerateAll}
+              onClick={onGenerate}
               disabled={!canGenerate}
               className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
@@ -109,95 +118,33 @@ export function SummaryPanel({
                 color: canGenerate ? "white" : "var(--color-text-tertiary)",
               }}
             >
-              Generate
+              Overview
             </button>
-          ) : (
-            /* Individual type buttons when summaries exist */
-            <>
-              {SUMMARY_TYPES.map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => onGenerate(type.value)}
-                  disabled={!canGenerate}
-                  className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
-                    color: canGenerate ? "white" : "var(--color-text-tertiary)",
-                  }}
-                >
-                  {type.label}
-                </button>
-              ))}
-              {/* Regenerate Summary & Title Button */}
-              {onRegenerate && (
-                <button
-                  onClick={() => {
-                    // Collapse all existing overview summaries before regenerating
-                    setExpandState((prev) => {
-                      const next = new Map(prev);
-                      summaries
-                        .filter((s) => s.summary_type === "overview")
-                        .forEach((s) => next.set(s.id, false));
-                      return next;
-                    });
-                    onRegenerate();
-                  }}
-                  disabled={!canGenerate || isRegenerating}
-                  className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    backgroundColor: "var(--color-accent)",
-                    color: "white",
-                  }}
-                >
-                  {isRegenerating ? "Regenerating..." : "Regenerate"}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Custom Prompt */}
-        <div>
-          <button
-            onClick={() => setShowCustom(!showCustom)}
-            className="transition-colors"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            {showCustom ? "Hide custom prompt" : "+ Custom prompt"}
-          </button>
-          {showCustom && (
-            <div className="mt-3 flex gap-3">
-              <input
-                type="text"
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Ask anything about the meeting..."
-                className="flex-1 px-4 py-3 rounded-xl outline-none"
-                style={{
-                  backgroundColor: "var(--color-bg-elevated)",
-                  color: "var(--color-text)",
-                  border: "1px solid var(--color-border)",
-                }}
-              />
+            {onRegenerate && (
               <button
                 onClick={() => {
-                  if (customPrompt.trim()) {
-                    onGenerate("custom", customPrompt);
-                    setCustomPrompt("");
-                  }
+                  // Collapse all existing overview summaries before regenerating
+                  setExpandState((prev) => {
+                    const next = new Map(prev);
+                    summaries
+                      .filter((s) => s.summary_type === "overview")
+                      .forEach((s) => next.set(s.id, false));
+                    return next;
+                  });
+                  onRegenerate();
                 }}
-                disabled={!canGenerate || !customPrompt.trim()}
-                className="px-5 py-3 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={!canGenerate || isRegenerating}
+                className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: "#374151",
+                  backgroundColor: "var(--color-accent)",
                   color: "white",
                 }}
               >
-                Ask
+                {isRegenerating ? "Regenerating..." : "Regenerate"}
               </button>
-            </div>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Generating Indicator with Streaming Content */}

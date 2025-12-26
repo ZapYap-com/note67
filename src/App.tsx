@@ -17,7 +17,7 @@ import {
   useLiveTranscription,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
-import type { Note, SummaryType, TranscriptSegment } from "./types";
+import type { Note, TranscriptSegment } from "./types";
 
 
 function App() {
@@ -1296,14 +1296,7 @@ function NoteView({
             hasOllamaModel={hasOllamaModel}
             ollamaRunning={ollamaRunning}
             isTranscribing={isTranscribing}
-            onGenerate={(type: SummaryType, prompt?: string) =>
-              generateSummary(type, prompt)
-            }
-            onGenerateAll={async () => {
-              await generateSummary("overview");
-              await generateSummary("action_items");
-              await generateSummary("key_decisions");
-            }}
+            onGenerate={() => generateSummary("overview")}
             onDelete={deleteSummary}
             onRegenerate={onRegenerate}
             isRegenerating={isRegenerating}
