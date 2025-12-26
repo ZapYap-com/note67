@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { transcriptionApi } from "../api";
+import type { DualTranscriptionResult } from "../api/transcription";
 import { useWhisperStore } from "../stores/whisperStore";
 import type {
   ModelInfo,
@@ -66,6 +67,12 @@ interface UseTranscriptionReturn {
   transcript: TranscriptSegment[];
   error: string | null;
   transcribe: (audioPath: string, meetingId: string) => Promise<TranscriptionResult | null>;
+  /** Transcribe dual audio files (mic + system) with speaker labels */
+  transcribeDual: (
+    micPath: string,
+    systemPath: string | null,
+    meetingId: string
+  ) => Promise<DualTranscriptionResult | null>;
   loadTranscript: (meetingId: string) => Promise<TranscriptSegment[]>;
 }
 
@@ -102,6 +109,36 @@ export function useTranscription(): UseTranscriptionReturn {
     []
   );
 
+  const transcribeDual = useCallback(
+    async (
+      micPath: string,
+      systemPath: string | null,
+      meetingId: string
+    ): Promise<DualTranscriptionResult | null> => {
+      try {
+        setError(null);
+        setIsTranscribing(true);
+        const result = await transcriptionApi.transcribeDualAudio(
+          micPath,
+          systemPath,
+          meetingId
+        );
+
+        // Load the transcript from database (includes both "You" and "Others" segments)
+        const segments = await transcriptionApi.getTranscript(meetingId);
+        setTranscript(segments);
+
+        return result;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        return null;
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    []
+  );
+
   const loadTranscript = useCallback(async (meetingId: string): Promise<TranscriptSegment[]> => {
     try {
       setError(null);
@@ -124,6 +161,7 @@ export function useTranscription(): UseTranscriptionReturn {
     transcript,
     error,
     transcribe,
+    transcribeDual,
     loadTranscript,
   };
 }

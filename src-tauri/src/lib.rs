@@ -173,6 +173,7 @@ pub fn run() {
             commands::load_model,
             commands::get_loaded_model,
             commands::transcribe_audio,
+            commands::transcribe_dual_audio,
             commands::is_transcribing,
             commands::get_transcript,
             commands::add_transcript_segment,

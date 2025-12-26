@@ -265,6 +265,120 @@ pub fn is_transcribing(state: State<TranscriptionState>) -> bool {
     state.is_transcribing.load(Ordering::SeqCst)
 }
 
+/// Result of dual transcription
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DualTranscriptionResult {
+    /// Transcription result from mic audio ("You")
+    pub mic_result: TranscriptionResult,
+    /// Transcription result from system audio ("Others"), if available
+    pub system_result: Option<TranscriptionResult>,
+    /// Total number of segments saved
+    pub total_segments: usize,
+}
+
+/// Transcribe dual audio files (mic and system) with speaker labels
+///
+/// - mic_path: Path to the microphone recording (labeled as "You")
+/// - system_path: Optional path to system audio recording (labeled as "Others")
+/// - meeting_id: The meeting ID to associate segments with
+#[tauri::command]
+pub async fn transcribe_dual_audio(
+    mic_path: String,
+    system_path: Option<String>,
+    meeting_id: String,
+    state: State<'_, TranscriptionState>,
+    db: State<'_, Database>,
+) -> Result<DualTranscriptionResult, String> {
+    // Check if already transcribing
+    if state.is_transcribing.swap(true, Ordering::SeqCst) {
+        return Err("Already transcribing".to_string());
+    }
+
+    // Get the transcriber
+    let transcriber = {
+        let guard = state.transcriber.lock().map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+        guard.clone().ok_or_else(|| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            "No model loaded. Please load a model first.".to_string()
+        })?
+    };
+
+    let mut total_segments = 0;
+
+    // Transcribe mic audio (labeled as "You")
+    let mic_path_buf = PathBuf::from(&mic_path);
+    let transcriber_clone = transcriber.clone();
+    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
+        .await
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+
+    // Save mic segments to database with "You" speaker label
+    for segment in &mic_result.segments {
+        db.add_transcript_segment(
+            &meeting_id,
+            segment.start_time,
+            segment.end_time,
+            &segment.text,
+            Some("You"),
+        )
+        .map_err(|e| e.to_string())?;
+        total_segments += 1;
+    }
+
+    // Transcribe system audio if provided (labeled as "Others")
+    let system_result = if let Some(sys_path) = system_path {
+        let sys_path_buf = PathBuf::from(&sys_path);
+        let transcriber_clone = transcriber.clone();
+
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+            Ok(Ok(result)) => {
+                // Save system segments to database with "Others" speaker label
+                for segment in &result.segments {
+                    db.add_transcript_segment(
+                        &meeting_id,
+                        segment.start_time,
+                        segment.end_time,
+                        &segment.text,
+                        Some("Others"),
+                    )
+                    .map_err(|e| e.to_string())?;
+                    total_segments += 1;
+                }
+                Some(result)
+            }
+            Ok(Err(e)) => {
+                eprintln!("Failed to transcribe system audio: {}", e);
+                None
+            }
+            Err(e) => {
+                eprintln!("Failed to spawn system audio transcription task: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    state.is_transcribing.store(false, Ordering::SeqCst);
+
+    Ok(DualTranscriptionResult {
+        mic_result,
+        system_result,
+        total_segments,
+    })
+}
+
 /// Get transcript segments for a meeting
 #[tauri::command]
 pub fn get_transcript(

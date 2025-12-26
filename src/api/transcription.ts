@@ -6,6 +6,16 @@ import type {
   TranscriptionResult,
 } from "../types";
 
+/** Result of dual transcription (mic + system audio) */
+export interface DualTranscriptionResult {
+  /** Transcription result from mic audio ("You") */
+  micResult: TranscriptionResult;
+  /** Transcription result from system audio ("Others"), if available */
+  systemResult: TranscriptionResult | null;
+  /** Total number of segments saved */
+  totalSegments: number;
+}
+
 export const transcriptionApi = {
   // Model management
   listModels: (): Promise<ModelInfo[]> => {
@@ -43,6 +53,15 @@ export const transcriptionApi = {
     speaker?: string
   ): Promise<TranscriptionResult> => {
     return invoke("transcribe_audio", { audioPath, meetingId, speaker });
+  },
+
+  /** Transcribe dual audio files (mic and system) with speaker labels */
+  transcribeDualAudio: (
+    micPath: string,
+    systemPath: string | null,
+    meetingId: string
+  ): Promise<DualTranscriptionResult> => {
+    return invoke("transcribe_dual_audio", { micPath, systemPath, meetingId });
   },
 
   isTranscribing: (): Promise<boolean> => {
