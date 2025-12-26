@@ -29,6 +29,7 @@ interface WhisperState {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
   isDownloading: boolean;
+  downloadingModel: ModelSize | null;
   downloadProgress: number;
   error: string | null;
   progressInterval: number | null;
@@ -46,6 +47,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
   models: [],
   loadedModel: null,
   isDownloading: false,
+  downloadingModel: null,
   downloadProgress: 0,
   error: null,
   progressInterval: null,
@@ -79,7 +81,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
 
   downloadModel: async (size: ModelSize) => {
     try {
-      set({ error: null, isDownloading: true, downloadProgress: 0 });
+      set({ error: null, isDownloading: true, downloadingModel: size, downloadProgress: 0 });
 
       // Start polling progress
       const interval = window.setInterval(async () => {
@@ -101,7 +103,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
       if (progressInterval) {
         clearInterval(progressInterval);
       }
-      set({ isDownloading: false, downloadProgress: 0, progressInterval: null });
+      set({ isDownloading: false, downloadingModel: null, downloadProgress: 0, progressInterval: null });
     }
   },
 

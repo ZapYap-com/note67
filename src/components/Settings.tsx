@@ -992,6 +992,7 @@ function WhisperTab() {
     models,
     loadedModel,
     isDownloading,
+    downloadingModel,
     downloadProgress,
     error,
     downloadModel,
@@ -1035,12 +1036,13 @@ function WhisperTab() {
             key={model.size}
             model={model}
             isLoaded={loadedModel === model.size}
-            isDownloading={isDownloading}
+            isDownloading={isDownloading && downloadingModel === model.size}
             downloadProgress={downloadProgress}
             sizeLabel={sizeLabels[model.size]}
             onDownload={() => downloadModel(model.size)}
             onDelete={() => deleteModel(model.size)}
             onLoad={() => loadModel(model.size)}
+            isAnyDownloading={isDownloading}
           />
         ))}
       </div>
@@ -1064,6 +1066,7 @@ interface WhisperModelCardProps {
   onDownload: () => void;
   onDelete: () => void;
   onLoad: () => void;
+  isAnyDownloading: boolean;
 }
 
 function WhisperModelCard({
@@ -1075,6 +1078,7 @@ function WhisperModelCard({
   onDownload,
   onDelete,
   onLoad,
+  isAnyDownloading,
 }: WhisperModelCardProps) {
   return (
     <div
@@ -1143,7 +1147,7 @@ function WhisperModelCard({
           ) : (
             <button
               onClick={onDownload}
-              disabled={isDownloading}
+              disabled={isAnyDownloading}
               className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
               style={{
                 backgroundColor: "#374151",

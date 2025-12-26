@@ -10,6 +10,7 @@ export function ModelManager({ onClose }: ModelManagerProps) {
     models,
     loadedModel,
     isDownloading,
+    downloadingModel,
     downloadProgress,
     error,
     downloadModel,
@@ -71,11 +72,12 @@ export function ModelManager({ onClose }: ModelManagerProps) {
                 key={model.size}
                 model={model}
                 isLoaded={loadedModel === model.size}
-                isDownloading={isDownloading}
+                isDownloading={isDownloading && downloadingModel === model.size}
                 downloadProgress={downloadProgress}
                 onDownload={() => downloadModel(model.size)}
                 onDelete={() => deleteModel(model.size)}
                 onLoad={() => loadModel(model.size)}
+                isAnyDownloading={isDownloading}
               />
             ))}
           </div>
@@ -106,6 +108,7 @@ interface ModelCardProps {
   onDownload: () => void;
   onDelete: () => void;
   onLoad: () => void;
+  isAnyDownloading: boolean;
 }
 
 function ModelCard({
@@ -116,6 +119,7 @@ function ModelCard({
   onDownload,
   onDelete,
   onLoad,
+  isAnyDownloading,
 }: ModelCardProps) {
   const sizeLabels: Record<ModelSize, string> = {
     tiny: "Fastest, basic accuracy",
@@ -182,7 +186,7 @@ function ModelCard({
           ) : (
             <button
               onClick={onDownload}
-              disabled={isDownloading}
+              disabled={isAnyDownloading}
               className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
               style={{
                 backgroundColor: "var(--color-text)",

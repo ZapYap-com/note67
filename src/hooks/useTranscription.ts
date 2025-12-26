@@ -25,6 +25,7 @@ interface UseModelsReturn {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
   isDownloading: boolean;
+  downloadingModel: ModelSize | null;
   downloadProgress: number;
   error: string | null;
   refreshModels: () => Promise<void>;
@@ -38,6 +39,7 @@ export function useModels(): UseModelsReturn {
   const models = useWhisperStore((state) => state.models);
   const loadedModel = useWhisperStore((state) => state.loadedModel);
   const isDownloading = useWhisperStore((state) => state.isDownloading);
+  const downloadingModel = useWhisperStore((state) => state.downloadingModel);
   const downloadProgress = useWhisperStore((state) => state.downloadProgress);
   const error = useWhisperStore((state) => state.error);
   const refreshModels = useWhisperStore((state) => state.refreshModels);
@@ -54,6 +56,7 @@ export function useModels(): UseModelsReturn {
     models,
     loadedModel,
     isDownloading,
+    downloadingModel,
     downloadProgress,
     error,
     refreshModels,
