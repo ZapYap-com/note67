@@ -602,11 +602,13 @@ function App() {
           ) : (
             <button
               onClick={handleStartMeeting}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+              disabled={!loadedModel || !ollamaRunning || !ollamaModel}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-105"
               style={{
                 backgroundColor: "var(--color-accent)",
                 color: "white",
               }}
+              title={!loadedModel || !ollamaRunning || !ollamaModel ? "Complete setup in Settings first" : undefined}
             >
               <span className="w-2 h-2 rounded-full bg-white" />
               Start listening

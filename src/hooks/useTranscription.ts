@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { transcriptionApi } from "../api";
+import { useWhisperStore } from "../stores/whisperStore";
 import type {
   ModelInfo,
   ModelSize,
@@ -20,109 +21,23 @@ interface UseModelsReturn {
 }
 
 export function useModels(): UseModelsReturn {
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [loadedModel, setLoadedModel] = useState<ModelSize | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const progressIntervalRef = useRef<number | null>(null);
+  const store = useWhisperStore();
 
-  const refreshModels = useCallback(async () => {
-    try {
-      const [modelList, loaded] = await Promise.all([
-        transcriptionApi.listModels(),
-        transcriptionApi.getLoadedModel(),
-      ]);
-      setModels(modelList);
-      setLoadedModel(loaded);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  const downloadModel = useCallback(
-    async (size: ModelSize) => {
-      try {
-        setError(null);
-        setIsDownloading(true);
-        setDownloadProgress(0);
-
-        // Start polling progress
-        progressIntervalRef.current = window.setInterval(async () => {
-          try {
-            const progress = await transcriptionApi.getDownloadProgress();
-            setDownloadProgress(progress);
-          } catch {
-            // Ignore errors during polling
-          }
-        }, 500);
-
-        await transcriptionApi.downloadModel(size);
-        await refreshModels();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setIsDownloading(false);
-        setDownloadProgress(0);
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-      }
-    },
-    [refreshModels]
-  );
-
-  const deleteModel = useCallback(
-    async (size: ModelSize) => {
-      try {
-        setError(null);
-        await transcriptionApi.deleteModel(size);
-        await refreshModels();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    },
-    [refreshModels]
-  );
-
-  const loadModel = useCallback(
-    async (size: ModelSize) => {
-      try {
-        setError(null);
-        await transcriptionApi.loadModel(size);
-        setLoadedModel(size);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    },
-    []
-  );
-
-  // Load initial data
+  // Initialize on first mount
   useEffect(() => {
-    refreshModels();
-  }, [refreshModels]);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
+    store.refreshModels();
   }, []);
 
   return {
-    models,
-    loadedModel,
-    isDownloading,
-    downloadProgress,
-    error,
-    refreshModels,
-    downloadModel,
-    deleteModel,
-    loadModel,
+    models: store.models,
+    loadedModel: store.loadedModel,
+    isDownloading: store.isDownloading,
+    downloadProgress: store.downloadProgress,
+    error: store.error,
+    refreshModels: store.refreshModels,
+    downloadModel: store.downloadModel,
+    deleteModel: store.deleteModel,
+    loadModel: store.loadModel,
   };
 }
 
