@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct Meeting {
     pub id: String,
     pub title: String,
+    pub description: Option<String>,
+    pub participants: Option<String>, // Comma-separated list
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
     pub audio_path: Option<String>,
@@ -65,6 +67,15 @@ impl SummaryType {
 #[derive(Debug, Deserialize)]
 pub struct NewMeeting {
     pub title: String,
+    pub description: Option<String>,
+    pub participants: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMeeting {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub participants: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

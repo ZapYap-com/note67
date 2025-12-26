@@ -1,6 +1,7 @@
 export type {
   Meeting,
   NewMeeting,
+  UpdateMeeting,
   TranscriptSegment,
   Summary,
   SummaryType,

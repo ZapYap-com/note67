@@ -1,11 +1,23 @@
 import { useState } from "react";
-import { ModelManager, OllamaSettings, SummaryPanel, TranscriptSearch } from "./components";
+import { MeetingEditor, MeetingSearch, ModelManager, OllamaSettings, SummaryPanel, TranscriptSearch } from "./components";
+import { exportApi } from "./api";
 import { useMeetings, useModels, useOllama, useRecording, useSummaries, useTranscription } from "./hooks";
-import type { Meeting, SummaryType, TranscriptSegment } from "./types";
+import type { Meeting, SummaryType, TranscriptSegment, UpdateMeeting } from "./types";
 
 function App() {
-  const { meetings, loading, error, createMeeting, endMeeting, deleteMeeting } =
-    useMeetings();
+  const {
+    meetings,
+    loading,
+    error,
+    searchQuery,
+    isSearching,
+    createMeeting,
+    updateMeeting,
+    searchMeetings,
+    clearSearch,
+    endMeeting,
+    deleteMeeting,
+  } = useMeetings();
   const {
     isRecording,
     audioLevel,
@@ -29,6 +41,8 @@ function App() {
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
   const [meetingTranscripts, setMeetingTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +90,35 @@ function App() {
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString();
+  };
+
+  const handleUpdateMeeting = async (update: UpdateMeeting) => {
+    if (!editingMeeting) return;
+    await updateMeeting(editingMeeting.id, update);
+  };
+
+  const handleExportMarkdown = async (meetingId: string) => {
+    try {
+      const data = await exportApi.exportMarkdown(meetingId);
+      const path = await exportApi.saveToFile(data.markdown, data.filename);
+      setExportMessage(`Exported to ${path}`);
+      setTimeout(() => setExportMessage(null), 3000);
+    } catch (err) {
+      setExportMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+      setTimeout(() => setExportMessage(null), 3000);
+    }
+  };
+
+  const handleCopyMarkdown = async (meetingId: string) => {
+    try {
+      const data = await exportApi.exportMarkdown(meetingId);
+      await exportApi.copyToClipboard(data.markdown);
+      setExportMessage("Copied to clipboard!");
+      setTimeout(() => setExportMessage(null), 2000);
+    } catch (err) {
+      setExportMessage(`Copy failed: ${err instanceof Error ? err.message : String(err)}`);
+      setTimeout(() => setExportMessage(null), 3000);
+    }
   };
 
   const displayError = error || recordingError || transcriptionError;
@@ -137,7 +180,7 @@ function App() {
         )}
 
         {/* Create Meeting Form */}
-        <form onSubmit={handleCreate} className="flex gap-2 mb-8">
+        <form onSubmit={handleCreate} className="flex gap-2 mb-4">
           <input
             type="text"
             value={newTitle}
@@ -160,6 +203,21 @@ function App() {
           </button>
         </form>
 
+        {/* Search */}
+        <div className="mb-8">
+          <MeetingSearch
+            searchQuery={searchQuery}
+            isSearching={isSearching}
+            onSearch={searchMeetings}
+            onClear={clearSearch}
+          />
+          {searchQuery && (
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Showing results for "{searchQuery}"
+            </p>
+          )}
+        </div>
+
         {/* Error State */}
         {displayError && (
           <div className="p-4 mb-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg">
@@ -179,6 +237,13 @@ function App() {
           </p>
         )}
 
+        {/* Export Message Toast */}
+        {exportMessage && (
+          <div className="fixed bottom-4 right-4 p-4 bg-gray-800 text-white rounded-lg shadow-lg z-50">
+            {exportMessage}
+          </div>
+        )}
+
         <div className="space-y-4">
           {meetings.map((meeting) => (
             <MeetingCard
@@ -193,6 +258,9 @@ function App() {
               ollamaRunning={ollamaRunning}
               hasOllamaModel={!!ollamaModel}
               onEnd={() => handleEndMeeting(meeting.id)}
+              onEdit={() => setEditingMeeting(meeting)}
+              onExport={() => handleExportMarkdown(meeting.id)}
+              onCopy={() => handleCopyMarkdown(meeting.id)}
               onDelete={() => deleteMeeting(meeting.id)}
               onTranscribe={() => handleTranscribe(meeting)}
               onToggleTranscript={() => handleLoadTranscript(meeting.id)}
@@ -211,6 +279,15 @@ function App() {
       {/* Ollama Settings Modal */}
       {showOllamaSettings && (
         <OllamaSettings onClose={() => setShowOllamaSettings(false)} />
+      )}
+
+      {/* Meeting Editor Modal */}
+      {editingMeeting && (
+        <MeetingEditor
+          meeting={editingMeeting}
+          onSave={handleUpdateMeeting}
+          onClose={() => setEditingMeeting(null)}
+        />
       )}
     </main>
   );
@@ -240,6 +317,9 @@ interface MeetingCardProps {
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
   onEnd: () => void;
+  onEdit: () => void;
+  onExport: () => void;
+  onCopy: () => void;
   onDelete: () => void;
   onTranscribe: () => void;
   onToggleTranscript: () => void;
@@ -258,6 +338,9 @@ function MeetingCard({
   ollamaRunning,
   hasOllamaModel,
   onEnd,
+  onEdit,
+  onExport,
+  onCopy,
   onDelete,
   onTranscribe,
   onToggleTranscript,
@@ -302,6 +385,16 @@ function MeetingCard({
                 </span>
               )}
             </h3>
+            {meeting.description && (
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                {meeting.description}
+              </p>
+            )}
+            {meeting.participants && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <span className="font-medium">Participants:</span> {meeting.participants}
+              </p>
+            )}
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Started: {formatDate(meeting.started_at)}
             </p>
@@ -316,7 +409,7 @@ function MeetingCard({
               </p>
             )}
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 flex-wrap">
             {isActive ? (
               <button
                 onClick={onEnd}
@@ -344,6 +437,31 @@ function MeetingCard({
                     {isExpanded ? "Hide" : "Show"}
                   </button>
                 )}
+              </>
+            )}
+            <button
+              onClick={onEdit}
+              className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              title="Edit meeting details"
+            >
+              Edit
+            </button>
+            {!isActive && (
+              <>
+                <button
+                  onClick={onExport}
+                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                  title="Export to Markdown file"
+                >
+                  Export
+                </button>
+                <button
+                  onClick={onCopy}
+                  className="px-3 py-1 text-sm bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors"
+                  title="Copy to clipboard"
+                >
+                  Copy
+                </button>
               </>
             )}
             <button

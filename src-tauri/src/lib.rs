@@ -17,6 +17,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let db = Database::new(app.handle())?;
             app.manage(db);
@@ -33,6 +34,8 @@ pub fn run() {
             commands::list_meetings,
             commands::end_meeting,
             commands::delete_meeting,
+            commands::update_meeting,
+            commands::search_meetings,
             commands::start_recording,
             commands::stop_recording,
             commands::get_recording_status,
@@ -56,6 +59,10 @@ pub fn run() {
             commands::generate_summary,
             commands::get_meeting_summaries,
             commands::delete_summary,
+            // Export commands
+            commands::export_meeting_markdown,
+            commands::save_export_to_file,
+            commands::get_export_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

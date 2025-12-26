@@ -2,7 +2,7 @@ use chrono::Utc;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::db::models::{Meeting, NewMeeting};
+use crate::db::models::{Meeting, NewMeeting, UpdateMeeting};
 use crate::db::Database;
 
 #[tauri::command]
@@ -12,11 +12,13 @@ pub fn create_meeting(db: State<Database>, input: NewMeeting) -> Result<Meeting,
     let id = Uuid::new_v4().to_string();
 
     conn.execute(
-        "INSERT INTO meetings (id, title, started_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO meetings (id, title, description, participants, started_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         (
             &id,
             &input.title,
+            &input.description,
+            &input.participants,
             now.to_rfc3339(),
             now.to_rfc3339(),
             now.to_rfc3339(),
@@ -27,6 +29,8 @@ pub fn create_meeting(db: State<Database>, input: NewMeeting) -> Result<Meeting,
     Ok(Meeting {
         id,
         title: input.title,
+        description: input.description,
+        participants: input.participants,
         started_at: now,
         ended_at: None,
         audio_path: None,
@@ -40,18 +44,20 @@ pub fn get_meeting(db: State<Database>, id: String) -> Result<Option<Meeting>, S
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
-        "SELECT id, title, started_at, ended_at, audio_path, created_at, updated_at
+        "SELECT id, title, description, participants, started_at, ended_at, audio_path, created_at, updated_at
          FROM meetings WHERE id = ?1",
         [&id],
         |row| {
             Ok(Meeting {
                 id: row.get(0)?,
                 title: row.get(1)?,
-                started_at: parse_datetime(row.get::<_, String>(2)?),
-                ended_at: row.get::<_, Option<String>>(3)?.map(parse_datetime),
-                audio_path: row.get(4)?,
-                created_at: parse_datetime(row.get::<_, String>(5)?),
-                updated_at: parse_datetime(row.get::<_, String>(6)?),
+                description: row.get(2)?,
+                participants: row.get(3)?,
+                started_at: parse_datetime(row.get::<_, String>(4)?),
+                ended_at: row.get::<_, Option<String>>(5)?.map(parse_datetime),
+                audio_path: row.get(6)?,
+                created_at: parse_datetime(row.get::<_, String>(7)?),
+                updated_at: parse_datetime(row.get::<_, String>(8)?),
             })
         },
     );
@@ -69,7 +75,7 @@ pub fn list_meetings(db: State<Database>) -> Result<Vec<Meeting>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, started_at, ended_at, audio_path, created_at, updated_at
+            "SELECT id, title, description, participants, started_at, ended_at, audio_path, created_at, updated_at
              FROM meetings ORDER BY started_at DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -79,16 +85,131 @@ pub fn list_meetings(db: State<Database>) -> Result<Vec<Meeting>, String> {
             Ok(Meeting {
                 id: row.get(0)?,
                 title: row.get(1)?,
-                started_at: parse_datetime(row.get::<_, String>(2)?),
-                ended_at: row.get::<_, Option<String>>(3)?.map(parse_datetime),
-                audio_path: row.get(4)?,
-                created_at: parse_datetime(row.get::<_, String>(5)?),
-                updated_at: parse_datetime(row.get::<_, String>(6)?),
+                description: row.get(2)?,
+                participants: row.get(3)?,
+                started_at: parse_datetime(row.get::<_, String>(4)?),
+                ended_at: row.get::<_, Option<String>>(5)?.map(parse_datetime),
+                audio_path: row.get(6)?,
+                created_at: parse_datetime(row.get::<_, String>(7)?),
+                updated_at: parse_datetime(row.get::<_, String>(8)?),
             })
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+
+    Ok(meetings)
+}
+
+#[tauri::command]
+pub fn update_meeting(
+    db: State<Database>,
+    id: String,
+    update: UpdateMeeting,
+) -> Result<Meeting, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now();
+
+    // Build dynamic update query
+    let mut updates = vec!["updated_at = ?1"];
+    let mut param_idx = 2;
+
+    if update.title.is_some() {
+        updates.push("title = ?2");
+        param_idx = 3;
+    }
+    if update.description.is_some() {
+        updates.push(if param_idx == 2 {
+            "description = ?2"
+        } else {
+            "description = ?3"
+        });
+        param_idx += 1;
+    }
+    if update.participants.is_some() {
+        updates.push(match param_idx {
+            2 => "participants = ?2",
+            3 => "participants = ?3",
+            _ => "participants = ?4",
+        });
+    }
+
+    let sql = format!(
+        "UPDATE meetings SET {} WHERE id = ?{}",
+        updates.join(", "),
+        param_idx
+    );
+
+    // Execute with the right number of params
+    match (
+        update.title.as_ref(),
+        update.description.as_ref(),
+        update.participants.as_ref(),
+    ) {
+        (Some(t), Some(d), Some(p)) => {
+            conn.execute(&sql, rusqlite::params![now.to_rfc3339(), t, d, p, id])
+        }
+        (Some(t), Some(d), None) => {
+            conn.execute(&sql, rusqlite::params![now.to_rfc3339(), t, d, id])
+        }
+        (Some(t), None, Some(p)) => {
+            conn.execute(&sql, rusqlite::params![now.to_rfc3339(), t, p, id])
+        }
+        (Some(t), None, None) => conn.execute(&sql, rusqlite::params![now.to_rfc3339(), t, id]),
+        (None, Some(d), Some(p)) => {
+            conn.execute(&sql, rusqlite::params![now.to_rfc3339(), d, p, id])
+        }
+        (None, Some(d), None) => conn.execute(&sql, rusqlite::params![now.to_rfc3339(), d, id]),
+        (None, None, Some(p)) => conn.execute(&sql, rusqlite::params![now.to_rfc3339(), p, id]),
+        (None, None, None) => conn.execute(&sql, rusqlite::params![now.to_rfc3339(), id]),
+    }
+    .map_err(|e| e.to_string())?;
+
+    // Return updated meeting
+    drop(conn);
+    get_meeting(db, id)?.ok_or_else(|| "Meeting not found".to_string())
+}
+
+#[tauri::command]
+pub fn search_meetings(db: State<Database>, query: String) -> Result<Vec<Meeting>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Use FTS5 search with fallback to LIKE for simple queries
+    let search_query = if query.contains('*') || query.contains('"') {
+        query.clone()
+    } else {
+        format!("{}*", query) // Prefix search by default
+    };
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT m.id, m.title, m.description, m.participants, m.started_at, m.ended_at,
+                    m.audio_path, m.created_at, m.updated_at
+             FROM meetings m
+             JOIN meetings_fts fts ON m.rowid = fts.rowid
+             WHERE meetings_fts MATCH ?1
+             ORDER BY m.started_at DESC
+             LIMIT 50",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let meetings = stmt
+        .query_map([&search_query], |row| {
+            Ok(Meeting {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                description: row.get(2)?,
+                participants: row.get(3)?,
+                started_at: parse_datetime(row.get::<_, String>(4)?),
+                ended_at: row.get::<_, Option<String>>(5)?.map(parse_datetime),
+                audio_path: row.get(6)?,
+                created_at: parse_datetime(row.get::<_, String>(7)?),
+                updated_at: parse_datetime(row.get::<_, String>(8)?),
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
 
     Ok(meetings)
 }

@@ -1,6 +1,8 @@
 export interface Meeting {
   id: string;
   title: string;
+  description: string | null;
+  participants: string | null; // Comma-separated list
   started_at: string; // ISO 8601 datetime
   ended_at: string | null;
   audio_path: string | null;
@@ -10,6 +12,14 @@ export interface Meeting {
 
 export interface NewMeeting {
   title: string;
+  description?: string;
+  participants?: string;
+}
+
+export interface UpdateMeeting {
+  title?: string;
+  description?: string;
+  participants?: string;
 }
 
 export interface TranscriptSegment {
