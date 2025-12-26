@@ -6,9 +6,12 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 
 - [x] Meeting management (create, end, delete)
 - [x] SQLite database for local storage
+- [x] Transcript viewer with search
+- [x] AI-powered summaries via Ollama
+- [x] Settings with Profile, Whisper, Ollama, Best Practices tabs
+- [x] Custom context menus
 - [ ] Audio capture during meetings
 - [ ] Local transcription with Whisper
-- [ ] AI-powered meeting summaries
 - [ ] Cross-platform (macOS, Windows, Linux)
 
 ## Tech Stack
@@ -19,7 +22,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 | Backend | Rust (Tauri v2) |
 | State | Zustand |
 | Database | SQLite (rusqlite) |
-| AI | whisper-rs, llama-cpp-rs (planned) |
+| AI | Ollama (local LLMs), whisper-rs (planned) |
 
 ## Prerequisites
 
@@ -62,9 +65,11 @@ npm run tauri build
 note67/
 ├── src/                      # React frontend
 │   ├── api/                  # Tauri invoke wrappers
+│   ├── components/           # React components
 │   ├── hooks/                # React hooks
 │   ├── stores/               # Zustand state
 │   ├── types/                # TypeScript interfaces
+│   ├── utils/                # Utilities (seeder, etc.)
 │   └── App.tsx
 ├── src-tauri/                # Rust backend
 │   ├── src/
