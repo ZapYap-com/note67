@@ -324,27 +324,29 @@ function App() {
           style={{ borderColor: "var(--color-border)" }}
         >
           {/* Model badges */}
-          <div
-            className="flex flex-wrap items-center gap-1.5 text-xs mb-2"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            {loadedModel && (
-              <span
-                className="px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
-              >
-                {loadedModel}
-              </span>
-            )}
-            {ollamaRunning && ollamaModel && (
-              <span
-                className="px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-sidebar-hover)" }}
-              >
-                {ollamaModel.split(":")[0]}
-              </span>
-            )}
-          </div>
+          {(loadedModel || (ollamaRunning && ollamaModel)) && (
+            <div
+              className="flex flex-wrap items-center gap-1.5 text-xs mb-2"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              {loadedModel && (
+                <span
+                  className="px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-sidebar-hover)" }}
+                >
+                  {loadedModel}
+                </span>
+              )}
+              {ollamaRunning && ollamaModel && (
+                <span
+                  className="px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-sidebar-hover)" }}
+                >
+                  {ollamaModel.split(":")[0]}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* User profile */}
           <button
