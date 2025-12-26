@@ -222,12 +222,13 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
           // Ignore events if effect was cleaned up (StrictMode double-mount)
           if (cancelled) return;
 
-          const { meeting_id, segments, is_final } = event.payload;
+          const { meeting_id, segments, is_final, audio_source } = event.payload;
 
           // Only process events for the current meeting
           if (meeting_id !== currentMeetingIdRef.current) return;
 
-          const speaker = speakerNameRef.current;
+          // Set speaker based on audio source: mic = user's name, system = "Others"
+          const speaker = audio_source === "system" ? "Others" : speakerNameRef.current;
 
           setLiveSegments((prev) => {
             // Convert new segments

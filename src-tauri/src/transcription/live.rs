@@ -14,8 +14,10 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 /// Live transcription state
 pub struct LiveTranscriptionState {
     pub is_running: AtomicBool,
-    /// Offset in seconds for segment timestamps
-    pub time_offset: Mutex<f64>,
+    /// Offset in seconds for mic segment timestamps
+    pub mic_time_offset: Mutex<f64>,
+    /// Offset in seconds for system audio segment timestamps
+    pub system_time_offset: Mutex<f64>,
     /// Accumulated segments
     pub segments: Mutex<Vec<TranscriptionSegment>>,
 }
@@ -24,7 +26,8 @@ impl LiveTranscriptionState {
     pub fn new() -> Self {
         Self {
             is_running: AtomicBool::new(false),
-            time_offset: Mutex::new(0.0),
+            mic_time_offset: Mutex::new(0.0),
+            system_time_offset: Mutex::new(0.0),
             segments: Mutex::new(Vec::new()),
         }
     }
@@ -36,12 +39,24 @@ impl Default for LiveTranscriptionState {
     }
 }
 
+/// Audio source for transcription
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudioSource {
+    /// Microphone input (the user)
+    Mic,
+    /// System audio (other participants)
+    System,
+}
+
 /// Event payload for transcription updates
 #[derive(Clone, serde::Serialize)]
 pub struct TranscriptionUpdateEvent {
     pub meeting_id: String,
     pub segments: Vec<TranscriptionSegment>,
     pub is_final: bool,
+    /// The source of the audio (mic or system)
+    pub audio_source: AudioSource,
 }
 
 /// Start live transcription
@@ -58,7 +73,8 @@ pub async fn start_live_transcription(
     }
 
     // Reset state
-    *live_state.time_offset.lock().await = 0.0;
+    *live_state.mic_time_offset.lock().await = 0.0;
+    *live_state.system_time_offset.lock().await = 0.0;
     live_state.segments.lock().await.clear();
 
     let app_clone = app.clone();
@@ -88,62 +104,75 @@ pub async fn start_live_transcription(
             let mic_samples = recording_state_clone.take_audio_buffer();
             let system_samples = take_system_audio_samples();
 
-            // Prefer system audio if available (captures meeting participants)
-            // Fall back to mic audio if system audio is empty
-            let (samples, sample_rate, channels) = if !system_samples.is_empty() {
-                // System audio is already at 16kHz mono
-                (system_samples, 16000_u32, 1_usize)
-            } else if !mic_samples.is_empty() {
+            // Build list of audio sources to process
+            let mut audio_sources: Vec<(Vec<f32>, u32, usize, AudioSource)> = Vec::new();
+
+            // Add mic samples if available
+            if !mic_samples.is_empty() {
                 let rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
                 let ch = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
-                (mic_samples, rate, ch)
-            } else {
-                continue;
-            };
-
-            if sample_rate == 0 || channels == 0 {
-                continue;
+                if rate > 0 && ch > 0 {
+                    audio_sources.push((mic_samples, rate, ch, AudioSource::Mic));
+                }
             }
 
-            // Process audio in blocking task
-            let whisper_ctx = whisper_ctx_clone.clone();
-            let time_offset = *live_state_clone.time_offset.lock().await;
+            // Add system audio samples if available (already at 16kHz mono)
+            if !system_samples.is_empty() {
+                audio_sources.push((system_samples, 16000_u32, 1_usize, AudioSource::System));
+            }
 
-            let result = tokio::task::spawn_blocking(move || {
-                transcribe_samples(&whisper_ctx, &samples, sample_rate, channels, time_offset)
-            })
-            .await;
+            // Process each audio source
+            for (samples, sample_rate, channels, audio_source) in audio_sources {
+                let whisper_ctx = whisper_ctx_clone.clone();
+                let time_offset = match audio_source {
+                    AudioSource::Mic => *live_state_clone.mic_time_offset.lock().await,
+                    AudioSource::System => *live_state_clone.system_time_offset.lock().await,
+                };
 
-            match result {
-                Ok(Ok(transcription)) => {
-                    if !transcription.segments.is_empty() {
-                        // Update time offset for next chunk
-                        if let Some(last) = transcription.segments.last() {
-                            *live_state_clone.time_offset.lock().await = last.end_time;
+                let result = tokio::task::spawn_blocking(move || {
+                    transcribe_samples(&whisper_ctx, &samples, sample_rate, channels, time_offset)
+                })
+                .await;
+
+                match result {
+                    Ok(Ok(transcription)) => {
+                        if !transcription.segments.is_empty() {
+                            // Update time offset for next chunk
+                            if let Some(last) = transcription.segments.last() {
+                                match audio_source {
+                                    AudioSource::Mic => {
+                                        *live_state_clone.mic_time_offset.lock().await = last.end_time;
+                                    }
+                                    AudioSource::System => {
+                                        *live_state_clone.system_time_offset.lock().await = last.end_time;
+                                    }
+                                }
+                            }
+
+                            // Store segments
+                            live_state_clone
+                                .segments
+                                .lock()
+                                .await
+                                .extend(transcription.segments.clone());
+
+                            // Emit event with audio source
+                            let event = TranscriptionUpdateEvent {
+                                meeting_id: meeting_id_clone.clone(),
+                                segments: transcription.segments,
+                                is_final: false,
+                                audio_source,
+                            };
+
+                            let _ = app_clone.emit("transcription-update", event);
                         }
-
-                        // Store segments
-                        live_state_clone
-                            .segments
-                            .lock()
-                            .await
-                            .extend(transcription.segments.clone());
-
-                        // Emit event
-                        let event = TranscriptionUpdateEvent {
-                            meeting_id: meeting_id_clone.clone(),
-                            segments: transcription.segments,
-                            is_final: false,
-                        };
-
-                        let _ = app_clone.emit("transcription-update", event);
                     }
-                }
-                Ok(Err(e)) => {
-                    eprintln!("Live transcription error: {}", e);
-                }
-                Err(e) => {
-                    eprintln!("Live transcription task error: {}", e);
+                    Ok(Err(e)) => {
+                        eprintln!("Live transcription error ({:?}): {}", audio_source, e);
+                    }
+                    Err(e) => {
+                        eprintln!("Live transcription task error ({:?}): {}", audio_source, e);
+                    }
                 }
             }
         }

@@ -452,6 +452,7 @@ pub async fn stop_live_transcription(
         meeting_id,
         segments: vec![],
         is_final: true,
+        audio_source: crate::transcription::AudioSource::Mic, // Default for final event
     };
     let _ = app.emit("transcription-update", event);
 
