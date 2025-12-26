@@ -665,6 +665,7 @@ function App() {
       >
         {selectedNote ? (
           <NoteView
+            key={selectedNote.id}
             note={selectedNote}
             transcript={currentTranscript}
             isRecording={isRecording && recordingNoteId === selectedNote.id}
