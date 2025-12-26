@@ -182,9 +182,9 @@ function App() {
         }}
       >
         {/* Sidebar Header */}
-        <div className="px-5 py-5 flex items-center justify-between">
+        <div className="px-4 py-3 flex items-center justify-between">
           <span
-            className="text-lg font-semibold"
+            className="text-base font-semibold"
             style={{ color: "var(--color-text)" }}
           >
             Meetings
@@ -243,17 +243,17 @@ function App() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div
-              className="px-5 py-8 text-center"
+              className="px-4 py-6 text-center text-sm"
               style={{ color: "var(--color-text-secondary)" }}
             >
               Loading...
             </div>
           ) : groupedMeetings.length === 0 ? (
             <div
-              className="px-5 py-12 text-center"
+              className="px-4 py-8 text-center text-sm"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <p className="mb-4">No meetings yet</p>
+              <p className="mb-3">No meetings yet</p>
               <button
                 onClick={async () => {
                   const { seedMeetings } = await import("./utils/seeder");
@@ -267,9 +267,9 @@ function App() {
             </div>
           ) : (
             groupedMeetings.map((group) => (
-              <div key={group.label} className="mb-2">
+              <div key={group.label} className="mb-1">
                 <div
-                  className="px-5 py-2 text-xs font-medium uppercase tracking-wider"
+                  className="px-4 py-1.5 text-xs font-medium uppercase tracking-wider"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
                   {group.label}
@@ -278,7 +278,7 @@ function App() {
                   <button
                     key={meeting.id}
                     onClick={() => handleSelectMeeting(meeting)}
-                    className="w-full px-5 py-3 text-left transition-colors"
+                    className="w-full px-4 py-2 text-left transition-colors"
                     style={{
                       backgroundColor:
                         selectedMeetingId === meeting.id
@@ -298,13 +298,13 @@ function App() {
                     }}
                   >
                     <div
-                      className="font-medium truncate"
+                      className="text-sm font-medium truncate"
                       style={{ color: "var(--color-text)" }}
                     >
                       {meeting.title}
                     </div>
                     <div
-                      className="text-sm mt-0.5"
+                      className="text-xs"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
                       {formatTime(meeting.started_at)}
