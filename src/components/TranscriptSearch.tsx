@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { TranscriptSegment } from "../types";
 
+type SpeakerFilter = "all" | "you" | "others";
+
 function SpeakerLabel({ speaker }: { speaker: string | null }) {
   if (!speaker) return null;
 
@@ -26,8 +28,14 @@ interface TranscriptSearchProps {
 
 export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: TranscriptSearchProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [speakerFilter, setSpeakerFilter] = useState<SpeakerFilter>("all");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevSegmentCountRef = useRef(segments.length);
+
+  // Check if we have speaker data in any segment
+  const hasSpeakerData = useMemo(() => {
+    return segments.some((s) => s.speaker !== null);
+  }, [segments]);
 
   // Auto-scroll to bottom when new segments arrive (only in live mode)
   useEffect(() => {
@@ -41,10 +49,29 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
   }, [segments.length, isLive]);
 
   const filteredSegments = useMemo(() => {
-    if (!searchQuery.trim()) return segments;
-    const query = searchQuery.toLowerCase();
-    return segments.filter((s) => s.text.toLowerCase().includes(query));
-  }, [segments, searchQuery]);
+    let result = segments;
+
+    // Filter by speaker
+    if (speakerFilter !== "all") {
+      result = result.filter((s) => {
+        if (speakerFilter === "you") {
+          // "You" includes any speaker that isn't "Others"
+          return s.speaker !== null && s.speaker !== "Others";
+        } else {
+          // "Others" is specifically the "Others" speaker
+          return s.speaker === "Others";
+        }
+      });
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((s) => s.text.toLowerCase().includes(query));
+    }
+
+    return result;
+  }, [segments, searchQuery, speakerFilter]);
 
   const highlightMatch = (text: string, query: string): React.ReactNode => {
     if (!query.trim()) return text;
@@ -120,10 +147,57 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
         )}
       </div>
 
+      {/* Speaker Filter (only show if we have speaker data) */}
+      {hasSpeakerData && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+            Speaker:
+          </span>
+          <div className="flex gap-1">
+            {(["all", "you", "others"] as SpeakerFilter[]).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setSpeakerFilter(filter)}
+                className="px-3 py-1 text-xs font-medium rounded-full transition-colors"
+                style={{
+                  backgroundColor:
+                    speakerFilter === filter
+                      ? filter === "you"
+                        ? "var(--color-accent-light)"
+                        : filter === "others"
+                        ? "rgba(100, 116, 139, 0.15)"
+                        : "var(--color-bg-elevated)"
+                      : "var(--color-bg-subtle)",
+                  color:
+                    speakerFilter === filter
+                      ? filter === "you"
+                        ? "var(--color-accent)"
+                        : filter === "others"
+                        ? "var(--color-text-secondary)"
+                        : "var(--color-text)"
+                      : "var(--color-text-tertiary)",
+                  border:
+                    speakerFilter === filter
+                      ? filter === "you"
+                        ? "1px solid var(--color-accent)"
+                        : filter === "others"
+                        ? "1px solid var(--color-text-secondary)"
+                        : "1px solid var(--color-border)"
+                      : "1px solid transparent",
+                }}
+              >
+                {filter === "all" ? "All" : filter === "you" ? "You" : "Others"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Results count */}
-      {searchQuery && (
+      {(searchQuery || speakerFilter !== "all") && (
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
           {filteredSegments.length} of {segments.length} segments
+          {speakerFilter !== "all" && ` (${speakerFilter === "you" ? "You" : "Others"})`}
         </p>
       )}
 
