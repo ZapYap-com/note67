@@ -35,3 +35,27 @@ export type SummaryType =
   | "action_items"
   | "key_decisions"
   | "custom";
+
+// Model types for transcription
+export type ModelSize = "tiny" | "base" | "small" | "medium" | "large";
+
+export interface ModelInfo {
+  size: ModelSize;
+  name: string;
+  downloaded: boolean;
+  path: string | null;
+  size_mb: number;
+}
+
+// Segment from whisper transcription (before saving to DB)
+export interface TranscriptionSegment {
+  start_time: number;
+  end_time: number;
+  text: string;
+}
+
+export interface TranscriptionResult {
+  segments: TranscriptionSegment[];
+  full_text: string;
+  language: string | null;
+}

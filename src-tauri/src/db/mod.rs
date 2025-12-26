@@ -4,9 +4,11 @@ pub mod schema;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
+use chrono::Utc;
+use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
+use crate::db::models::TranscriptSegment;
 use crate::db::schema::run_migrations;
 
 pub struct Database {
@@ -33,6 +35,66 @@ impl Database {
         Ok(Self {
             conn: Mutex::new(conn),
         })
+    }
+
+    /// Add a transcript segment to the database
+    pub fn add_transcript_segment(
+        &self,
+        meeting_id: &str,
+        start_time: f64,
+        end_time: f64,
+        text: &str,
+        speaker: Option<&str>,
+    ) -> anyhow::Result<i64> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now();
+
+        conn.execute(
+            "INSERT INTO transcript_segments (meeting_id, start_time, end_time, text, speaker, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![meeting_id, start_time, end_time, text, speaker, now.to_rfc3339()],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all transcript segments for a meeting
+    pub fn get_transcript_segments(&self, meeting_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, meeting_id, start_time, end_time, text, speaker, created_at
+             FROM transcript_segments
+             WHERE meeting_id = ?1
+             ORDER BY start_time ASC",
+        )?;
+
+        let segments = stmt
+            .query_map([meeting_id], |row| {
+                Ok(TranscriptSegment {
+                    id: row.get(0)?,
+                    meeting_id: row.get(1)?,
+                    start_time: row.get(2)?,
+                    end_time: row.get(3)?,
+                    text: row.get(4)?,
+                    speaker: row.get(5)?,
+                    created_at: row.get::<_, String>(6)?.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(segments)
+    }
+
+    /// Delete all transcript segments for a meeting
+    pub fn delete_transcript_segments(&self, meeting_id: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "DELETE FROM transcript_segments WHERE meeting_id = ?1",
+            [meeting_id],
+        )?;
+        Ok(())
     }
 }
 

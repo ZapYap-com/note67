@@ -1,8 +1,9 @@
 mod audio;
 mod commands;
 mod db;
+mod transcription;
 
-use commands::AudioState;
+use commands::{init_transcription_state, AudioState};
 use db::Database;
 use tauri::Manager;
 
@@ -19,6 +20,8 @@ pub fn run() {
             let db = Database::new(app.handle())?;
             app.manage(db);
             app.manage(AudioState::default());
+            let transcription_state = init_transcription_state(app.handle());
+            app.manage(transcription_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -32,6 +35,16 @@ pub fn run() {
             commands::stop_recording,
             commands::get_recording_status,
             commands::get_audio_level,
+            commands::list_models,
+            commands::download_model,
+            commands::get_download_progress,
+            commands::is_downloading,
+            commands::delete_model,
+            commands::load_model,
+            commands::get_loaded_model,
+            commands::transcribe_audio,
+            commands::is_transcribing,
+            commands::get_transcript,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,4 +4,8 @@ export type {
   TranscriptSegment,
   Summary,
   SummaryType,
+  ModelSize,
+  ModelInfo,
+  TranscriptionSegment,
+  TranscriptionResult,
 } from "./meeting";
