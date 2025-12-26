@@ -475,10 +475,10 @@ function ProfileTab() {
 
       <div>
         <label
-          className="block text-sm font-medium mb-2"
+          className="block text-sm font-medium mb-1"
           style={{ color: "var(--color-text)" }}
         >
-          Name
+          Name <span className="font-normal" style={{ color: "var(--color-text-tertiary)" }}>(optional)</span>
         </label>
         <input
           type="text"
@@ -496,10 +496,10 @@ function ProfileTab() {
 
       <div>
         <label
-          className="block text-sm font-medium mb-2"
+          className="block text-sm font-medium mb-1"
           style={{ color: "var(--color-text)" }}
         >
-          Email
+          Email <span className="font-normal" style={{ color: "var(--color-text-tertiary)" }}>(optional)</span>
         </label>
         <input
           type="email"
@@ -513,6 +513,12 @@ function ProfileTab() {
             border: "1px solid var(--color-border)",
           }}
         />
+        <p
+          className="mt-1.5 text-xs"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          Used for receiving Note67 updates and other new app announcements. Will be used to signup for my newsletter. No need to signup if you do not feel like it.
+        </p>
       </div>
 
       <div className="flex items-center justify-between pt-2">
@@ -1394,12 +1400,50 @@ function AboutTab() {
       </div>
 
       {/* Credits */}
-      <p
-        className="text-xs text-center"
-        style={{ color: "var(--color-text-tertiary)" }}
-      >
-        Built with Tauri, React, and Rust
-      </p>
+      <div className="space-y-3 text-center">
+        <p
+          className="text-xs"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          Built with{" "}
+          <span style={{ color: "#ef4444" }}>♥</span> by{" "}
+          <a
+            href="https://ctmakes.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-80"
+            style={{ color: "var(--color-accent)" }}
+          >
+            @ctmakes
+          </a>
+        </p>
+        <p
+          className="text-xs"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          If you like this app, consider checking out {" "}
+          <a
+            href="https://leapcount.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-80"
+            style={{ color: "var(--color-accent)" }}
+          >
+            Leapcount
+          </a>
+          {" and "}
+          <a
+            href="https://zapyap.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-80"
+            style={{ color: "var(--color-accent)" }}
+          >
+            ZapYap
+          </a>{" "}
+          as well.
+        </p>
+      </div>
     </div>
   );
 }

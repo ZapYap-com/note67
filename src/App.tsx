@@ -590,7 +590,7 @@ function App() {
           {/* User profile */}
           <button
             onClick={() => {
-              setSettingsTab("profile");
+              setSettingsTab("about");
               setShowSettings(true);
             }}
             className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-black/5 transition-colors"
