@@ -2,7 +2,17 @@ pub mod recorder;
 
 pub use recorder::{start_recording, stop_recording, RecordingState};
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// Audio source type for recording
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AudioSource {
+    /// User's microphone input
+    Microphone,
+    /// System audio output (other participants)
+    SystemAudio,
+}
 
 #[derive(Error, Debug)]
 pub enum AudioError {
@@ -20,6 +30,12 @@ pub enum AudioError {
 
     #[error("Failed to acquire lock")]
     LockError,
+
+    #[error("System audio capture is not supported on this platform")]
+    UnsupportedPlatform,
+
+    #[error("Permission denied for audio capture: {0}")]
+    PermissionDenied(String),
 
     #[error("Audio device error: {0}")]
     DeviceError(#[from] cpal::DevicesError),

@@ -215,6 +215,7 @@ pub fn get_loaded_model(state: State<TranscriptionState>) -> Option<String> {
 pub async fn transcribe_audio(
     audio_path: String,
     meeting_id: String,
+    speaker: Option<String>,
     state: State<'_, TranscriptionState>,
     db: State<'_, Database>,
 ) -> Result<TranscriptionResult, String> {
@@ -250,7 +251,7 @@ pub async fn transcribe_audio(
 
     // Save segments to database
     for segment in &result.segments {
-        db.add_transcript_segment(&meeting_id, segment.start_time, segment.end_time, &segment.text, None)
+        db.add_transcript_segment(&meeting_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
             .map_err(|e| e.to_string())?;
     }
 

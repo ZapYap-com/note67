@@ -39,9 +39,10 @@ export const transcriptionApi = {
   // Transcription
   transcribeAudio: (
     audioPath: string,
-    meetingId: string
+    meetingId: string,
+    speaker?: string
   ): Promise<TranscriptionResult> => {
-    return invoke("transcribe_audio", { audioPath, meetingId });
+    return invoke("transcribe_audio", { audioPath, meetingId, speaker });
   },
 
   isTranscribing: (): Promise<boolean> => {
