@@ -440,6 +440,7 @@ pub async fn generate_title_from_summary(
 
 /// Strip thinking tags from LLM responses (used by reasoning models like DeepSeek)
 /// Handles: <think>, <thinking>, and variations with different casing
+/// Also handles cases where opening tag is missing but closing tag exists
 fn strip_thinking_tags(text: &str) -> String {
     let mut result = text.to_string();
 
@@ -452,16 +453,26 @@ fn strip_thinking_tags(text: &str) -> String {
     for (open_tag, close_tag) in tag_patterns {
         loop {
             let lower = result.to_lowercase();
-            if let Some(start) = lower.find(open_tag) {
-                if let Some(end_pos) = lower.find(close_tag) {
+
+            // Check if we have a closing tag
+            if let Some(end_pos) = lower.find(close_tag) {
+                // Look for matching opening tag
+                if let Some(start) = lower.find(open_tag) {
+                    // Both tags found - remove everything between them (inclusive)
                     let end = end_pos + close_tag.len();
                     result = format!("{}{}", &result[..start], &result[end..]);
                 } else {
-                    // No closing tag - remove everything from open tag onwards
-                    result = result[..start].to_string();
-                    break;
+                    // Only closing tag found - remove everything before and including it
+                    // This handles cases where the model starts with thinking content
+                    let end = end_pos + close_tag.len();
+                    result = result[end..].to_string();
                 }
+            } else if let Some(start) = lower.find(open_tag) {
+                // Only opening tag found - remove everything from it onwards
+                result = result[..start].to_string();
+                break;
             } else {
+                // No tags found
                 break;
             }
         }
