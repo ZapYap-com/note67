@@ -43,4 +43,9 @@ export const aiApi = {
   deleteSummary: (summaryId: number): Promise<void> => {
     return invoke("delete_summary", { summaryId });
   },
+
+  // Title generation
+  generateTitle: (meetingId: string): Promise<string> => {
+    return invoke("generate_title", { meetingId });
+  },
 };

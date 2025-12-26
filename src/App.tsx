@@ -5,7 +5,7 @@ import {
   TranscriptSearch,
   useProfile,
 } from "./components";
-import { exportApi } from "./api";
+import { exportApi, aiApi } from "./api";
 import {
   useMeetings,
   useModels,
@@ -24,6 +24,7 @@ function App() {
   const {
     meetings,
     loading,
+    refresh: refreshMeetings,
     createMeeting,
     updateMeeting,
     endMeeting,
@@ -32,7 +33,7 @@ function App() {
   const { isRecording, audioLevel, startRecording, stopRecording } =
     useRecording();
   const { loadedModel } = useModels();
-  const { isTranscribing, transcribe, loadTranscript } = useTranscription();
+  const { loadTranscript } = useTranscription();
   const {
     isLiveTranscribing,
     liveSegments,
@@ -230,41 +231,34 @@ function App() {
 
   const handleStopRecording = async () => {
     if (recordingMeetingId) {
+      const meetingId = recordingMeetingId;
       const audioPath = await stopRecording();
-      // Stop live transcription and save segments
-      await stopLiveTranscription(recordingMeetingId);
-      await endMeeting(recordingMeetingId, audioPath ?? undefined);
+      // Stop live transcription and save segments to database
+      await stopLiveTranscription(meetingId);
+      await endMeeting(meetingId, audioPath ?? undefined);
       // Store live segments as the meeting's transcript
       if (liveSegments.length > 0) {
         setMeetingTranscripts((prev) => ({
           ...prev,
-          [recordingMeetingId]: liveSegments,
+          [meetingId]: liveSegments,
         }));
       }
       setRecordingMeetingId(null);
-    }
-  };
 
-  const handleTranscribe = async () => {
-    if (!selectedMeeting?.audio_path || !loadedModel) return;
-    const result = await transcribe(
-      selectedMeeting.audio_path,
-      selectedMeeting.id
-    );
-    if (result) {
-      setMeetingTranscripts((prev) => ({
-        ...prev,
-        [selectedMeeting.id]: result.segments.map((s, idx) => ({
-          id: idx,
-          meeting_id: selectedMeeting.id,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          text: s.text,
-          speaker: null,
-          created_at: new Date().toISOString(),
-        })),
-      }));
-      setActiveTab("transcript");
+      // Auto-generate summary and title if we have transcript
+      if (liveSegments.length > 0) {
+        setActiveTab("summary");
+        try {
+          // Generate overview summary
+          await aiApi.generateSummary(meetingId, "overview");
+          // Generate and update title
+          await aiApi.generateTitle(meetingId);
+          // Refresh meeting list to show new title
+          await refreshMeetings();
+        } catch (error) {
+          console.error("Failed to auto-generate summary/title:", error);
+        }
+      }
     }
   };
 
@@ -548,11 +542,9 @@ function App() {
             meeting={selectedMeeting}
             transcript={currentTranscript}
             isRecording={isRecording && recordingMeetingId === selectedMeeting.id}
-            isTranscribing={isTranscribing}
             audioLevel={audioLevel}
             activeTab={activeTab}
             editingTitle={editingTitle}
-            hasModel={!!loadedModel}
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
             onTabChange={setActiveTab}
@@ -560,7 +552,6 @@ function App() {
             onUpdateTitle={handleUpdateTitle}
             onUpdateDescription={handleUpdateDescription}
             onStopRecording={handleStopRecording}
-            onTranscribe={handleTranscribe}
             onDelete={() => setShowDeleteConfirm(true)}
             onExport={async () => {
               const data = await exportApi.exportMarkdown(selectedMeeting.id);
@@ -821,11 +812,9 @@ interface MeetingViewProps {
   meeting: Meeting;
   transcript: TranscriptSegment[];
   isRecording: boolean;
-  isTranscribing: boolean;
   audioLevel: number;
   activeTab: "notes" | "transcript" | "summary";
   editingTitle: boolean;
-  hasModel: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
@@ -833,7 +822,6 @@ interface MeetingViewProps {
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
   onStopRecording: () => void;
-  onTranscribe: () => void;
   onDelete: () => void;
   onExport: () => void;
   onCopy: () => void;
@@ -843,11 +831,9 @@ function MeetingView({
   meeting,
   transcript,
   isRecording,
-  isTranscribing,
   audioLevel,
   activeTab,
   editingTitle,
-  hasModel,
   ollamaRunning,
   hasOllamaModel,
   onTabChange,
@@ -855,7 +841,6 @@ function MeetingView({
   onUpdateTitle,
   onUpdateDescription,
   onStopRecording,
-  onTranscribe,
   onDelete,
   onExport,
   onCopy,
@@ -865,9 +850,6 @@ function MeetingView({
 
   const { summaries, isGenerating, generateSummary, deleteSummary } =
     useSummaries(meeting.id);
-
-  const canTranscribe =
-    meeting.ended_at && meeting.audio_path && hasModel && !isTranscribing;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -910,17 +892,6 @@ function MeetingView({
           )}
           {!isRecording && meeting.ended_at && (
             <>
-              <button
-                onClick={onTranscribe}
-                disabled={!canTranscribe}
-                className="px-2.5 py-1 text-sm rounded-md transition-colors disabled:opacity-40"
-                style={{
-                  backgroundColor: "var(--color-sidebar)",
-                  color: "var(--color-text)",
-                }}
-              >
-                {isTranscribing ? "Transcribing..." : "Transcribe"}
-              </button>
               <button
                 onClick={onExport}
                 className="p-1 rounded-md hover:bg-black/5"

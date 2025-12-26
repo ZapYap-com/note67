@@ -198,3 +198,70 @@ pub fn get_meeting_summaries(
 pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), String> {
     db.delete_summary(summary_id).map_err(|e| e.to_string())
 }
+
+/// Generate a title for a meeting based on its transcript
+#[tauri::command]
+pub async fn generate_title(
+    meeting_id: String,
+    ai_state: State<'_, AiState>,
+    db: State<'_, Database>,
+) -> Result<String, String> {
+    // Get selected model
+    let model = ai_state
+        .selected_model
+        .lock()
+        .await
+        .clone()
+        .ok_or("No model selected. Please select a model first.")?;
+
+    // Get transcript from database
+    let segments = db
+        .get_transcript_segments(&meeting_id)
+        .map_err(|e| e.to_string())?;
+
+    if segments.is_empty() {
+        return Err("No transcript found for this meeting.".to_string());
+    }
+
+    // Combine segments into full transcript (limit to first ~2000 chars to keep prompt small)
+    let transcript: String = segments
+        .iter()
+        .map(|s| s.text.clone())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let truncated = if transcript.len() > 2000 {
+        format!("{}...", &transcript[..2000])
+    } else {
+        transcript
+    };
+
+    // Build prompt
+    let prompt = SummaryPrompts::title(&truncated);
+
+    // Generate with Ollama (low temperature for consistent output)
+    let response = ai_state
+        .client
+        .generate(&model, &prompt, 0.3, Some(100))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Clean up the response - remove quotes and trim
+    let title = response
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_string();
+
+    // Update meeting title in database
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now();
+        conn.execute(
+            "UPDATE meetings SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![&title, now.to_rfc3339(), &meeting_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(title)
+}

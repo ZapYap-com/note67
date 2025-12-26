@@ -63,6 +63,7 @@ pub fn run() {
             commands::generate_summary,
             commands::get_meeting_summaries,
             commands::delete_summary,
+            commands::generate_title,
             // Export commands
             commands::export_meeting_markdown,
             commands::save_export_to_file,

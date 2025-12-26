@@ -62,6 +62,28 @@ KEY DECISIONS:"#,
         )
     }
 
+    /// Generate a short, descriptive title for the meeting
+    pub fn title(transcript: &str) -> String {
+        format!(
+            r#"You are an expert at creating concise meeting titles. Based on the following meeting transcript, generate a short, descriptive title.
+
+TRANSCRIPT:
+{}
+
+Requirements:
+- Title should be 2-6 words
+- Capture the main topic or purpose of the meeting
+- Be specific and informative
+- Do not use quotes around the title
+- Do not include prefixes like "Meeting:" or "Title:"
+
+Respond with ONLY the title, nothing else.
+
+TITLE:"#,
+            transcript
+        )
+    }
+
     /// Generate a custom summary based on user prompt
     pub fn custom(transcript: &str, user_prompt: &str) -> String {
         format!(
