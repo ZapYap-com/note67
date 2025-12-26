@@ -1073,7 +1073,7 @@ function NoteView({
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
 
-  const { summaries, isGenerating, streamingContent, generateSummary, deleteSummary } =
+  const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
 
   return (
@@ -1296,9 +1296,8 @@ function NoteView({
             hasOllamaModel={hasOllamaModel}
             ollamaRunning={ollamaRunning}
             isTranscribing={isTranscribing}
-            onGenerate={() => generateSummary("overview")}
+            onGenerate={onRegenerate}
             onDelete={deleteSummary}
-            onRegenerate={onRegenerate}
             isRegenerating={isRegenerating}
           />
         )}

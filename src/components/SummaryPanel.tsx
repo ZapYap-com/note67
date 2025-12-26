@@ -12,7 +12,6 @@ interface SummaryPanelProps {
   isTranscribing: boolean;
   onGenerate: () => void;
   onDelete: (summaryId: number) => void;
-  onRegenerate?: () => void;
   isRegenerating?: boolean;
 }
 
@@ -33,7 +32,6 @@ export function SummaryPanel({
   isTranscribing,
   onGenerate,
   onDelete,
-  onRegenerate,
   isRegenerating,
 }: SummaryPanelProps) {
   // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
@@ -91,61 +89,30 @@ export function SummaryPanel({
         </div>
       )}
 
-      {/* Generate Buttons */}
-      <div className="flex flex-wrap gap-3">
-        {summaries.length === 0 ? (
-          /* Single Generate button when no summaries exist */
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate}
-            className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
-              color: canGenerate ? "white" : "var(--color-text-tertiary)",
-            }}
-          >
-            Generate
-          </button>
-        ) : (
-          /* Overview and Regenerate buttons when summaries exist */
-          <>
-            <button
-              onClick={onGenerate}
-              disabled={!canGenerate}
-              className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: canGenerate ? "#374151" : "var(--color-bg-subtle)",
-                color: canGenerate ? "white" : "var(--color-text-tertiary)",
-              }}
-            >
-              Overview
-            </button>
-            {onRegenerate && (
-              <button
-                onClick={() => {
-                  // Collapse all existing overview summaries before regenerating
-                  setExpandState((prev) => {
-                    const next = new Map(prev);
-                    summaries
-                      .filter((s) => s.summary_type === "overview")
-                      .forEach((s) => next.set(s.id, false));
-                    return next;
-                  });
-                  onRegenerate();
-                }}
-                disabled={!canGenerate || isRegenerating}
-                className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: "var(--color-accent)",
-                  color: "white",
-                }}
-              >
-                {isRegenerating ? "Regenerating..." : "Regenerate"}
-              </button>
-            )}
-          </>
-        )}
-      </div>
+      {/* Generate/Regenerate Button */}
+      <button
+        onClick={() => {
+          if (summaries.length > 0) {
+            // Collapse all existing overview summaries before regenerating
+            setExpandState((prev) => {
+              const next = new Map(prev);
+              summaries
+                .filter((s) => s.summary_type === "overview")
+                .forEach((s) => next.set(s.id, false));
+              return next;
+            });
+          }
+          onGenerate();
+        }}
+        disabled={!canGenerate || isRegenerating}
+        className="px-4 py-2.5 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{
+          backgroundColor: canGenerate && !isRegenerating ? "#374151" : "var(--color-bg-subtle)",
+          color: canGenerate && !isRegenerating ? "white" : "var(--color-text-tertiary)",
+        }}
+      >
+        {isRegenerating ? "Generating..." : summaries.length === 0 ? "Generate" : "Regenerate"}
+      </button>
 
       {/* Generating Indicator with Streaming Content */}
       {isGenerating && (
