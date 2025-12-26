@@ -618,7 +618,7 @@ function App() {
                 className="text-sm font-medium"
                 style={{ color: "var(--color-text)" }}
               >
-                Generating summary & title...
+                Generating Summary
               </span>
             </div>
           ) : isRecording && recordingMeeting ? (
