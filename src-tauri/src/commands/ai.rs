@@ -170,9 +170,12 @@ pub async fn generate_summary(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Strip thinking tags from response
+    let clean_response = strip_thinking_tags(&response);
+
     // Save to database
     let summary_id = db
-        .add_summary(&meeting_id, &stype, &response)
+        .add_summary(&meeting_id, &stype, &clean_response)
         .map_err(|e| e.to_string())?;
 
     // Fetch the saved summary
@@ -282,9 +285,12 @@ pub async fn generate_summary_stream(
     };
     let _ = app.emit("summary-stream", done_event);
 
+    // Strip thinking tags from response
+    let clean_response = strip_thinking_tags(&response);
+
     // Save to database
     let summary_id = db
-        .add_summary(&meeting_id, &stype, &response)
+        .add_summary(&meeting_id, &stype, &clean_response)
         .map_err(|e| e.to_string())?;
 
     // Fetch the saved summary
@@ -357,8 +363,8 @@ pub async fn generate_title(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Clean up the response - remove quotes and trim
-    let title = response
+    // Clean up the response - remove thinking tags, quotes, and trim
+    let title = strip_thinking_tags(&response)
         .trim()
         .trim_matches('"')
         .trim_matches('\'')
@@ -376,4 +382,36 @@ pub async fn generate_title(
     }
 
     Ok(title)
+}
+
+/// Strip thinking tags from LLM responses (used by reasoning models like DeepSeek)
+/// Handles: <think>, <thinking>, and variations with different casing
+fn strip_thinking_tags(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // List of tag patterns to remove (open tag, close tag)
+    let tag_patterns = [
+        ("<think>", "</think>"),
+        ("<thinking>", "</thinking>"),
+    ];
+
+    for (open_tag, close_tag) in tag_patterns {
+        loop {
+            let lower = result.to_lowercase();
+            if let Some(start) = lower.find(open_tag) {
+                if let Some(end_pos) = lower.find(close_tag) {
+                    let end = end_pos + close_tag.len();
+                    result = format!("{}{}", &result[..start], &result[end..]);
+                } else {
+                    // No closing tag - remove everything from open tag onwards
+                    result = result[..start].to_string();
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    result.trim().to_string()
 }

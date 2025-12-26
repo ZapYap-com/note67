@@ -174,10 +174,16 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
 
   // Set up event listener
   useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+
     const setupListener = async () => {
-      unlistenRef.current = await listen<TranscriptionUpdateEvent>(
+      const unlistenFn = await listen<TranscriptionUpdateEvent>(
         "transcription-update",
         (event) => {
+          // Ignore events if effect was cleaned up (StrictMode double-mount)
+          if (cancelled) return;
+
           const { meeting_id, segments, is_final } = event.payload;
 
           // Only process events for the current meeting
@@ -225,13 +231,22 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
           }
         }
       );
+
+      // If effect was cancelled during async setup, clean up immediately
+      if (cancelled) {
+        unlistenFn();
+      } else {
+        unlisten = unlistenFn;
+        unlistenRef.current = unlistenFn;
+      }
     };
 
     setupListener();
 
     return () => {
-      if (unlistenRef.current) {
-        unlistenRef.current();
+      cancelled = true;
+      if (unlisten) {
+        unlisten();
       }
     };
   }, []);
