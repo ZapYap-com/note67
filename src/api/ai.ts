@@ -12,7 +12,7 @@ export const aiApi = {
   },
 
   selectModel: (modelName: string): Promise<void> => {
-    return invoke("select_ollama_model", { modelName });
+    return invoke("select_ollama_model", { model_name: modelName });
   },
 
   getSelectedModel: (): Promise<string | null> => {
@@ -30,9 +30,9 @@ export const aiApi = {
     customPrompt?: string
   ): Promise<Summary> => {
     return invoke("generate_summary", {
-      noteId,
-      summaryType,
-      customPrompt: customPrompt ?? null,
+      note_id: noteId,
+      summary_type: summaryType,
+      custom_prompt: customPrompt ?? null,
     });
   },
 
@@ -43,27 +43,27 @@ export const aiApi = {
     customPrompt?: string
   ): Promise<Summary> => {
     return invoke("generate_summary_stream", {
-      noteId,
-      summaryType,
-      customPrompt: customPrompt ?? null,
+      note_id: noteId,
+      summary_type: summaryType,
+      custom_prompt: customPrompt ?? null,
     });
   },
 
   getNoteSummaries: (noteId: string): Promise<Summary[]> => {
-    return invoke("get_note_summaries", { noteId });
+    return invoke("get_note_summaries", { note_id: noteId });
   },
 
   deleteSummary: (summaryId: number): Promise<void> => {
-    return invoke("delete_summary", { summaryId });
+    return invoke("delete_summary", { summary_id: summaryId });
   },
 
   // Title generation
   generateTitle: (noteId: string): Promise<string> => {
-    return invoke("generate_title", { noteId });
+    return invoke("generate_title", { note_id: noteId });
   },
 
   // Title generation from summary content
   generateTitleFromSummary: (noteId: string, summaryContent: string): Promise<string> => {
-    return invoke("generate_title_from_summary", { noteId, summaryContent });
+    return invoke("generate_title_from_summary", { note_id: noteId, summary_content: summaryContent });
   },
 };

@@ -8,7 +8,7 @@ export interface ExportData {
 
 export const exportApi = {
   exportMarkdown: (noteId: string): Promise<ExportData> => {
-    return invoke("export_note_markdown", { noteId });
+    return invoke("export_note_markdown", { note_id: noteId });
   },
 
   saveToFile: (content: string, filename: string): Promise<string> => {
