@@ -21,6 +21,9 @@ import type {
   UpdateMeeting,
 } from "./types";
 
+// Import seeder for dev console access
+import "./utils/seeder";
+
 function App() {
   const {
     meetings,
@@ -250,7 +253,17 @@ function App() {
               className="px-5 py-12 text-center"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              No meetings yet
+              <p className="mb-4">No meetings yet</p>
+              <button
+                onClick={async () => {
+                  const { seedMeetings } = await import("./utils/seeder");
+                  await seedMeetings();
+                }}
+                className="text-xs underline"
+                style={{ color: "var(--color-accent)" }}
+              >
+                Add sample data
+              </button>
             </div>
           ) : (
             groupedMeetings.map((group) => (
