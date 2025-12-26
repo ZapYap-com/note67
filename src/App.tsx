@@ -13,6 +13,7 @@ import {
   useRecording,
   useSummaries,
   useTranscription,
+  useLiveTranscription,
 } from "./hooks";
 import type { Meeting, SummaryType, TranscriptSegment } from "./types";
 
@@ -32,6 +33,12 @@ function App() {
     useRecording();
   const { loadedModel } = useModels();
   const { isTranscribing, transcribe, loadTranscript } = useTranscription();
+  const {
+    isLiveTranscribing,
+    liveSegments,
+    startLiveTranscription,
+    stopLiveTranscription
+  } = useLiveTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
   const { profile } = useProfile();
@@ -65,8 +72,11 @@ function App() {
     meetings.find((m) => m.id === selectedMeetingId) || null;
   const recordingMeeting =
     meetings.find((m) => m.id === recordingMeetingId) || null;
+  // Show live segments during recording, otherwise show saved transcript
   const currentTranscript = selectedMeetingId
-    ? meetingTranscripts[selectedMeetingId] || []
+    ? (isLiveTranscribing && recordingMeetingId === selectedMeetingId
+        ? liveSegments
+        : meetingTranscripts[selectedMeetingId] || [])
     : [];
 
   // Group meetings by date
@@ -118,6 +128,8 @@ function App() {
     setRecordingMeetingId(meeting.id);
     setActiveTab("transcript");
     await startRecording(meeting.id);
+    // Start live transcription
+    await startLiveTranscription(meeting.id);
   };
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
@@ -219,7 +231,16 @@ function App() {
   const handleStopRecording = async () => {
     if (recordingMeetingId) {
       const audioPath = await stopRecording();
+      // Stop live transcription and save segments
+      await stopLiveTranscription(recordingMeetingId);
       await endMeeting(recordingMeetingId, audioPath ?? undefined);
+      // Store live segments as the meeting's transcript
+      if (liveSegments.length > 0) {
+        setMeetingTranscripts((prev) => ({
+          ...prev,
+          [recordingMeetingId]: liveSegments,
+        }));
+      }
       setRecordingMeetingId(null);
     }
   };

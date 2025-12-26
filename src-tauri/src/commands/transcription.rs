@@ -1,19 +1,26 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+use whisper_rs::{WhisperContext, WhisperContextParameters};
 
+use crate::commands::audio::AudioState;
 use crate::db::Database;
-use crate::transcription::{ModelInfo, ModelManager, ModelSize, TranscriptionResult, Transcriber};
+use crate::transcription::{
+    live, LiveTranscriptionState, ModelInfo, ModelManager, ModelSize, TranscriptionResult,
+    Transcriber,
+};
 
 /// State for transcription operations
 pub struct TranscriptionState {
     pub model_manager: Mutex<Option<ModelManager>>,
     pub transcriber: Mutex<Option<Arc<Transcriber>>>,
+    pub whisper_ctx: Mutex<Option<Arc<WhisperContext>>>,
     pub current_model: Mutex<Option<ModelSize>>,
     pub is_transcribing: AtomicBool,
     pub download_progress: Arc<AtomicU8>,
     pub is_downloading: AtomicBool,
+    pub live_state: Arc<LiveTranscriptionState>,
 }
 
 impl Default for TranscriptionState {
@@ -21,10 +28,12 @@ impl Default for TranscriptionState {
         Self {
             model_manager: Mutex::new(None),
             transcriber: Mutex::new(None),
+            whisper_ctx: Mutex::new(None),
             current_model: Mutex::new(None),
             is_transcribing: AtomicBool::new(false),
             download_progress: Arc::new(AtomicU8::new(0)),
             is_downloading: AtomicBool::new(false),
+            live_state: Arc::new(LiveTranscriptionState::new()),
         }
     }
 }
@@ -37,10 +46,12 @@ pub fn init_transcription_state(app: &AppHandle) -> TranscriptionState {
     TranscriptionState {
         model_manager: Mutex::new(Some(model_manager)),
         transcriber: Mutex::new(None),
+        whisper_ctx: Mutex::new(None),
         current_model: Mutex::new(None),
         is_transcribing: AtomicBool::new(false),
         download_progress: Arc::new(AtomicU8::new(0)),
         is_downloading: AtomicBool::new(false),
+        live_state: Arc::new(LiveTranscriptionState::new()),
     }
 }
 
@@ -164,10 +175,23 @@ pub fn load_model(size: String, state: State<TranscriptionState>) -> Result<(), 
     // Load the model
     let transcriber = Transcriber::new(&model_path).map_err(|e| e.to_string())?;
 
+    // Also load WhisperContext for live transcription
+    let whisper_ctx = WhisperContext::new_with_params(
+        model_path.to_str().unwrap(),
+        WhisperContextParameters::default(),
+    )
+    .map_err(|e| format!("Failed to load whisper context: {}", e))?;
+
     // Store the transcriber
     {
         let mut t = state.transcriber.lock().map_err(|e| e.to_string())?;
         *t = Some(Arc::new(transcriber));
+    }
+
+    // Store the whisper context
+    {
+        let mut ctx = state.whisper_ctx.lock().map_err(|e| e.to_string())?;
+        *ctx = Some(Arc::new(whisper_ctx));
     }
 
     // Update current model
@@ -261,6 +285,68 @@ pub fn add_transcript_segment(
 ) -> Result<i64, String> {
     db.add_transcript_segment(&meeting_id, start_time, end_time, &text, speaker.as_deref())
         .map_err(|e| e.to_string())
+}
+
+/// Start live transcription during recording
+#[tauri::command]
+pub async fn start_live_transcription(
+    app: AppHandle,
+    meeting_id: String,
+    state: State<'_, TranscriptionState>,
+    audio_state: State<'_, AudioState>,
+) -> Result<(), String> {
+    // Get the whisper context
+    let whisper_ctx = {
+        let guard = state.whisper_ctx.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No model loaded. Please load a model first.")?
+    };
+
+    let recording_state = audio_state.recording.clone();
+    let live_state = state.live_state.clone();
+
+    live::start_live_transcription(app, meeting_id, recording_state, live_state, whisper_ctx)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Stop live transcription and get final result
+#[tauri::command]
+pub async fn stop_live_transcription(
+    app: AppHandle,
+    meeting_id: String,
+    state: State<'_, TranscriptionState>,
+    db: State<'_, Database>,
+) -> Result<TranscriptionResult, String> {
+    let live_state = state.live_state.clone();
+    let result = live::stop_live_transcription(live_state).await;
+
+    // Save segments to database
+    for segment in &result.segments {
+        db.add_transcript_segment(
+            &meeting_id,
+            segment.start_time,
+            segment.end_time,
+            &segment.text,
+            None,
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Emit final event
+    let event = crate::transcription::TranscriptionUpdateEvent {
+        meeting_id,
+        segments: result.segments.clone(),
+        is_final: true,
+    };
+    let _ = app.emit("transcription-update", event);
+
+    Ok(result)
+}
+
+/// Check if live transcription is running
+#[tauri::command]
+pub fn is_live_transcribing(state: State<TranscriptionState>) -> bool {
+    state.live_state.is_running.load(Ordering::SeqCst)
 }
 
 fn parse_model_size(size: &str) -> Result<ModelSize, String> {

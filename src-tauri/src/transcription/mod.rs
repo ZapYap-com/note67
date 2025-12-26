@@ -1,8 +1,10 @@
+pub mod live;
 pub mod model;
 pub mod transcriber;
 
+pub use live::{LiveTranscriptionState, TranscriptionUpdateEvent};
 pub use model::{ModelInfo, ModelManager, ModelSize};
-pub use transcriber::{TranscriptionResult, Transcriber};
+pub use transcriber::{TranscriptionResult, TranscriptionSegment, Transcriber};
 
 use thiserror::Error;
 

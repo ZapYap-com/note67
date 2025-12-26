@@ -67,4 +67,17 @@ export const transcriptionApi = {
       speaker,
     });
   },
+
+  // Live transcription
+  startLiveTranscription: (meetingId: string): Promise<void> => {
+    return invoke("start_live_transcription", { meetingId });
+  },
+
+  stopLiveTranscription: (meetingId: string): Promise<TranscriptionResult> => {
+    return invoke("stop_live_transcription", { meetingId });
+  },
+
+  isLiveTranscribing: (): Promise<boolean> => {
+    return invoke("is_live_transcribing");
+  },
 };

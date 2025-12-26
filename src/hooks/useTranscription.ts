@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { transcriptionApi } from "../api";
 import { useWhisperStore } from "../stores/whisperStore";
 import type {
@@ -7,6 +8,16 @@ import type {
   TranscriptSegment,
   TranscriptionResult,
 } from "../types";
+
+interface TranscriptionUpdateEvent {
+  meeting_id: string;
+  segments: Array<{
+    start_time: number;
+    end_time: number;
+    text: string;
+  }>;
+  is_final: boolean;
+}
 
 interface UseModelsReturn {
   models: ModelInfo[];
@@ -114,5 +125,100 @@ export function useTranscription(): UseTranscriptionReturn {
     error,
     transcribe,
     loadTranscript,
+  };
+}
+
+interface UseLiveTranscriptionReturn {
+  isLiveTranscribing: boolean;
+  liveSegments: TranscriptSegment[];
+  error: string | null;
+  startLiveTranscription: (meetingId: string) => Promise<void>;
+  stopLiveTranscription: (meetingId: string) => Promise<TranscriptionResult | null>;
+}
+
+export function useLiveTranscription(): UseLiveTranscriptionReturn {
+  const [isLiveTranscribing, setIsLiveTranscribing] = useState(false);
+  const [liveSegments, setLiveSegments] = useState<TranscriptSegment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const currentMeetingIdRef = useRef<string | null>(null);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  // Set up event listener
+  useEffect(() => {
+    const setupListener = async () => {
+      unlistenRef.current = await listen<TranscriptionUpdateEvent>(
+        "transcription-update",
+        (event) => {
+          const { meeting_id, segments, is_final } = event.payload;
+
+          // Only process events for the current meeting
+          if (meeting_id !== currentMeetingIdRef.current) return;
+
+          // Convert to TranscriptSegment format and append
+          const newSegments: TranscriptSegment[] = segments.map((s, idx) => ({
+            id: Date.now() + idx,
+            meeting_id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            text: s.text,
+            speaker: null,
+            created_at: new Date().toISOString(),
+          }));
+
+          setLiveSegments((prev) => [...prev, ...newSegments]);
+
+          if (is_final) {
+            setIsLiveTranscribing(false);
+          }
+        }
+      );
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlistenRef.current) {
+        unlistenRef.current();
+      }
+    };
+  }, []);
+
+  const startLiveTranscription = useCallback(async (meetingId: string) => {
+    try {
+      setError(null);
+      setLiveSegments([]);
+      currentMeetingIdRef.current = meetingId;
+      await transcriptionApi.startLiveTranscription(meetingId);
+      setIsLiveTranscribing(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      currentMeetingIdRef.current = null;
+    }
+  }, []);
+
+  const stopLiveTranscription = useCallback(async (meetingId: string): Promise<TranscriptionResult | null> => {
+    try {
+      setError(null);
+      const result = await transcriptionApi.stopLiveTranscription(meetingId);
+      setIsLiveTranscribing(false);
+      currentMeetingIdRef.current = null;
+      return result;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return null;
+    }
+  }, []);
+
+  // Check initial status
+  useEffect(() => {
+    transcriptionApi.isLiveTranscribing().then(setIsLiveTranscribing).catch(console.error);
+  }, []);
+
+  return {
+    isLiveTranscribing,
+    liveSegments,
+    error,
+    startLiveTranscription,
+    stopLiveTranscription,
   };
 }

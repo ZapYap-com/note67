@@ -14,6 +14,12 @@ pub struct RecordingState {
     pub is_recording: AtomicBool,
     pub audio_level: AtomicU32,
     pub output_path: std::sync::Mutex<Option<PathBuf>>,
+    /// Buffer for live transcription - stores raw f32 samples
+    pub audio_buffer: std::sync::Mutex<Vec<f32>>,
+    /// Sample rate of the recorded audio (set when recording starts)
+    pub sample_rate: AtomicU32,
+    /// Number of channels (set when recording starts)
+    pub channels: AtomicU32,
 }
 
 impl RecordingState {
@@ -22,6 +28,27 @@ impl RecordingState {
             is_recording: AtomicBool::new(false),
             audio_level: AtomicU32::new(0),
             output_path: std::sync::Mutex::new(None),
+            audio_buffer: std::sync::Mutex::new(Vec::new()),
+            sample_rate: AtomicU32::new(0),
+            channels: AtomicU32::new(0),
+        }
+    }
+
+    /// Take all samples from the buffer (clears the buffer)
+    pub fn take_audio_buffer(&self) -> Vec<f32> {
+        if let Ok(mut buffer) = self.audio_buffer.lock() {
+            std::mem::take(&mut *buffer)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Get the current buffer length without clearing
+    pub fn buffer_len(&self) -> usize {
+        if let Ok(buffer) = self.audio_buffer.lock() {
+            buffer.len()
+        } else {
+            0
         }
     }
 }
@@ -77,6 +104,15 @@ fn run_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Result<(),
     let config = device.default_input_config()?;
     let sample_rate = config.sample_rate().0;
     let channels = config.channels();
+
+    // Store sample rate and channels for live transcription
+    state.sample_rate.store(sample_rate, Ordering::SeqCst);
+    state.channels.store(channels as u32, Ordering::SeqCst);
+
+    // Clear the audio buffer at start
+    if let Ok(mut buffer) = state.audio_buffer.lock() {
+        buffer.clear();
+    }
 
     let spec = WavSpec {
         channels,
@@ -162,6 +198,11 @@ fn process_audio(
     let sum: f32 = data.iter().map(|s| s * s).sum();
     let rms = (sum / data.len() as f32).sqrt();
     state.audio_level.store(rms.to_bits(), Ordering::SeqCst);
+
+    // Copy samples to buffer for live transcription
+    if let Ok(mut buffer) = state.audio_buffer.lock() {
+        buffer.extend_from_slice(data);
+    }
 
     // Write to WAV file
     if let Ok(mut guard) = writer.lock() {

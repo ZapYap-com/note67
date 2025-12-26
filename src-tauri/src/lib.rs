@@ -51,6 +51,9 @@ pub fn run() {
             commands::is_transcribing,
             commands::get_transcript,
             commands::add_transcript_segment,
+            commands::start_live_transcription,
+            commands::stop_live_transcription,
+            commands::is_live_transcribing,
             // AI commands
             commands::get_ollama_status,
             commands::list_ollama_models,
