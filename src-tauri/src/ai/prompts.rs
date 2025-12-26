@@ -2,12 +2,27 @@
 pub struct SummaryPrompts;
 
 impl SummaryPrompts {
-    /// Generate a note overview summary
-    pub fn overview(transcript: &str) -> String {
-        format!(
-            r#"You are a professional note summarizer. Analyze the following transcript and provide a clear, concise summary in markdown format.
+    /// Format the notes section if present
+    fn format_notes_section(notes: Option<&str>) -> String {
+        match notes {
+            Some(n) if !n.trim().is_empty() => format!(
+                r#"
+USER NOTES:
+{}
 
-TRANSCRIPT:
+"#,
+                n
+            ),
+            _ => String::new(),
+        }
+    }
+
+    /// Generate a note overview summary
+    pub fn overview(transcript: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        format!(
+            r#"You are a professional note summarizer. Analyze the following transcript{} and provide a clear, concise summary in markdown format.
+{}TRANSCRIPT:
 {}
 
 Provide a professional summary that includes:
@@ -21,18 +36,25 @@ Rules:
 - Do NOT use emojis
 - Focus on factual information
 - Use clear, formal language
+- If user notes are provided, incorporate relevant context from them
 
 SUMMARY:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section,
             transcript
         )
     }
 
     /// Extract action items from the transcript
-    pub fn action_items(transcript: &str) -> String {
+    pub fn action_items(transcript: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
         format!(
-            r#"You are a professional note analyst. Extract all action items from the following transcript.
-
-TRANSCRIPT:
+            r#"You are a professional note analyst. Extract all action items from the following transcript{}.
+{}TRANSCRIPT:
 {}
 
 For each action item, identify:
@@ -46,18 +68,25 @@ Rules:
 - Do NOT use emojis
 - If no action items are found, state "No action items identified."
 - Use professional, clear language
+- If user notes mention action items or tasks, include them
 
 ACTION ITEMS:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section,
             transcript
         )
     }
 
     /// Extract key decisions from the transcript
-    pub fn key_decisions(transcript: &str) -> String {
+    pub fn key_decisions(transcript: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
         format!(
-            r#"You are a professional note analyst. Extract all key decisions from the following transcript.
-
-TRANSCRIPT:
+            r#"You are a professional note analyst. Extract all key decisions from the following transcript{}.
+{}TRANSCRIPT:
 {}
 
 For each decision, include:
@@ -71,8 +100,15 @@ Rules:
 - Do NOT use emojis
 - If no decisions were made, state "No key decisions identified."
 - Use professional, formal language
+- If user notes mention decisions, include them
 
 KEY DECISIONS:"#,
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section,
             transcript
         )
     }
@@ -124,11 +160,11 @@ TITLE:"#,
     }
 
     /// Generate a custom summary based on user prompt
-    pub fn custom(transcript: &str, user_prompt: &str) -> String {
+    pub fn custom(transcript: &str, user_prompt: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
         format!(
-            r#"You are a professional note analyst. Analyze the following transcript based on the user's request.
-
-TRANSCRIPT:
+            r#"You are a professional note analyst. Analyze the following transcript{} based on the user's request.
+{}TRANSCRIPT:
 {}
 
 USER REQUEST:
@@ -140,9 +176,17 @@ Rules:
 - Do NOT use emojis
 - Directly address the user's request
 - Use clear, formal language
+- If user notes are provided, consider them as additional context
 
 RESPONSE:"#,
-            transcript, user_prompt
+            if notes.is_some_and(|n| !n.trim().is_empty()) {
+                " and user notes"
+            } else {
+                ""
+            },
+            notes_section,
+            transcript,
+            user_prompt
         )
     }
 }

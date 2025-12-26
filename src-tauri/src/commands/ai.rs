@@ -142,6 +142,11 @@ pub async fn generate_summary(
         return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
     }
 
+    // Get user notes (description) from database
+    let notes = db
+        .get_note_description(&note_id)
+        .map_err(|e| e.to_string())?;
+
     // Combine segments into full transcript, filtering out blank audio markers
     let transcript = segments
         .iter()
@@ -159,12 +164,12 @@ pub async fn generate_summary(
 
     // Build prompt based on summary type
     let prompt = match stype {
-        SummaryType::Overview => SummaryPrompts::overview(&transcript),
-        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript),
-        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript),
+        SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
+        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript, notes.as_deref()),
+        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript, notes.as_deref()),
         SummaryType::Custom => {
             let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
-            SummaryPrompts::custom(&transcript, &user_prompt)
+            SummaryPrompts::custom(&transcript, &user_prompt, notes.as_deref())
         }
     };
 
@@ -237,6 +242,11 @@ pub async fn generate_summary_stream(
         return Err("No transcript found for this note. Please transcribe the audio first.".to_string());
     }
 
+    // Get user notes (description) from database
+    let notes = db
+        .get_note_description(&note_id)
+        .map_err(|e| e.to_string())?;
+
     // Combine segments into full transcript, filtering out blank audio markers
     let transcript = segments
         .iter()
@@ -254,12 +264,12 @@ pub async fn generate_summary_stream(
 
     // Build prompt based on summary type
     let prompt = match stype {
-        SummaryType::Overview => SummaryPrompts::overview(&transcript),
-        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript),
-        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript),
+        SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
+        SummaryType::ActionItems => SummaryPrompts::action_items(&transcript, notes.as_deref()),
+        SummaryType::KeyDecisions => SummaryPrompts::key_decisions(&transcript, notes.as_deref()),
         SummaryType::Custom => {
             let user_prompt = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
-            SummaryPrompts::custom(&transcript, &user_prompt)
+            SummaryPrompts::custom(&transcript, &user_prompt, notes.as_deref())
         }
     };
 

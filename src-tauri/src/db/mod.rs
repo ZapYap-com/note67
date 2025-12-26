@@ -181,6 +181,20 @@ impl Database {
         Ok(())
     }
 
+    /// Get the description (user notes) for a note
+    pub fn get_note_description(&self, note_id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let description: Option<String> = conn
+            .query_row(
+                "SELECT description FROM notes WHERE id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        Ok(description)
+    }
+
     /// Get a setting value
     pub fn get_setting(&self, key: &str) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
