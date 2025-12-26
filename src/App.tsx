@@ -329,27 +329,27 @@ function App() {
 
         {/* Sidebar Footer */}
         <div
-          className="px-4 py-4 border-t"
+          className="px-3 py-2.5 border-t"
           style={{ borderColor: "var(--color-border)" }}
         >
           <div
-            className="flex flex-wrap items-center gap-2 text-xs"
+            className="flex flex-wrap items-center gap-1.5 text-xs"
             style={{ color: "var(--color-text-secondary)" }}
           >
             {loadedModel && (
               <span
-                className="px-2 py-1 rounded"
+                className="px-1.5 py-0.5 rounded"
                 style={{ backgroundColor: "var(--color-sidebar-hover)" }}
               >
-                Whisper: {loadedModel}
+                {loadedModel}
               </span>
             )}
             {ollamaRunning && ollamaModel && (
               <span
-                className="px-2 py-1 rounded"
+                className="px-1.5 py-0.5 rounded"
                 style={{ backgroundColor: "var(--color-sidebar-hover)" }}
               >
-                AI: {ollamaModel.split(":")[0]}
+                {ollamaModel.split(":")[0]}
               </span>
             )}
           </div>
@@ -400,20 +400,16 @@ function App() {
 
         {/* Start Listening Button */}
         {!isRecording && (
-          <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
             <button
               onClick={handleStartMeeting}
-              className="flex items-center gap-3 rounded-full font-normal text-sm shadow-lg transition-transform hover:scale-105"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
               style={{
                 backgroundColor: "var(--color-accent)",
                 color: "white",
-                padding: "3px 6px",
               }}
             >
-              <span
-                className="rounded-full bg-white"
-                style={{ width: "10px", height: "10px" }}
-              />
+              <span className="w-2 h-2 rounded-full bg-white" />
               Start listening
             </button>
           </div>
@@ -433,19 +429,19 @@ function App() {
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center pb-24">
-      <div className="text-center max-w-md px-8">
+    <div className="flex-1 flex flex-col items-center justify-center pb-20">
+      <div className="text-center max-w-sm px-6">
         <h2
-          className="text-3xl font-semibold mb-3"
+          className="text-2xl font-semibold mb-2"
           style={{ color: "var(--color-text)" }}
         >
           Note67
         </h2>
         <p
-          className="text-base leading-relaxed"
+          className="text-sm"
           style={{ color: "var(--color-text-secondary)" }}
         >
-          Select a meeting from the sidebar or start a new one
+          Select a meeting or start a new one
         </p>
       </div>
     </div>
@@ -511,7 +507,7 @@ function MeetingView({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <header
-        className="px-8 py-6 border-b flex items-center justify-between"
+        className="px-6 py-4 border-b flex items-center justify-between"
         style={{ borderColor: "var(--color-border)" }}
       >
         <div className="flex-1">
@@ -522,27 +518,27 @@ function MeetingView({
               onChange={(e) => setTitleValue(e.target.value)}
               onBlur={() => onUpdateTitle(titleValue)}
               onKeyDown={(e) => e.key === "Enter" && onUpdateTitle(titleValue)}
-              className="text-2xl font-semibold w-full"
+              className="text-xl font-semibold w-full"
               style={{ color: "var(--color-text)" }}
             />
           ) : (
             <h1
               onClick={onEditTitle}
-              className="text-2xl font-semibold cursor-text"
+              className="text-xl font-semibold cursor-text"
               style={{ color: "var(--color-text)" }}
             >
               {meeting.title}
             </h1>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {isRecording && (
             <button
               onClick={onStopRecording}
-              className="flex items-center gap-2 px-4 py-2 rounded-full font-medium"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
               style={{ backgroundColor: "var(--color-accent)", color: "white" }}
             >
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               Stop
             </button>
           )}
@@ -551,7 +547,7 @@ function MeetingView({
               <button
                 onClick={onTranscribe}
                 disabled={!canTranscribe}
-                className="px-3 py-1.5 text-sm rounded-md transition-colors disabled:opacity-40"
+                className="px-2.5 py-1 text-sm rounded-md transition-colors disabled:opacity-40"
                 style={{
                   backgroundColor: "var(--color-sidebar)",
                   color: "var(--color-text)",
@@ -561,11 +557,11 @@ function MeetingView({
               </button>
               <button
                 onClick={onExport}
-                className="p-1.5 rounded-md hover:bg-black/5"
+                className="p-1 rounded-md hover:bg-black/5"
                 title="Export"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   style={{ color: "var(--color-text-secondary)" }}
                   fill="none"
                   stroke="currentColor"
@@ -581,11 +577,11 @@ function MeetingView({
               </button>
               <button
                 onClick={onCopy}
-                className="p-1.5 rounded-md hover:bg-black/5"
+                className="p-1 rounded-md hover:bg-black/5"
                 title="Copy"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   style={{ color: "var(--color-text-secondary)" }}
                   fill="none"
                   stroke="currentColor"
@@ -601,11 +597,11 @@ function MeetingView({
               </button>
               <button
                 onClick={onDelete}
-                className="p-1.5 rounded-md hover:bg-black/5"
+                className="p-1 rounded-md hover:bg-black/5"
                 title="Delete"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   style={{ color: "var(--color-text-secondary)" }}
                   fill="none"
                   stroke="currentColor"
@@ -627,21 +623,21 @@ function MeetingView({
       {/* Recording indicator */}
       {isRecording && (
         <div
-          className="px-8 py-3 flex items-center gap-3"
+          className="px-6 py-2 flex items-center gap-2"
           style={{ backgroundColor: "var(--color-accent-light)" }}
         >
           <span
-            className="w-2 h-2 rounded-full animate-pulse"
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
             style={{ backgroundColor: "var(--color-accent)" }}
           />
           <span
-            className="text-sm font-medium"
+            className="text-xs font-medium"
             style={{ color: "var(--color-accent)" }}
           >
             Recording
           </span>
           <div
-            className="flex-1 h-1.5 rounded-full overflow-hidden"
+            className="flex-1 h-1 rounded-full overflow-hidden"
             style={{ backgroundColor: "rgba(229, 77, 46, 0.2)" }}
           >
             <div
@@ -657,14 +653,14 @@ function MeetingView({
 
       {/* Tabs */}
       <div
-        className="px-8 border-b flex gap-8"
+        className="px-6 border-b flex gap-6"
         style={{ borderColor: "var(--color-border)" }}
       >
         {(["notes", "transcript", "summary"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
-            className="py-4 font-medium capitalize transition-colors"
+            className="py-2.5 text-sm font-medium capitalize transition-colors"
             style={{
               color:
                 activeTab === tab
@@ -699,7 +695,7 @@ function MeetingView({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         {activeTab === "notes" && (
           <div>
             <textarea
@@ -707,7 +703,7 @@ function MeetingView({
               onChange={(e) => setDescValue(e.target.value)}
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
-              className="w-full min-h-[400px] text-lg leading-relaxed resize-none"
+              className="w-full min-h-[300px] text-base leading-relaxed resize-none"
               style={{ color: "var(--color-text)" }}
             />
           </div>
@@ -718,7 +714,7 @@ function MeetingView({
             <TranscriptSearch segments={transcript} />
           ) : (
             <div
-              className="text-center py-16"
+              className="text-center py-12 text-sm"
               style={{ color: "var(--color-text-secondary)" }}
             >
               {meeting.audio_path
