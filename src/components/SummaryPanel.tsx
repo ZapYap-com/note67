@@ -49,14 +49,10 @@ export function SummaryPanel({
     });
   };
 
-  // Always expand the latest summary (first in the list)
+  // Always expand only the latest summary (first in the list), close others
   useEffect(() => {
     if (summaries.length > 0) {
-      setExpandedSummaries((prev) => {
-        const next = new Set(prev);
-        next.add(summaries[0].id);
-        return next;
-      });
+      setExpandedSummaries(new Set([summaries[0].id]));
     }
   }, [summaries]);
 
