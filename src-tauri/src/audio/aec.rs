@@ -3,7 +3,21 @@
 //! Uses NLMS (Normalized Least Mean Squares) adaptive filter to remove
 //! speaker output (reference signal) from microphone input.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+
+/// Global flag to enable/disable AEC (disable when using headphones)
+static AEC_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Check if AEC is enabled
+pub fn is_aec_enabled() -> bool {
+    AEC_ENABLED.load(Ordering::SeqCst)
+}
+
+/// Set AEC enabled state (disable when using headphones for better performance)
+pub fn set_aec_enabled(enabled: bool) {
+    AEC_ENABLED.store(enabled, Ordering::SeqCst);
+}
 
 /// AEC processor state
 pub struct AecProcessor {
@@ -119,7 +133,7 @@ static AEC_PROCESSOR: Mutex<Option<AecProcessor>> = Mutex::new(None);
 /// Initialize the global AEC processor
 pub fn init_aec(sample_rate: u32) {
     let mut processor = AEC_PROCESSOR.lock().unwrap();
-    *processor = Some(AecProcessor::new(sample_rate, 150)); // 150ms max delay
+    *processor = Some(AecProcessor::new(sample_rate, 50)); // 50ms max delay (reduced for performance)
 }
 
 /// Apply AEC to mic samples using the stored reference

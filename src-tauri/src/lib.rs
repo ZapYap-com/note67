@@ -167,6 +167,8 @@ pub fn run() {
             commands::start_dual_recording,
             commands::stop_dual_recording,
             commands::is_dual_recording,
+            commands::is_aec_enabled,
+            commands::set_aec_enabled,
             commands::list_models,
             commands::download_model,
             commands::get_download_progress,

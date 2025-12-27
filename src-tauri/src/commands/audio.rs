@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use crate::audio::{self, is_system_audio_available, mix_wav_files, RecordingState, SystemAudioCapture};
+use crate::audio::{self, aec, is_system_audio_available, mix_wav_files, RecordingState, SystemAudioCapture};
 
 /// Result of dual recording containing paths to all recorded files
 #[derive(Debug, Clone, Serialize)]
@@ -245,4 +245,17 @@ pub fn is_dual_recording(state: State<AudioState>) -> bool {
         .unwrap_or(false);
 
     mic_recording || system_recording
+}
+
+/// Check if AEC (Acoustic Echo Cancellation) is enabled
+#[tauri::command]
+pub fn is_aec_enabled() -> bool {
+    aec::is_aec_enabled()
+}
+
+/// Set AEC enabled state
+/// Disable AEC when using headphones for better performance
+#[tauri::command]
+pub fn set_aec_enabled(enabled: bool) {
+    aec::set_aec_enabled(enabled);
 }

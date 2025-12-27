@@ -58,6 +58,33 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
+    /// Add multiple transcript segments in a single transaction (batch insert)
+    pub fn add_transcript_segments_batch(
+        &self,
+        segments: &[(String, f64, f64, String, Option<String>)], // (note_id, start, end, text, speaker)
+    ) -> anyhow::Result<usize> {
+        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now().to_rfc3339();
+
+        let tx = conn.transaction()?;
+        let mut count = 0;
+
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+
+            for (note_id, start_time, end_time, text, speaker) in segments {
+                stmt.execute(params![note_id, start_time, end_time, text, speaker.as_deref(), &now])?;
+                count += 1;
+            }
+        }
+
+        tx.commit()?;
+        Ok(count)
+    }
+
     /// Get all transcript segments for a note
     pub fn get_transcript_segments(&self, note_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;

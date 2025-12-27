@@ -116,7 +116,7 @@ pub struct TranscriptionUpdateEvent {
 }
 
 /// Start live transcription
-/// Runs every 5 seconds, transcribes accumulated audio, saves to DB, emits events
+/// Runs every 3 seconds, transcribes accumulated audio in parallel, saves to DB, emits events
 pub async fn start_live_transcription(
     app: AppHandle,
     note_id: String,
@@ -145,7 +145,7 @@ pub async fn start_live_transcription(
 
     // Spawn the live transcription task
     tokio::spawn(async move {
-        let mut ticker = interval(Duration::from_secs(5));
+        let mut ticker = interval(Duration::from_secs(3));
 
         loop {
             ticker.tick().await;
@@ -194,10 +194,14 @@ pub async fn start_live_transcription(
                         mono_mic
                     };
 
-                    // Apply AEC to remove speaker echo from mic
-                    let reference = get_reference_samples(mic_16k.len());
-                    let cleaned_mic = if !reference.is_empty() {
-                        aec::apply_aec(&mic_16k, &reference)
+                    // Apply AEC to remove speaker echo from mic (only if enabled)
+                    let cleaned_mic = if aec::is_aec_enabled() {
+                        let reference = get_reference_samples(mic_16k.len());
+                        if !reference.is_empty() {
+                            aec::apply_aec(&mic_16k, &reference)
+                        } else {
+                            mic_16k
+                        }
                     } else {
                         mic_16k
                     };
@@ -207,93 +211,155 @@ pub async fn start_live_transcription(
                 }
             }
 
-            // Add system audio samples if available (already at 16kHz mono)
-            if !system_samples.is_empty() {
-                audio_sources.push((system_samples, 16000_u32, 1_usize, AudioSource::System));
-            }
+            // Extract mic audio data if available
+            let mic_data = if let Some((samples, _, _, _)) = audio_sources
+                .iter()
+                .find(|(_, _, _, src)| *src == AudioSource::Mic)
+            {
+                let offset = *live_state_clone.mic_time_offset.lock().await;
+                Some((samples.clone(), offset))
+            } else {
+                None
+            };
 
-            // Process each audio source
-            for (samples, sample_rate, channels, audio_source) in audio_sources {
-                let whisper_ctx = whisper_ctx_clone.clone();
-                let time_offset = match audio_source {
-                    AudioSource::Mic => *live_state_clone.mic_time_offset.lock().await,
-                    AudioSource::System => *live_state_clone.system_time_offset.lock().await,
-                };
+            // Extract system audio data if available
+            let system_data = if !system_samples.is_empty() {
+                let offset = *live_state_clone.system_time_offset.lock().await;
+                Some((system_samples, offset))
+            } else {
+                None
+            };
 
-                let result = tokio::task::spawn_blocking(move || {
-                    transcribe_samples(&whisper_ctx, &samples, sample_rate, channels, time_offset)
-                })
-                .await;
+            // Process mic and system audio in PARALLEL
+            let whisper_ctx_mic = whisper_ctx_clone.clone();
+            let whisper_ctx_sys = whisper_ctx_clone.clone();
 
-                match result {
-                    Ok(Ok(transcription)) => {
-                        if !transcription.segments.is_empty() {
-                            // Update time offset for next chunk
-                            if let Some(last) = transcription.segments.last() {
-                                match audio_source {
-                                    AudioSource::Mic => {
-                                        *live_state_clone.mic_time_offset.lock().await = last.end_time;
-                                    }
-                                    AudioSource::System => {
-                                        *live_state_clone.system_time_offset.lock().await = last.end_time;
-                                    }
-                                }
-                            }
+            let mic_future = async {
+                if let Some((samples, time_offset)) = mic_data {
+                    let ctx = whisper_ctx_mic;
+                    tokio::task::spawn_blocking(move || {
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset)
+                    })
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                } else {
+                    None
+                }
+            };
 
-                            // Filter out blank/noise segments
-                            let valid_segments: Vec<_> = transcription
-                                .segments
-                                .into_iter()
-                                .filter(|s| !should_skip_segment(&s.text))
-                                .collect();
+            let system_future = async {
+                if let Some((samples, time_offset)) = system_data {
+                    let ctx = whisper_ctx_sys;
+                    tokio::task::spawn_blocking(move || {
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset)
+                    })
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                } else {
+                    None
+                }
+            };
 
-                            if !valid_segments.is_empty() {
-                                // Determine speaker based on audio source
-                                let speaker = match audio_source {
-                                    AudioSource::Mic => Some("You"),
-                                    AudioSource::System => Some("Others"),
-                                };
+            // Run both transcriptions in parallel
+            let (mic_result, system_result) = tokio::join!(mic_future, system_future);
 
-                                // Save segments to database with speaker
-                                let db = app_clone.state::<Database>();
-                                for segment in &valid_segments {
-                                    if let Err(e) = db.add_transcript_segment(
-                                        &note_id_clone,
-                                        segment.start_time,
-                                        segment.end_time,
-                                        &segment.text,
-                                        speaker,
-                                    ) {
-                                        eprintln!("Failed to save transcript segment: {}", e);
-                                    }
-                                }
+            // Collect all segments for batch DB insert
+            let mut db_segments: Vec<(String, f64, f64, String, Option<String>)> = Vec::new();
+            let mut all_events: Vec<TranscriptionUpdateEvent> = Vec::new();
 
-                                // Store segments in memory (for final result)
-                                live_state_clone
-                                    .segments
-                                    .lock()
-                                    .await
-                                    .extend(valid_segments.clone());
+            // Process mic results
+            if let Some(transcription) = mic_result {
+                if !transcription.segments.is_empty() {
+                    if let Some(last) = transcription.segments.last() {
+                        *live_state_clone.mic_time_offset.lock().await = last.end_time;
+                    }
 
-                                // Emit event with audio source
-                                let event = TranscriptionUpdateEvent {
-                                    note_id: note_id_clone.clone(),
-                                    segments: valid_segments,
-                                    is_final: false,
-                                    audio_source,
-                                };
+                    let valid_segments: Vec<_> = transcription
+                        .segments
+                        .into_iter()
+                        .filter(|s| !should_skip_segment(&s.text))
+                        .collect();
 
-                                let _ = app_clone.emit("transcription-update", event);
-                            }
+                    if !valid_segments.is_empty() {
+                        for segment in &valid_segments {
+                            db_segments.push((
+                                note_id_clone.clone(),
+                                segment.start_time,
+                                segment.end_time,
+                                segment.text.clone(),
+                                Some("You".to_string()),
+                            ));
                         }
-                    }
-                    Ok(Err(e)) => {
-                        eprintln!("Live transcription error ({:?}): {}", audio_source, e);
-                    }
-                    Err(e) => {
-                        eprintln!("Live transcription task error ({:?}): {}", audio_source, e);
+
+                        live_state_clone
+                            .segments
+                            .lock()
+                            .await
+                            .extend(valid_segments.clone());
+
+                        all_events.push(TranscriptionUpdateEvent {
+                            note_id: note_id_clone.clone(),
+                            segments: valid_segments,
+                            is_final: false,
+                            audio_source: AudioSource::Mic,
+                        });
                     }
                 }
+            }
+
+            // Process system results
+            if let Some(transcription) = system_result {
+                if !transcription.segments.is_empty() {
+                    if let Some(last) = transcription.segments.last() {
+                        *live_state_clone.system_time_offset.lock().await = last.end_time;
+                    }
+
+                    let valid_segments: Vec<_> = transcription
+                        .segments
+                        .into_iter()
+                        .filter(|s| !should_skip_segment(&s.text))
+                        .collect();
+
+                    if !valid_segments.is_empty() {
+                        for segment in &valid_segments {
+                            db_segments.push((
+                                note_id_clone.clone(),
+                                segment.start_time,
+                                segment.end_time,
+                                segment.text.clone(),
+                                Some("Others".to_string()),
+                            ));
+                        }
+
+                        live_state_clone
+                            .segments
+                            .lock()
+                            .await
+                            .extend(valid_segments.clone());
+
+                        all_events.push(TranscriptionUpdateEvent {
+                            note_id: note_id_clone.clone(),
+                            segments: valid_segments,
+                            is_final: false,
+                            audio_source: AudioSource::System,
+                        });
+                    }
+                }
+            }
+
+            // Batch insert all segments into database
+            if !db_segments.is_empty() {
+                let db = app_clone.state::<Database>();
+                if let Err(e) = db.add_transcript_segments_batch(&db_segments) {
+                    eprintln!("Failed to batch save transcript segments: {}", e);
+                }
+            }
+
+            // Emit all events
+            for event in all_events {
+                let _ = app_clone.emit("transcription-update", event);
             }
         }
 

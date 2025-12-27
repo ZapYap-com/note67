@@ -59,4 +59,15 @@ export const audioApi = {
   isDualRecording: (): Promise<boolean> => {
     return invoke("is_dual_recording");
   },
+
+  // AEC (Acoustic Echo Cancellation) settings
+  /** Check if AEC is enabled */
+  isAecEnabled: (): Promise<boolean> => {
+    return invoke("is_aec_enabled");
+  },
+
+  /** Enable or disable AEC (disable when using headphones for better performance) */
+  setAecEnabled: (enabled: boolean): Promise<void> => {
+    return invoke("set_aec_enabled", { enabled });
+  },
 };
