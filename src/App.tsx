@@ -358,6 +358,9 @@ function App() {
       }
       setRecordingNoteId(null);
 
+      // Always refresh notes to update ended_at
+      await refreshNotes();
+
       // Auto-generate summary and title if we have transcript
       if (transcriptToUse.length > 0) {
         setActiveTab("summary");
@@ -1286,8 +1289,8 @@ function NoteView({
               </button>
             </>
           )}
-          {/* Ended note controls */}
-          {!isRecording && !isPaused && note.ended_at && (
+          {/* Ended/idle note controls - show Continue for any note not currently recording */}
+          {!isRecording && !isPaused && (
             <>
               <button
                 onClick={onContinueRecording}
@@ -1296,13 +1299,13 @@ function NoteView({
                   backgroundColor: "var(--color-accent)",
                   color: "white",
                 }}
-                title="Continue recording"
+                title="Listen"
               >
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
                   <circle cx="12" cy="12" r="4" />
                 </svg>
-                Continue
+                Listen
               </button>
               <button
                 onClick={onExport}
