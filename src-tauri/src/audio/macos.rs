@@ -74,11 +74,11 @@ fn get_system_audio_buffer() -> &'static Mutex<Vec<f32>> {
 
 /// Take all samples from the system audio buffer (clears the buffer)
 pub fn take_system_audio_samples() -> Vec<f32> {
-    if let Ok(mut buffer) = get_system_audio_buffer().lock() {
+    match get_system_audio_buffer().lock() { Ok(mut buffer) => {
         std::mem::take(&mut *buffer)
-    } else {
+    } _ => {
         Vec::new()
-    }
+    }}
 }
 
 /// Clear the system audio buffer
@@ -91,7 +91,7 @@ pub fn clear_system_audio_buffer() {
 /// Process audio samples from CMSampleBuffer and write to WAV file
 fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
     unsafe {
-        extern "C" {
+        unsafe extern "C" {
             fn CMSampleBufferGetDataBuffer(sbuf: CMSampleBufferRef) -> *mut c_void;
             fn CMBlockBufferGetDataLength(block_buffer: *mut c_void) -> usize;
             fn CMBlockBufferGetDataPointer(
@@ -182,7 +182,7 @@ fn create_stream_output_class() -> *const AnyClass {
 
     REGISTER.call_once(|| {
         unsafe {
-            extern "C" {
+            unsafe extern "C" {
                 fn objc_allocateClassPair(
                     superclass: *const AnyClass,
                     name: *const i8,
@@ -315,13 +315,13 @@ impl MacOSSystemAudioCapture {
                     )));
                 } else {
                     // Retain the content before sending
-                    if let Some(retained) = Retained::retain(content) {
+                    match Retained::retain(content) { Some(retained) => {
                         let _ = tx_clone.send(Ok(retained));
-                    } else {
+                    } _ => {
                         let _ = tx_clone.send(Err(AudioError::PermissionDenied(
                             "Failed to retain content".to_string(),
                         )));
-                    }
+                    }}
                 }
             });
 
@@ -465,7 +465,7 @@ impl MacOSSystemAudioCapture {
 
             // Create a dispatch queue for audio callbacks
             let queue_label = b"com.note67.screencapture.audio\0".as_ptr() as *const i8;
-            extern "C" {
+            unsafe extern "C" {
                 fn dispatch_queue_create(label: *const i8, attr: *const c_void) -> *mut c_void;
             }
             let queue = dispatch_queue_create(queue_label, std::ptr::null());
@@ -595,15 +595,15 @@ impl MacOSSystemAudioCapture {
 
             // Finalize WAV file and get path
             let mut guard = get_audio_writer().lock().map_err(|_| AudioError::LockError)?;
-            if let Some(mut state) = guard.take() {
+            match guard.take() { Some(mut state) => {
                 state.is_active = false;
                 if let Some(writer) = state.writer.take() {
                     let _ = writer.finalize();
                 }
                 Some(state.output_path)
-            } else {
+            } _ => {
                 None
-            }
+            }}
         } else {
             None
         };

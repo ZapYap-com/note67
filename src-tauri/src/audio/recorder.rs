@@ -111,20 +111,20 @@ impl RecordingState {
 
     /// Take all samples from the buffer (clears the buffer)
     pub fn take_audio_buffer(&self) -> Vec<f32> {
-        if let Ok(mut buffer) = self.audio_buffer.lock() {
+        match self.audio_buffer.lock() { Ok(mut buffer) => {
             std::mem::take(&mut *buffer)
-        } else {
+        } _ => {
             Vec::new()
-        }
+        }}
     }
 
     /// Get the current buffer length without clearing
     pub fn buffer_len(&self) -> usize {
-        if let Ok(buffer) = self.audio_buffer.lock() {
+        match self.audio_buffer.lock() { Ok(buffer) => {
             buffer.len()
-        } else {
+        } _ => {
             0
-        }
+        }}
     }
 }
 

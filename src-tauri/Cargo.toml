@@ -3,7 +3,7 @@ name = "note67"
 version = "0.1.0"
 description = "A private, local notes assistant"
 authors = ["you"]
-edition = "2025"
+edition = "2024"
 
 [lib]
 name = "note67_lib"
