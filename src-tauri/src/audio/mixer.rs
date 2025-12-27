@@ -89,16 +89,20 @@ fn mix_int_samples<R1: std::io::Read, R2: std::io::Read, W: std::io::Write + std
     spec_a: WavSpec,
     spec_b: WavSpec,
 ) -> Result<(), AudioError> {
-    // Convert to float for processing
+    // Calculate scale factor based on bit depth
+    let scale_a = (1 << (spec_a.bits_per_sample - 1)) as f32;
+    let scale_b = (1 << (spec_b.bits_per_sample - 1)) as f32;
+
+    // Convert to float for processing (normalized to -1.0 to 1.0)
     let samples_a: Vec<f32> = reader_a
         .samples::<i32>()
         .filter_map(|s| s.ok())
-        .map(|s| s as f32 / i32::MAX as f32)
+        .map(|s| s as f32 / scale_a)
         .collect();
     let samples_b: Vec<f32> = reader_b
         .samples::<i32>()
         .filter_map(|s| s.ok())
-        .map(|s| s as f32 / i32::MAX as f32)
+        .map(|s| s as f32 / scale_b)
         .collect();
 
     // Handle different channel counts
@@ -166,6 +170,10 @@ fn mix_mixed_samples<R1: std::io::Read, R2: std::io::Read, W: std::io::Write + s
     spec_a: WavSpec,
     spec_b: WavSpec,
 ) -> Result<(), AudioError> {
+    // Calculate scale factors based on bit depth
+    let scale_a = (1 << (spec_a.bits_per_sample - 1)) as f32;
+    let scale_b = (1 << (spec_b.bits_per_sample - 1)) as f32;
+
     // Convert both to float for mixing
     let samples_a: Vec<f32> = if spec_a.sample_format == SampleFormat::Float {
         reader_a.samples::<f32>().filter_map(|s| s.ok()).collect()
@@ -173,7 +181,7 @@ fn mix_mixed_samples<R1: std::io::Read, R2: std::io::Read, W: std::io::Write + s
         reader_a
             .samples::<i32>()
             .filter_map(|s| s.ok())
-            .map(|s| s as f32 / i32::MAX as f32)
+            .map(|s| s as f32 / scale_a)
             .collect()
     };
 
@@ -183,7 +191,7 @@ fn mix_mixed_samples<R1: std::io::Read, R2: std::io::Read, W: std::io::Write + s
         reader_b
             .samples::<i32>()
             .filter_map(|s| s.ok())
-            .map(|s| s as f32 / i32::MAX as f32)
+            .map(|s| s as f32 / scale_b)
             .collect()
     };
 

@@ -126,7 +126,8 @@ fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
             return;
         }
 
-        // ScreenCaptureKit provides audio as 32-bit float samples
+        // ScreenCaptureKit provides audio as 32-bit float samples in NON-INTERLEAVED (planar) format
+        // First half is left channel, second half is right channel
         let sample_count = total_length / std::mem::size_of::<f32>();
         if sample_count == 0 {
             return;
@@ -134,15 +135,27 @@ fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
 
         let samples = std::slice::from_raw_parts(data_ptr as *const f32, sample_count);
 
-        // Write audio data to WAV file
+        // Split into left and right channels (non-interleaved/planar format)
+        let samples_per_channel = sample_count / 2;
+        let left_channel = &samples[..samples_per_channel];
+        let right_channel = &samples[samples_per_channel..];
+
+        // Write audio data to WAV file (interleaved stereo)
         if let Ok(mut guard) = get_audio_writer().lock() {
             if let Some(ref mut state) = *guard {
                 if state.is_active {
                     if let Some(ref mut writer) = state.writer {
-                        for &sample in samples {
+                        // Interleave left and right channels
+                        for i in 0..samples_per_channel {
+                            let left = left_channel.get(i).copied().unwrap_or(0.0);
+                            let right = right_channel.get(i).copied().unwrap_or(0.0);
+
                             // Convert f32 (-1.0 to 1.0) to i16
-                            let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                            let _ = writer.write_sample(sample_i16);
+                            let left_i16 = (left.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                            let right_i16 = (right.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+
+                            let _ = writer.write_sample(left_i16);
+                            let _ = writer.write_sample(right_i16);
                         }
                     }
                 }
@@ -150,12 +163,10 @@ fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
         }
 
         // Also push to the system audio buffer for live transcription
-        // Downsample from stereo 48kHz to mono 16kHz for Whisper
-        // ScreenCaptureKit gives us stereo, so take every 6th sample (48000/16000 * 2 channels = 6)
+        // Downsample from 48kHz to 16kHz for Whisper (take every 3rd sample from left channel)
         if let Ok(mut buffer) = get_system_audio_buffer().lock() {
-            for (i, &sample) in samples.iter().enumerate() {
-                // Take left channel only (even indices) and downsample 3x
-                if i % 6 == 0 {
+            for (i, &sample) in left_channel.iter().enumerate() {
+                if i % 3 == 0 {
                     buffer.push(sample);
                 }
             }
