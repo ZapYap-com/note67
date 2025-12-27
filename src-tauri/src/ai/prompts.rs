@@ -119,29 +119,10 @@ RESPONSE:"#
     pub fn overview(transcript: &str, notes: Option<&str>) -> String {
         let notes_section = Self::format_notes_section(notes);
         format!(
-            r#"You are a professional note summarizer. Analyze the following transcript{} and provide a clear, concise summary in markdown format.
-{}TRANSCRIPT:
-{}
+            r#"Summarize this transcript in markdown. Only include what was actually said. If brief, keep summary brief.
+{}{}
 
-Provide a professional summary that includes:
-- Main topics discussed
-- Key points and conclusions
-- Overall outcome
-
-Rules:
-- Use markdown formatting (headings, bullet points, bold for emphasis)
-- Be concise and professional
-- Do NOT use emojis
-- Focus on factual information
-- Use clear, formal language
-- If user notes are provided, incorporate relevant context from them
-
-SUMMARY:"#,
-            if notes.is_some_and(|n| !n.trim().is_empty()) {
-                " and user notes"
-            } else {
-                ""
-            },
+Summary:"#,
             notes_section,
             transcript
         )
@@ -161,10 +142,12 @@ For each action item, identify:
 - Deadline or timeline (if mentioned)
 
 Rules:
+- ONLY extract action items explicitly mentioned in the transcript
+- Do NOT infer or fabricate action items that are not clearly stated
 - Use markdown formatting with numbered lists
 - Be specific and actionable
 - Do NOT use emojis
-- If no action items are found, state "No action items identified."
+- If no action items are found or the transcript is too brief, state "No action items identified."
 - Use professional, clear language
 - If user notes mention action items or tasks, include them
 
@@ -193,10 +176,12 @@ For each decision, include:
 - Who made or approved the decision (if mentioned)
 
 Rules:
+- ONLY extract decisions explicitly mentioned in the transcript
+- Do NOT infer or fabricate decisions that are not clearly stated
 - Use markdown formatting with numbered lists
 - Be specific and clear
 - Do NOT use emojis
-- If no decisions were made, state "No key decisions identified."
+- If no decisions were made or the transcript is too brief, state "No key decisions identified."
 - Use professional, formal language
 - If user notes mention decisions, include them
 
@@ -214,22 +199,11 @@ KEY DECISIONS:"#,
     /// Generate a short, descriptive title for the note
     pub fn title(transcript: &str) -> String {
         format!(
-            r#"Generate a concise title based on this transcript.
+            r#"Write a 2-6 word plain text title. No markdown. Only use words from the transcript.
 
-TRANSCRIPT:
 {}
 
-Rules:
-- 2-6 words only
-- Capture the main topic or purpose
-- Be specific and informative
-- No quotes around the title
-- No prefixes like "Note:" or "Title:"
-- No emojis
-
-Respond with ONLY the title, nothing else.
-
-TITLE:"#,
+Title:"#,
             transcript
         )
     }
@@ -237,22 +211,11 @@ TITLE:"#,
     /// Generate a short, descriptive title based on the note summary
     pub fn title_from_summary(summary: &str) -> String {
         format!(
-            r#"Generate a concise title based on this summary.
+            r#"Write a 2-6 word plain text title. No markdown. Only use words from the summary.
 
-SUMMARY:
 {}
 
-Rules:
-- 2-6 words only
-- Capture the main topic or purpose
-- Be specific and informative
-- No quotes around the title
-- No prefixes like "Note:" or "Title:"
-- No emojis
-
-Respond with ONLY the title, nothing else.
-
-TITLE:"#,
+Title:"#,
             summary
         )
     }

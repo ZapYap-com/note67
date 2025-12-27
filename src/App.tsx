@@ -1083,6 +1083,12 @@ function NoteView({
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
 
+  // Set titleValue to current note.title when entering edit mode
+  const handleEditTitle = () => {
+    setTitleValue(note.title);
+    onEditTitle();
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
@@ -1124,7 +1130,7 @@ function NoteView({
             />
           ) : (
             <h1
-              onClick={onEditTitle}
+              onClick={handleEditTitle}
               className="text-xl font-semibold cursor-text"
               style={{ color: "var(--color-text)" }}
             >

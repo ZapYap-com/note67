@@ -634,11 +634,7 @@ pub async fn generate_title(
         .map_err(|e| e.to_string())?;
 
     // Clean up the response - remove thinking tags, quotes, and trim
-    let title = strip_thinking_tags(&response)
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string();
+    let title = clean_title_response(&response);
 
     // Update note title in database
     {
@@ -652,6 +648,77 @@ pub async fn generate_title(
     }
 
     Ok(title)
+}
+
+/// Clean up LLM response to extract just the title
+fn clean_title_response(response: &str) -> String {
+    let cleaned = strip_thinking_tags(response);
+
+    // Take only the first non-empty line (ignore any explanations after)
+    let first_line = cleaned
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or(&cleaned)
+        .to_string();
+
+    // Remove common prefixes LLMs might add
+    let without_prefix = first_line
+        .trim_start_matches("Title:")
+        .trim_start_matches("title:")
+        .trim_start_matches("TITLE:")
+        .trim_start_matches("Here's a title:")
+        .trim_start_matches("Here is a title:")
+        .trim_start_matches("The title is:")
+        .trim_start_matches("Suggested title:")
+        .trim();
+
+    // Remove surrounding quotes and markdown formatting
+    let without_quotes = without_prefix
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_matches('`')
+        .trim_matches('*')
+        .trim_matches('#')
+        .trim_matches('_')
+        .trim();
+
+    // Detect if LLM returned a question, request, or placeholder instead of a title
+    let lower = without_quotes.to_lowercase();
+    if lower.contains("can you")
+        || lower.contains("could you")
+        || lower.contains("please provide")
+        || lower.contains("more details")
+        || lower.contains("more context")
+        || lower.contains("more information")
+        || lower.starts_with("i need")
+        || lower.starts_with("i would need")
+        || lower.starts_with("unfortunately")
+        || lower.starts_with("i cannot")
+        || lower.starts_with("i'm unable")
+        || lower == "unspecified"
+        || lower == "untitled"
+        || lower == "n/a"
+        || lower == "none"
+        || lower == "unknown"
+        || lower.is_empty()
+        || without_quotes.ends_with('?')
+    {
+        return "Meeting Notes".to_string();
+    }
+
+    // Limit length (titles shouldn't be too long)
+    let max_len = 100;
+    if without_quotes.len() > max_len {
+        without_quotes
+            .chars()
+            .take(max_len)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+    } else {
+        without_quotes.to_string()
+    }
 }
 
 /// Generate a title for a note based on a summary content
@@ -687,12 +754,8 @@ pub async fn generate_title_from_summary(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Clean up the response - remove thinking tags, quotes, and trim
-    let title = strip_thinking_tags(&response)
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string();
+    // Clean up the response
+    let title = clean_title_response(&response);
 
     // Update note title in database
     {
