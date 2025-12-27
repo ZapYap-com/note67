@@ -1443,6 +1443,7 @@ function ShortcutsTab() {
   const shortcuts = [
     { keys: [modKey, "N"], description: "Create new note" },
     { keys: [modKey, "R"], description: "Create new note and start recording" },
+    { keys: [modKey, "S"], description: "Stop recording" },
     { keys: [modKey, "M"], description: "Toggle light/dark mode" },
     { keys: [modKey, ","], description: "Open settings" },
     { keys: ["Esc"], description: "Close modals" },

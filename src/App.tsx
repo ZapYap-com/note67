@@ -333,21 +333,25 @@ function App() {
   const handleStopRecording = async () => {
     if (recordingNoteId) {
       const noteId = recordingNoteId;
+      // Save segments before stopping (to avoid stale closure)
+      const segmentsToSave = [...liveSegments];
       const audioPath = await stopRecording();
       // Stop live transcription and save segments to database
       await stopLiveTranscription(noteId);
       await endNote(noteId, audioPath ?? undefined);
-      // Store live segments as the note's transcript
-      if (liveSegments.length > 0) {
+      // Reload transcript from database to ensure we have all segments
+      const savedSegments = await loadTranscript(noteId);
+      const transcriptToUse = savedSegments.length > 0 ? savedSegments : segmentsToSave;
+      if (transcriptToUse.length > 0) {
         setNoteTranscripts((prev) => ({
           ...prev,
-          [noteId]: liveSegments,
+          [noteId]: transcriptToUse,
         }));
       }
       setRecordingNoteId(null);
 
       // Auto-generate summary and title if we have transcript
-      if (liveSegments.length > 0) {
+      if (transcriptToUse.length > 0) {
         setActiveTab("summary");
         setIsGeneratingSummaryTitle(true);
         try {
@@ -367,6 +371,21 @@ function App() {
       }
     }
   };
+
+  // Keyboard shortcut: Cmd/Ctrl + S to stop recording
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (isRecording) {
+          handleStopRecording();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isRecording]);
 
   // Regenerate summary and title for the selected note
   const handleRegenerateSummaryTitle = async () => {
@@ -733,8 +752,9 @@ function App() {
               </span>
             </div>
           ) : isRecording && recordingNote ? (
-            <div
-              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
+            <button
+              onClick={handleStopRecording}
+              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg transition-transform hover:scale-105"
               style={{
                 backgroundColor: "var(--color-bg-elevated)",
                 border: "1px solid var(--color-border)",
@@ -744,24 +764,16 @@ function App() {
                 className="w-2 h-2 rounded-full animate-pulse"
                 style={{ backgroundColor: "var(--color-accent)" }}
               />
-              <button
-                onClick={() => setSelectedNoteId(recordingNoteId)}
-                className="text-sm font-medium hover:underline"
-                style={{ color: "var(--color-text)" }}
+              <span
+                className="text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
               >
-                {recordingNote.title}
-              </button>
-              <button
-                onClick={handleStopRecording}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors"
-                style={{
-                  backgroundColor: "var(--color-accent)",
-                  color: "white",
-                }}
-              >
-                Stop
-              </button>
-            </div>
+                <kbd className="font-medium" style={{ color: "var(--color-text)" }}>
+                  {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"} + S
+                </kbd>
+                {" "}to stop
+              </span>
+            </button>
           ) : (
             <button
               onClick={handleStartRecording}
