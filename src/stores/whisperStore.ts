@@ -9,7 +9,6 @@ export type WhisperLanguage = "auto" | string;
 
 // Common languages supported by Whisper (subset of ~99 total)
 export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
-  { code: "auto", name: "Auto-detect" },
   { code: "en", name: "English" },
   { code: "zh", name: "Chinese" },
   { code: "es", name: "Spanish" },
@@ -30,6 +29,7 @@ export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
   { code: "id", name: "Indonesian" },
   { code: "ms", name: "Malay" },
   { code: "tl", name: "Tagalog" },
+  { code: "auto", name: "Auto-detect (not recommended)" },
 ];
 
 function getSavedModel(): ModelSize | null {
@@ -56,9 +56,9 @@ function saveModel(model: ModelSize | null): void {
 function getSavedLanguage(): WhisperLanguage {
   try {
     const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    return saved || "auto";
+    return saved || "en";
   } catch {
-    return "auto";
+    return "en";
   }
 }
 
