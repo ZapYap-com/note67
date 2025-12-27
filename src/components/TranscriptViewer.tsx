@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { TranscriptSegment } from "../types";
 
 interface TranscriptViewerProps {
@@ -5,7 +6,42 @@ interface TranscriptViewerProps {
   isLoading?: boolean;
 }
 
+interface GroupedSegment {
+  speaker: string | null;
+  startTime: number;
+  texts: string[];
+  ids: number[];
+}
+
+function groupConsecutiveSegments(segments: TranscriptSegment[]): GroupedSegment[] {
+  if (segments.length === 0) return [];
+
+  const groups: GroupedSegment[] = [];
+  let currentGroup: GroupedSegment | null = null;
+
+  for (const segment of segments) {
+    if (currentGroup && currentGroup.speaker === segment.speaker) {
+      // Same speaker, add to current group
+      currentGroup.texts.push(segment.text);
+      currentGroup.ids.push(segment.id);
+    } else {
+      // Different speaker, start new group
+      currentGroup = {
+        speaker: segment.speaker,
+        startTime: segment.start_time,
+        texts: [segment.text],
+        ids: [segment.id],
+      };
+      groups.push(currentGroup);
+    }
+  }
+
+  return groups;
+}
+
 export function TranscriptViewer({ segments, isLoading }: TranscriptViewerProps) {
+  const groupedSegments = useMemo(() => groupConsecutiveSegments(segments), [segments]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -30,8 +66,8 @@ export function TranscriptViewer({ segments, isLoading }: TranscriptViewerProps)
 
   return (
     <div className="space-y-3 max-h-80 overflow-y-auto">
-      {segments.map((segment) => (
-        <TranscriptSegmentRow key={segment.id} segment={segment} />
+      {groupedSegments.map((group) => (
+        <GroupedSegmentRow key={group.ids[0]} group={group} />
       ))}
     </div>
   );
@@ -53,12 +89,15 @@ function SpeakerLabel({ speaker }: { speaker: string | null }) {
   );
 }
 
-function TranscriptSegmentRow({ segment }: { segment: TranscriptSegment }) {
+function GroupedSegmentRow({ group }: { group: GroupedSegment }) {
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // Join consecutive texts with a space
+  const combinedText = group.texts.join(" ");
 
   return (
     <div className="flex gap-3 group">
@@ -66,16 +105,16 @@ function TranscriptSegmentRow({ segment }: { segment: TranscriptSegment }) {
         className="text-xs font-mono shrink-0 pt-0.5"
         style={{ color: "var(--color-text-tertiary)" }}
       >
-        {formatTime(segment.start_time)}
+        {formatTime(group.startTime)}
       </span>
       <div className="flex-1 min-w-0">
-        {segment.speaker && (
+        {group.speaker && (
           <div className="mb-0.5">
-            <SpeakerLabel speaker={segment.speaker} />
+            <SpeakerLabel speaker={group.speaker} />
           </div>
         )}
         <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
-          {segment.text}
+          {combinedText}
         </p>
       </div>
     </div>

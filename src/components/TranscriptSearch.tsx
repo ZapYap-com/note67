@@ -3,6 +3,42 @@ import type { TranscriptSegment } from "../types";
 
 type SpeakerFilter = "all" | "you" | "others";
 
+interface GroupedSegment {
+  speaker: string | null;
+  startTime: number;
+  texts: string[];
+  ids: number[];
+  segments: TranscriptSegment[];
+}
+
+function groupConsecutiveSegments(segments: TranscriptSegment[]): GroupedSegment[] {
+  if (segments.length === 0) return [];
+
+  const groups: GroupedSegment[] = [];
+  let currentGroup: GroupedSegment | null = null;
+
+  for (const segment of segments) {
+    if (currentGroup && currentGroup.speaker === segment.speaker) {
+      // Same speaker, add to current group
+      currentGroup.texts.push(segment.text);
+      currentGroup.ids.push(segment.id);
+      currentGroup.segments.push(segment);
+    } else {
+      // Different speaker, start new group
+      currentGroup = {
+        speaker: segment.speaker,
+        startTime: segment.start_time,
+        texts: [segment.text],
+        ids: [segment.id],
+        segments: [segment],
+      };
+      groups.push(currentGroup);
+    }
+  }
+
+  return groups;
+}
+
 function SpeakerLabel({ speaker }: { speaker: string | null }) {
   if (!speaker) return null;
 
@@ -72,6 +108,12 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
 
     return result;
   }, [segments, searchQuery, speakerFilter]);
+
+  // Group consecutive segments by speaker
+  const groupedSegments = useMemo(
+    () => groupConsecutiveSegments(filteredSegments),
+    [filteredSegments]
+  );
 
   const highlightMatch = (text: string, query: string): React.ReactNode => {
     if (!query.trim()) return text;
@@ -203,31 +245,34 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
 
       {/* Segments */}
       <div ref={scrollContainerRef} className="space-y-2 max-h-[60vh] overflow-y-auto">
-        {filteredSegments.map((segment) => (
-          <button
-            key={segment.id}
-            onClick={() => onSegmentClick?.(segment)}
-            className="w-full flex gap-4 text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5"
-          >
-            <span
-              className="text-sm font-mono shrink-0 pt-0.5"
-              style={{ color: "var(--color-text-secondary)" }}
+        {groupedSegments.map((group) => {
+          const combinedText = group.texts.join(" ");
+          return (
+            <div
+              key={group.ids[0]}
+              onClick={() => onSegmentClick?.(group.segments[0])}
+              className="w-full flex gap-4 text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5 cursor-pointer"
             >
-              {formatTime(segment.start_time)}
-            </span>
-            <div className="flex-1 min-w-0">
-              {segment.speaker && (
-                <div className="mb-0.5">
-                  <SpeakerLabel speaker={segment.speaker} />
-                </div>
-              )}
-              <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
-                {highlightMatch(segment.text, searchQuery)}
-              </p>
+              <span
+                className="text-sm font-mono shrink-0 pt-0.5"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {formatTime(group.startTime)}
+              </span>
+              <div className="flex-1 min-w-0">
+                {group.speaker && (
+                  <div className="mb-0.5">
+                    <SpeakerLabel speaker={group.speaker} />
+                  </div>
+                )}
+                <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
+                  {highlightMatch(combinedText, searchQuery)}
+                </p>
+              </div>
             </div>
-          </button>
-        ))}
-        {filteredSegments.length === 0 && searchQuery && (
+          );
+        })}
+        {groupedSegments.length === 0 && searchQuery && (
           <p className="text-center py-8" style={{ color: "var(--color-text-secondary)" }}>
             No matches found.
           </p>
