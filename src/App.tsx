@@ -694,6 +694,7 @@ function App() {
               }
             }}
             onRegenerate={handleRegenerateSummaryTitle}
+            onClose={() => setSelectedNoteId(null)}
           />
         ) : (
           <EmptyState
@@ -706,6 +707,8 @@ function App() {
         )}
 
         {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
+        {/* Hide when viewing a note (unless recording or generating) */}
+        {!(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
           {isGeneratingSummaryTitle ? (
             <div
@@ -775,6 +778,7 @@ function App() {
             </button>
           )}
         </div>
+        )}
       </main>
 
       {/* Modals */}
@@ -1048,6 +1052,7 @@ interface NoteViewProps {
   onDelete: () => void;
   onExport: () => void;
   onRegenerate: () => void;
+  onClose: () => void;
 }
 
 function NoteView({
@@ -1070,6 +1075,7 @@ function NoteView({
   onDelete,
   onExport,
   onRegenerate,
+  onClose,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
@@ -1081,10 +1087,31 @@ function NoteView({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <header
-        className="px-6 py-4 border-b flex items-center justify-between"
+        className="px-6 py-4 border-b flex items-center justify-between gap-3"
         style={{ borderColor: "var(--color-border)" }}
       >
-        <div className="flex-1">
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+          title="Close"
+        >
+          <svg
+            className="w-5 h-5"
+            style={{ color: "var(--color-text-secondary)" }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
           {editingTitle ? (
             <input
               autoFocus
