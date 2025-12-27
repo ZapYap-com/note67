@@ -626,15 +626,51 @@ pub async fn generate_title(
     // Build prompt
     let prompt = SummaryPrompts::title(&truncated);
 
-    // Generate with Ollama (low temperature for consistent output)
-    let response = ai_state
-        .client
-        .generate(&model, &prompt, 0.3, Some(100))
-        .await
-        .map_err(|e| e.to_string())?;
+    // Retry logic: try up to 3 times to get a valid title
+    let max_retries = 3;
+    let mut title = String::new();
 
-    // Clean up the response - remove thinking tags, quotes, and trim
-    let title = clean_title_response(&response);
+    for attempt in 1..=max_retries {
+        // Generate with Ollama (low temperature for consistent output)
+        let response = ai_state
+            .client
+            .generate(&model, &prompt, 0.3, Some(100))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Debug: Log raw LLM output
+        eprintln!(
+            "[DEBUG] Attempt {}/{} - Raw LLM title response:\n{}",
+            attempt, max_retries, response
+        );
+
+        // Clean up the response - remove thinking tags, quotes, and trim
+        title = clean_title_response(&response);
+
+        // Debug: Log cleaned title
+        eprintln!(
+            "[DEBUG] Attempt {}/{} - Cleaned title: {}",
+            attempt, max_retries, title
+        );
+
+        // Check if title is valid
+        if title != "Meeting Notes" && is_valid_title(&title) {
+            eprintln!("[DEBUG] Title accepted: {}", title);
+            break;
+        } else {
+            eprintln!(
+                "[DEBUG] Title rejected (invalid or fallback), {}",
+                if attempt < max_retries {
+                    "retrying..."
+                } else {
+                    "using fallback"
+                }
+            );
+            if attempt == max_retries {
+                title = "Meeting Notes".to_string();
+            }
+        }
+    }
 
     // Update note title in database
     {
@@ -648,6 +684,133 @@ pub async fn generate_title(
     }
 
     Ok(title)
+}
+
+/// Check if a title is valid (not nonsense)
+fn is_valid_title(title: &str) -> bool {
+    // Must have at least 3 characters
+    if title.len() < 3 {
+        return false;
+    }
+
+    // Must have at least 2 alphabetic characters
+    let alpha_count = title.chars().filter(|c| c.is_alphabetic()).count();
+    if alpha_count < 2 {
+        return false;
+    }
+
+    // Check for repeated character patterns (e.g., "aaaa", "abababab")
+    let chars: Vec<char> = title.chars().collect();
+    if chars.len() >= 4 {
+        // Check for same character repeated
+        let first = chars[0];
+        if chars.iter().all(|&c| c == first) {
+            return false;
+        }
+
+        // Check for 2-char pattern repeated (e.g., "abab")
+        if chars.len() >= 4 && chars.len() % 2 == 0 {
+            let pattern = &chars[0..2];
+            let mut is_repeating = true;
+            for i in (0..chars.len()).step_by(2) {
+                if chars.get(i..i + 2) != Some(pattern) {
+                    is_repeating = false;
+                    break;
+                }
+            }
+            if is_repeating && chars.len() > 4 {
+                return false;
+            }
+        }
+    }
+
+    // Check for gibberish patterns: too many consonants in a row
+    let lower = title.to_lowercase();
+    let vowels = ['a', 'e', 'i', 'o', 'u'];
+    let mut consonant_streak = 0;
+    let mut max_consonant_streak = 0;
+    for c in lower.chars() {
+        if c.is_alphabetic() {
+            if vowels.contains(&c) {
+                consonant_streak = 0;
+            } else {
+                consonant_streak += 1;
+                max_consonant_streak = max_consonant_streak.max(consonant_streak);
+            }
+        } else {
+            consonant_streak = 0;
+        }
+    }
+    // More than 6 consonants in a row is likely gibberish (but allow some like "rhythm")
+    if max_consonant_streak > 6 {
+        return false;
+    }
+
+    // Check for mostly punctuation or numbers
+    let meaningful_chars = title
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .count();
+    if meaningful_chars < title.len() / 2 {
+        return false;
+    }
+
+    // Check for common nonsense patterns (exact matches)
+    let lower_trimmed = lower.trim();
+    let nonsense_exact = [
+        "lorem ipsum",
+        "test title",
+        "title here",
+        "insert title",
+        "placeholder",
+        "example",
+        "sample",
+        "asdf",
+        "qwerty",
+        "title",
+        "summary",
+        "transcript",
+        "meeting",
+        "note",
+        "notes",
+        "untitled meeting",
+        "new meeting",
+        "meeting title",
+        "the title",
+        "a title",
+    ];
+    for pattern in nonsense_exact {
+        if lower_trimmed == pattern {
+            return false;
+        }
+    }
+
+    // Check for patterns that might leak from the prompt (contains)
+    let prompt_leakage = [
+        "2-6 word",
+        "2-6word",
+        "generate a",
+        "just the title",
+        "nothing else",
+        "word title for",
+        "title for this",
+        "for this transcript",
+        "for this summary",
+        "here is",
+        "here's a",
+        "i would suggest",
+        "i suggest",
+        "my suggestion",
+        "based on the",
+        "based on this",
+    ];
+    for pattern in prompt_leakage {
+        if lower_trimmed.contains(pattern) {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Clean up LLM response to extract just the title
@@ -747,15 +910,51 @@ pub async fn generate_title_from_summary(
     // Build prompt
     let prompt = SummaryPrompts::title_from_summary(&truncated);
 
-    // Generate with Ollama (low temperature for consistent output)
-    let response = ai_state
-        .client
-        .generate(&model, &prompt, 0.3, Some(100))
-        .await
-        .map_err(|e| e.to_string())?;
+    // Retry logic: try up to 3 times to get a valid title
+    let max_retries = 3;
+    let mut title = String::new();
 
-    // Clean up the response
-    let title = clean_title_response(&response);
+    for attempt in 1..=max_retries {
+        // Generate with Ollama (low temperature for consistent output)
+        let response = ai_state
+            .client
+            .generate(&model, &prompt, 0.3, Some(100))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Debug: Log raw LLM output
+        eprintln!(
+            "[DEBUG] title_from_summary Attempt {}/{} - Raw response:\n{}",
+            attempt, max_retries, response
+        );
+
+        // Clean up the response
+        title = clean_title_response(&response);
+
+        // Debug: Log cleaned title
+        eprintln!(
+            "[DEBUG] title_from_summary Attempt {}/{} - Cleaned: {}",
+            attempt, max_retries, title
+        );
+
+        // Check if title is valid
+        if title != "Meeting Notes" && is_valid_title(&title) {
+            eprintln!("[DEBUG] Title accepted: {}", title);
+            break;
+        } else {
+            eprintln!(
+                "[DEBUG] Title rejected, {}",
+                if attempt < max_retries {
+                    "retrying..."
+                } else {
+                    "using fallback"
+                }
+            );
+            if attempt == max_retries {
+                title = "Meeting Notes".to_string();
+            }
+        }
+    }
 
     // Update note title in database
     {
