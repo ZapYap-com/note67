@@ -26,6 +26,18 @@ fn should_skip_segment(text: &str) -> bool {
         || text.trim().is_empty()
 }
 
+/// Simple voice activity detection based on RMS energy
+/// Returns true if audio has enough energy to likely contain speech
+fn has_voice_activity(samples: &[f32], threshold: f32) -> bool {
+    if samples.is_empty() {
+        return false;
+    }
+    // Calculate RMS energy
+    let sum_sq: f32 = samples.iter().map(|s| s * s).sum();
+    let rms = (sum_sq / samples.len() as f32).sqrt();
+    rms > threshold
+}
+
 /// Fast check if a mic segment is likely an echo of system audio
 /// Uses simple first-words comparison for speed
 fn is_echo_of_system(
@@ -79,6 +91,8 @@ pub struct LiveTranscriptionState {
     pub system_time_offset: Mutex<f64>,
     /// Accumulated segments
     pub segments: Mutex<Vec<TranscriptionSegment>>,
+    /// Recent system audio segments for echo detection (rolling history)
+    pub recent_system_segments: Mutex<Vec<(f64, f64, String)>>,
 }
 
 impl LiveTranscriptionState {
@@ -88,6 +102,7 @@ impl LiveTranscriptionState {
             mic_time_offset: Mutex::new(0.0),
             system_time_offset: Mutex::new(0.0),
             segments: Mutex::new(Vec::new()),
+            recent_system_segments: Mutex::new(Vec::new()),
         }
     }
 }
@@ -136,6 +151,7 @@ pub async fn start_live_transcription(
     *live_state.mic_time_offset.lock().await = 0.0;
     *live_state.system_time_offset.lock().await = 0.0;
     live_state.segments.lock().await.clear();
+    live_state.recent_system_segments.lock().await.clear();
 
     let app_clone = app.clone();
     let note_id_clone = note_id.clone();
@@ -169,7 +185,7 @@ pub async fn start_live_transcription(
             // Build list of audio sources to process
             let mut audio_sources: Vec<(Vec<f32>, u32, usize, AudioSource)> = Vec::new();
 
-            // Add mic samples if available
+            // Add mic samples if available and has voice activity
             if !mic_samples.is_empty() {
                 let rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
                 let ch = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
@@ -184,14 +200,18 @@ pub async fn start_live_transcription(
                         mic_samples
                     };
 
-                    // Resample mic to 16kHz for Whisper
-                    let mic_16k = if rate != 16000 {
-                        resample(&mono_mic, rate, 16000)
-                    } else {
-                        mono_mic
-                    };
+                    // Only process if there's voice activity (RMS > 0.01)
+                    // This filters out silence and low background noise
+                    if has_voice_activity(&mono_mic, 0.01) {
+                        // Resample mic to 16kHz for Whisper
+                        let mic_16k = if rate != 16000 {
+                            resample(&mono_mic, rate, 16000)
+                        } else {
+                            mono_mic
+                        };
 
-                    audio_sources.push((mic_16k, 16000_u32, 1_usize, AudioSource::Mic));
+                        audio_sources.push((mic_16k, 16000_u32, 1_usize, AudioSource::Mic));
+                    }
                 }
             }
 
@@ -258,9 +278,8 @@ pub async fn start_live_transcription(
             let mut db_segments: Vec<(String, f64, f64, String, Option<String>)> = Vec::new();
             let mut all_events: Vec<TranscriptionUpdateEvent> = Vec::new();
 
-            // Process system results FIRST to collect current batch for echo detection
+            // Process system results FIRST and update rolling history for echo detection
             let mut current_system_segments: Vec<TranscriptionSegment> = Vec::new();
-            let mut system_segments_for_echo_check: Vec<(f64, f64, String)> = Vec::new();
 
             if let Some(transcription) = &system_result {
                 if !transcription.segments.is_empty() {
@@ -271,12 +290,24 @@ pub async fn start_live_transcription(
                         .cloned()
                         .collect();
 
-                    for seg in &valid {
-                        system_segments_for_echo_check.push((seg.start_time, seg.end_time, seg.text.clone()));
+                    // Add new segments to rolling history
+                    {
+                        let mut history = live_state_clone.recent_system_segments.lock().await;
+                        for seg in &valid {
+                            history.push((seg.start_time, seg.end_time, seg.text.clone()));
+                        }
+                        // Keep only last 30 seconds of system segments (based on end_time)
+                        let current_time = *live_state_clone.system_time_offset.lock().await;
+                        let cutoff = current_time - 30.0;
+                        history.retain(|(_, end, _)| *end > cutoff);
                     }
                     current_system_segments = valid;
                 }
             }
+
+            // Get current rolling history for echo check
+            let system_segments_for_echo_check: Vec<(f64, f64, String)> =
+                live_state_clone.recent_system_segments.lock().await.clone();
 
             // Process mic results with echo filtering
             if let Some(transcription) = mic_result {
