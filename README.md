@@ -9,10 +9,11 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Audio recording (microphone)
 - [x] Local transcription with Whisper
 - [x] Speaker distinction (You vs Others) on macOS
-- [x] Acoustic Echo Cancellation (AEC) for speaker usage
+- [x] Echo deduplication for speaker usage
 - [x] Live transcription during recording
 - [x] Pause/Resume recording
 - [x] Continue recording on existing notes (Listen)
+- [x] Voice Activity Detection (VAD) for mic input
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
@@ -37,19 +38,17 @@ On macOS 13+, Note67 can distinguish between your voice and other meeting partic
 - Screen Recording permission (System Settings → Privacy & Security → Screen Recording)
 - Microphone permission
 
-## Acoustic Echo Cancellation (AEC)
+## Echo Handling
 
-When using speakers instead of headphones, your microphone picks up audio from your speakers, causing duplicate transcriptions. Note67 includes built-in AEC to handle this:
+When using speakers instead of headphones, your microphone picks up audio from your speakers, causing duplicate transcriptions. Note67 handles this with a multi-layer approach:
 
 **How it works:**
-1. System audio is captured as the "reference signal"
-2. Microphone input contains your voice + speaker echo
-3. NLMS adaptive filter subtracts the reference from mic input
-4. Result: clean voice signal without echo
+1. **Voice Activity Detection (VAD)** - Mic audio is only transcribed if RMS energy exceeds threshold, filtering silence and ambient noise
+2. **Echo Deduplication** - Mic transcripts are compared against a 30-second rolling history of system audio segments
+3. **Text Similarity Matching** - If mic text shares 3+ words with overlapping system audio, it's filtered as echo
 
 **For best results:**
 - Headphones are still recommended for optimal quality
-- AEC handles up to 150ms of echo delay
 - Works automatically when system audio capture is enabled
 
 ## Tech Stack
@@ -63,7 +62,7 @@ When using speakers instead of headphones, your microphone picks up audio from y
 | Transcription | whisper-rs (local Whisper models) |
 | AI Summaries | Ollama (local LLMs) |
 | System Audio | ScreenCaptureKit (macOS), objc2 bindings |
-| Echo Cancellation | NLMS adaptive filter |
+| Echo Handling | VAD + post-processing deduplication |
 
 ## Prerequisites
 
