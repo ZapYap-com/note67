@@ -47,6 +47,7 @@ struct GenerateOptions {
     num_ctx: Option<u32>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GenerateResponse {
     response: String,
@@ -246,6 +247,7 @@ impl OllamaClient {
     }
 
     /// Pull (download) a model
+    #[allow(dead_code)]
     pub async fn pull_model(&self, model: &str) -> Result<(), OllamaError> {
         let url = format!("{}/api/pull", self.base_url);
 

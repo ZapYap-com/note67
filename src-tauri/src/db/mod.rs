@@ -115,6 +115,7 @@ impl Database {
     }
 
     /// Delete all transcript segments for a note
+    #[allow(dead_code)]
     pub fn delete_transcript_segments(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute(
@@ -202,6 +203,7 @@ impl Database {
     }
 
     /// Delete all summaries for a note
+    #[allow(dead_code)]
     pub fn delete_note_summaries(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute("DELETE FROM summaries WHERE note_id = ?1", [note_id])?;
@@ -347,6 +349,7 @@ impl Database {
     }
 
     /// Get the latest (most recent) segment for a note
+    #[allow(dead_code)]
     pub fn get_latest_segment(&self, note_id: &str) -> anyhow::Result<Option<AudioSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 

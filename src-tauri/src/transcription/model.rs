@@ -94,6 +94,7 @@ impl ModelManager {
     }
 
     /// Get the models directory path
+    #[allow(dead_code)]
     pub fn models_dir(&self) -> &PathBuf {
         &self.models_dir
     }

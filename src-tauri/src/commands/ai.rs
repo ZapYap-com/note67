@@ -84,6 +84,7 @@ pub struct OllamaStatus {
     pub selected_model: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenerateSummaryRequest {
     pub note_id: String,
@@ -91,6 +92,7 @@ pub struct GenerateSummaryRequest {
     pub custom_prompt: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenerateSummaryResponse {
     pub summary: Summary,

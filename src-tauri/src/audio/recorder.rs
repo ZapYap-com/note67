@@ -119,6 +119,7 @@ impl RecordingState {
     }
 
     /// Get the current buffer length without clearing
+    #[allow(dead_code)]
     pub fn buffer_len(&self) -> usize {
         match self.audio_buffer.lock() { Ok(buffer) => {
             buffer.len()
@@ -216,6 +217,7 @@ pub fn stop_recording(state: &RecordingState) -> Result<Option<PathBuf>, AudioEr
 }
 
 /// Stop recording but preserve state for continue (used when ending a note that can be continued)
+#[allow(dead_code)]
 pub fn stop_recording_preserving_state(state: &RecordingState) -> Result<(Option<PathBuf>, i64), AudioError> {
     // Calculate duration before stopping
     let duration_ms = state.get_segment_elapsed_ms();

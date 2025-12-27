@@ -495,12 +495,14 @@ RESPONSE:"#
 }
 
 /// A template for generating prompts
+#[allow(dead_code)]
 pub struct PromptTemplate {
     pub name: String,
     pub description: String,
     pub template: String,
 }
 
+#[allow(dead_code)]
 impl PromptTemplate {
     pub fn render(&self, transcript: &str) -> String {
         self.template.replace("{transcript}", transcript)

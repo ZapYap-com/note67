@@ -25,6 +25,7 @@ pub enum TranscriptionError {
     #[error("Audio file not found: {0}")]
     AudioNotFound(String),
 
+    #[allow(dead_code)]
     #[error("Unsupported audio format")]
     UnsupportedFormat,
 
@@ -34,6 +35,7 @@ pub enum TranscriptionError {
     #[error("Already transcribing")]
     AlreadyTranscribing,
 
+    #[allow(dead_code)]
     #[error("Not transcribing")]
     NotTranscribing,
 }

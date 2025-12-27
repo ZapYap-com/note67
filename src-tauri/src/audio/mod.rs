@@ -8,27 +8,25 @@ pub mod macos;
 
 pub use mixer::mix_wav_files;
 pub use recorder::{
-    pause_recording, resume_recording, start_recording, stop_recording,
-    stop_recording_preserving_state, RecordingPhase, RecordingState,
+    pause_recording, resume_recording, start_recording, stop_recording, RecordingPhase,
+    RecordingState,
 };
 pub use system_audio::{create_system_audio_capture, is_system_audio_available, SystemAudioCapture};
 
 // Re-export system audio buffer functions for live transcription
 #[cfg(target_os = "macos")]
-pub use macos::{clear_system_audio_buffer, take_system_audio_samples};
+pub use macos::take_system_audio_samples;
 
 #[cfg(not(target_os = "macos"))]
 pub fn take_system_audio_samples() -> Vec<f32> {
     Vec::new()
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn clear_system_audio_buffer() {}
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Audio source type for recording
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AudioSource {
     /// User's microphone input

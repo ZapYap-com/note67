@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 
+#[allow(dead_code)]
 pub const SCHEMA_VERSION: i32 = 4;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {

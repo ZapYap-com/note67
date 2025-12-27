@@ -82,6 +82,7 @@ pub fn take_system_audio_samples() -> Vec<f32> {
 }
 
 /// Clear the system audio buffer
+#[allow(dead_code)]
 pub fn clear_system_audio_buffer() {
     if let Ok(mut buffer) = get_system_audio_buffer().lock() {
         buffer.clear();
@@ -93,6 +94,7 @@ fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
     unsafe {
         unsafe extern "C" {
             fn CMSampleBufferGetDataBuffer(sbuf: CMSampleBufferRef) -> *mut c_void;
+            #[allow(dead_code)]
             fn CMBlockBufferGetDataLength(block_buffer: *mut c_void) -> usize;
             fn CMBlockBufferGetDataPointer(
                 block_buffer: *mut c_void,

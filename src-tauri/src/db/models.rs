@@ -78,6 +78,7 @@ pub struct UpdateNote {
     pub participants: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NewTranscriptSegment {
     pub note_id: String,
@@ -100,6 +101,7 @@ pub struct AudioSegment {
     pub created_at: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct NewAudioSegment {
     pub note_id: String,

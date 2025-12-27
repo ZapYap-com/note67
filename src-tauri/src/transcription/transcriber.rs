@@ -49,6 +49,7 @@ impl Transcriber {
     }
 
     /// Check if currently transcribing
+    #[allow(dead_code)]
     pub fn is_transcribing(&self) -> bool {
         self.is_transcribing.load(Ordering::SeqCst)
     }
