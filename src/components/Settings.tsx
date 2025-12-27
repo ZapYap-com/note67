@@ -1876,6 +1876,15 @@ function OllamaTab() {
     (model) => !isEmbeddingModel(model.name)
   );
 
+  // Model recommendations
+  const getRecommendation = (modelName: string) => {
+    const lower = modelName.toLowerCase();
+    if (lower === "gemma3:latest" || lower === "gemma3") return "Recommended";
+    if (lower === "gemma3:27b") return "High-end";
+    if (lower === "gemma3:1b" || lower === "gemma3:1b-it") return "Lightweight";
+    return null;
+  };
+
   return (
     <div>
       {/* Status */}
@@ -1946,6 +1955,49 @@ function OllamaTab() {
           </div>
         )}
       </div>
+
+      {/* Model Recommendations */}
+      {isRunning && (
+        <div
+          className="mb-6 p-3 rounded-xl text-sm"
+          style={{
+            backgroundColor: "rgba(59, 130, 246, 0.08)",
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          <p
+            className="font-medium mb-2"
+            style={{ color: "var(--color-text)" }}
+          >
+            Recommended Models
+          </p>
+          <ul className="space-y-1 text-xs">
+            <li>
+              <strong>gemma3:latest</strong> — Best for most users
+            </li>
+            <li>
+              <strong>gemma3:1b</strong> — Lightweight, for older computers
+            </li>
+            <li>
+              <strong>gemma3:27b</strong> — High quality, for newer computers
+              with GPU
+            </li>
+          </ul>
+          <p
+            className="mt-2 text-xs"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
+            Run{" "}
+            <code
+              className="px-1 py-0.5 rounded"
+              style={{ backgroundColor: "rgba(59, 130, 246, 0.15)" }}
+            >
+              ollama pull gemma3:latest
+            </code>{" "}
+            to download
+          </p>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -2035,12 +2087,31 @@ function OllamaTab() {
                     )}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p
-                      className="font-medium truncate"
-                      style={{ color: "var(--color-text)" }}
-                    >
-                      {model.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className="font-medium truncate"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        {model.name}
+                      </p>
+                      {getRecommendation(model.name) && (
+                        <span
+                          className="px-1.5 py-0.5 text-xs font-medium rounded shrink-0"
+                          style={{
+                            backgroundColor:
+                              getRecommendation(model.name) === "Recommended"
+                                ? "rgba(34, 197, 94, 0.15)"
+                                : "var(--color-accent-light)",
+                            color:
+                              getRecommendation(model.name) === "Recommended"
+                                ? "#16a34a"
+                                : "var(--color-accent)",
+                          }}
+                        >
+                          {getRecommendation(model.name)}
+                        </span>
+                      )}
+                    </div>
                     <p
                       className="text-xs"
                       style={{ color: "var(--color-text-tertiary)" }}
