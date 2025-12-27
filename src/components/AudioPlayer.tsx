@@ -229,20 +229,20 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
             onMouseDown={handleMouseDown}
           >
             <div
-              className="h-full rounded-full relative"
+              className="h-full rounded-full"
               style={{
                 width: `${progress}%`,
                 backgroundColor: "var(--color-text)",
               }}
-            >
-              <div
-                className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{
-                  backgroundColor: "var(--color-text)",
-                  transform: "translate(50%, -50%)",
-                }}
-              />
-            </div>
+            />
+            <div
+              className="absolute top-1/2 w-3 h-3 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              style={{
+                backgroundColor: "var(--color-text)",
+                left: `${progress}%`,
+                transform: "translate(-50%, -50%)",
+              }}
+            />
           </div>
           <span
             className="text-xs tabular-nums w-10"
