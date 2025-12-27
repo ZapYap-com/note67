@@ -102,13 +102,11 @@ pub fn run() {
 
             let menu = Menu::with_items(app, &[&open, &new_note, &settings, &exit])?;
 
-            let icon = Image::from_path("icons/icon.png").unwrap_or_else(|_| {
-                app.default_window_icon().unwrap().clone()
-            });
+            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
-                .icon_as_template(true)
+                .icon_as_template(false)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
