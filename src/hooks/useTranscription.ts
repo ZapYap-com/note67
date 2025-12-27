@@ -46,10 +46,11 @@ export function useModels(): UseModelsReturn {
   const downloadModel = useWhisperStore((state) => state.downloadModel);
   const deleteModel = useWhisperStore((state) => state.deleteModel);
   const loadModel = useWhisperStore((state) => state.loadModel);
+  const loadSettings = useWhisperStore((state) => state.loadSettings);
 
-  // Initialize on first mount - refreshModels will auto-load saved model
+  // Initialize on first mount - load settings first, then refreshModels will auto-load saved model
   useEffect(() => {
-    refreshModels();
+    loadSettings().then(() => refreshModels());
   }, []);
 
   return {

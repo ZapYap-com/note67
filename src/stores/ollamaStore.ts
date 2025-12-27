@@ -1,26 +1,28 @@
 import { create } from "zustand";
-import { aiApi } from "../api";
+import { aiApi, settingsApi } from "../api";
 import type { OllamaModel, OllamaStatus } from "../types";
 
-const STORAGE_KEY = "note67_ollama_model";
+// Settings key for database storage
+const SETTINGS_KEY_MODEL = "ollama_model";
 
-function getSavedModel(): string | null {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
+// Legacy localStorage key for migration
+const LEGACY_STORAGE_KEY = "note67_ollama_model";
 
-function saveModel(model: string | null): void {
+// Migrate from localStorage to database (one-time)
+async function migrateFromLocalStorage(): Promise<void> {
   try {
-    if (model) {
-      localStorage.setItem(STORAGE_KEY, model);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
+    const migrated = localStorage.getItem("note67_ollama_migrated");
+    if (migrated) return;
+
+    const legacyModel = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyModel) {
+      await settingsApi.set(SETTINGS_KEY_MODEL, legacyModel);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
+
+    localStorage.setItem("note67_ollama_migrated", "true");
   } catch {
-    // Ignore storage errors
+    // Ignore migration errors
   }
 }
 
@@ -29,6 +31,8 @@ interface OllamaState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
+  settingsLoaded: boolean;
+  savedModel: string | null;
 
   // Derived getters as actions for convenience
   isRunning: () => boolean;
@@ -36,6 +40,7 @@ interface OllamaState {
   selectedModel: () => string | null;
 
   // Actions
+  loadSettings: () => Promise<void>;
   checkStatus: () => Promise<void>;
   selectModel: (modelName: string) => Promise<void>;
   setError: (error: string | null) => void;
@@ -46,10 +51,22 @@ export const useOllamaStore = create<OllamaState>((set, get) => ({
   loading: true,
   error: null,
   initialized: false,
+  settingsLoaded: false,
+  savedModel: null,
 
   isRunning: () => get().status?.running ?? false,
   models: () => get().status?.models ?? [],
   selectedModel: () => get().status?.selected_model ?? null,
+
+  loadSettings: async () => {
+    try {
+      await migrateFromLocalStorage();
+      const savedModel = await settingsApi.get(SETTINGS_KEY_MODEL);
+      set({ savedModel, settingsLoaded: true });
+    } catch {
+      set({ settingsLoaded: true });
+    }
+  },
 
   checkStatus: async () => {
     try {
@@ -58,10 +75,9 @@ export const useOllamaStore = create<OllamaState>((set, get) => ({
       set({ status, error: null });
 
       // Auto-select saved model on first init if no model is selected
-      const { initialized } = get();
+      const { initialized, savedModel } = get();
       if (!initialized) {
         set({ initialized: true });
-        const savedModel = getSavedModel();
         if (savedModel && status.running && !status.selected_model) {
           // Check if saved model is available
           const modelExists = status.models.some((m) => m.name === savedModel);
@@ -80,7 +96,9 @@ export const useOllamaStore = create<OllamaState>((set, get) => ({
   selectModel: async (modelName: string) => {
     try {
       await aiApi.selectModel(modelName);
-      saveModel(modelName);
+      set({ savedModel: modelName });
+      // Save to database
+      await settingsApi.set(SETTINGS_KEY_MODEL, modelName);
       await get().checkStatus();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });

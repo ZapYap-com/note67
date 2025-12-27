@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { settingsApi } from "../api";
 
 export interface UserProfile {
   name: string;
@@ -6,7 +7,11 @@ export interface UserProfile {
   avatar: string;
 }
 
-const STORAGE_KEY = "note67_profile";
+// Settings key for database storage
+const SETTINGS_KEY_PROFILE = "user_profile";
+
+// Legacy localStorage key for migration
+const LEGACY_STORAGE_KEY = "note67_profile";
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "",
@@ -14,37 +19,58 @@ const DEFAULT_PROFILE: UserProfile = {
   avatar: "",
 };
 
-function loadProfile(): UserProfile {
+// Migrate from localStorage to database (one-time)
+async function migrateFromLocalStorage(): Promise<void> {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return { ...DEFAULT_PROFILE, ...JSON.parse(saved) };
-    }
-  } catch (e) {
-    console.error("Failed to load profile:", e);
-  }
-  return DEFAULT_PROFILE;
-}
+    const migrated = localStorage.getItem("note67_profile_migrated");
+    if (migrated) return;
 
-function saveProfile(profile: UserProfile): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    const legacyProfile = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyProfile) {
+      await settingsApi.set(SETTINGS_KEY_PROFILE, legacyProfile);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+
+    localStorage.setItem("note67_profile_migrated", "true");
   } catch {
-    // Ignore storage errors
+    // Ignore migration errors
   }
 }
 
 interface ProfileState {
   profile: UserProfile;
-  updateProfile: (updates: Partial<UserProfile>) => void;
+  settingsLoaded: boolean;
+  loadSettings: () => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
-  profile: loadProfile(),
+  profile: DEFAULT_PROFILE,
+  settingsLoaded: false,
 
-  updateProfile: (updates: Partial<UserProfile>) => {
+  loadSettings: async () => {
+    try {
+      await migrateFromLocalStorage();
+      const saved = await settingsApi.get(SETTINGS_KEY_PROFILE);
+      if (saved) {
+        const profile = { ...DEFAULT_PROFILE, ...JSON.parse(saved) };
+        set({ profile, settingsLoaded: true });
+      } else {
+        set({ settingsLoaded: true });
+      }
+    } catch {
+      set({ settingsLoaded: true });
+    }
+  },
+
+  updateProfile: async (updates: Partial<UserProfile>) => {
     const newProfile = { ...get().profile, ...updates };
     set({ profile: newProfile });
-    saveProfile(newProfile);
+    // Save to database
+    try {
+      await settingsApi.set(SETTINGS_KEY_PROFILE, JSON.stringify(newProfile));
+    } catch {
+      // Ignore save errors
+    }
   },
 }));

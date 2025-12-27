@@ -203,6 +203,9 @@ pub fn run() {
             // Settings commands
             commands::get_theme_preference,
             commands::set_theme_preference,
+            commands::get_setting,
+            commands::set_setting,
+            commands::get_settings,
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
             commands::open_screen_recording_settings,

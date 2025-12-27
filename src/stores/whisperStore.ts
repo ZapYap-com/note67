@@ -1,9 +1,14 @@
 import { create } from "zustand";
-import { transcriptionApi } from "../api";
+import { settingsApi, transcriptionApi } from "../api";
 import type { ModelInfo, ModelSize } from "../types";
 
-const STORAGE_KEY = "note67_whisper_model";
-const LANGUAGE_STORAGE_KEY = "note67_whisper_language";
+// Settings keys for database storage
+const SETTINGS_KEY_MODEL = "whisper_model";
+const SETTINGS_KEY_LANGUAGE = "whisper_language";
+
+// Legacy localStorage keys for migration
+const LEGACY_STORAGE_KEY = "note67_whisper_model";
+const LEGACY_LANGUAGE_STORAGE_KEY = "note67_whisper_language";
 
 export type WhisperLanguage = "auto" | string;
 
@@ -32,74 +37,85 @@ export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
   { code: "auto", name: "Auto-detect (not recommended)" },
 ];
 
-function getSavedModel(): ModelSize | null {
+// Migrate from localStorage to database (one-time)
+async function migrateFromLocalStorage(): Promise<void> {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved as ModelSize | null;
-  } catch {
-    return null;
-  }
-}
+    // Check if migration already done
+    const migrated = localStorage.getItem("note67_whisper_migrated");
+    if (migrated) return;
 
-function saveModel(model: ModelSize | null): void {
-  try {
-    if (model) {
-      localStorage.setItem(STORAGE_KEY, model);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
+    // Migrate model setting
+    const legacyModel = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyModel) {
+      await settingsApi.set(SETTINGS_KEY_MODEL, legacyModel);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
-  } catch {
-    // Ignore storage errors
-  }
-}
 
-function getSavedLanguage(): WhisperLanguage {
-  try {
-    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    return saved || "en";
-  } catch {
-    return "en";
-  }
-}
+    // Migrate language setting
+    const legacyLanguage = localStorage.getItem(LEGACY_LANGUAGE_STORAGE_KEY);
+    if (legacyLanguage) {
+      await settingsApi.set(SETTINGS_KEY_LANGUAGE, legacyLanguage);
+      localStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY);
+    }
 
-function saveLanguage(language: WhisperLanguage): void {
-  try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    // Mark migration as done
+    localStorage.setItem("note67_whisper_migrated", "true");
   } catch {
-    // Ignore storage errors
+    // Ignore migration errors
   }
 }
 
 interface WhisperState {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
+  savedModel: ModelSize | null;
   isDownloading: boolean;
   downloadingModel: ModelSize | null;
   downloadProgress: number;
   error: string | null;
   progressInterval: number | null;
   initialized: boolean;
+  settingsLoaded: boolean;
   language: WhisperLanguage;
 
   // Actions
+  loadSettings: () => Promise<void>;
   refreshModels: () => Promise<void>;
   downloadModel: (size: ModelSize) => Promise<void>;
   deleteModel: (size: ModelSize) => Promise<void>;
   loadModel: (size: ModelSize) => Promise<void>;
   setError: (error: string | null) => void;
-  setLanguage: (language: WhisperLanguage) => void;
+  setLanguage: (language: WhisperLanguage) => Promise<void>;
 }
 
 export const useWhisperStore = create<WhisperState>((set, get) => ({
   models: [],
   loadedModel: null,
+  savedModel: null,
   isDownloading: false,
   downloadingModel: null,
   downloadProgress: 0,
   error: null,
   progressInterval: null,
   initialized: false,
-  language: getSavedLanguage(),
+  settingsLoaded: false,
+  language: "en",
+
+  loadSettings: async () => {
+    try {
+      // Run migration first
+      await migrateFromLocalStorage();
+
+      // Load settings from database
+      const settings = await settingsApi.getMultiple([SETTINGS_KEY_MODEL, SETTINGS_KEY_LANGUAGE]);
+      const savedModel = settings[SETTINGS_KEY_MODEL] as ModelSize | null;
+      const language = settings[SETTINGS_KEY_LANGUAGE] || "en";
+
+      set({ savedModel, language, settingsLoaded: true });
+    } catch {
+      set({ settingsLoaded: true });
+    }
+  },
 
   refreshModels: async () => {
     try {
@@ -110,10 +126,9 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
       set({ models: modelList, loadedModel: loaded, error: null });
 
       // Auto-load saved model on first init if no model is loaded
-      const { initialized } = get();
+      const { initialized, savedModel } = get();
       if (!initialized) {
         set({ initialized: true });
-        const savedModel = getSavedModel();
         if (savedModel && !loaded) {
           // Check if saved model is downloaded
           const savedModelInfo = modelList.find((m) => m.size === savedModel);
@@ -169,8 +184,9 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
     try {
       set({ error: null });
       await transcriptionApi.loadModel(size);
-      set({ loadedModel: size });
-      saveModel(size);
+      set({ loadedModel: size, savedModel: size });
+      // Save to database
+      await settingsApi.set(SETTINGS_KEY_MODEL, size);
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
@@ -178,8 +194,13 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
 
   setError: (error) => set({ error }),
 
-  setLanguage: (language) => {
-    saveLanguage(language);
+  setLanguage: async (language) => {
     set({ language });
+    // Save to database
+    try {
+      await settingsApi.set(SETTINGS_KEY_LANGUAGE, language);
+    } catch {
+      // Ignore save errors
+    }
   },
 }));

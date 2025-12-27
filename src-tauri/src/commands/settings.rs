@@ -38,6 +38,29 @@ pub fn set_theme_preference(theme: String, db: State<'_, Database>) -> Result<()
     db.set_setting("theme", &theme).map_err(|e| e.to_string())
 }
 
+/// Get a setting value by key
+#[tauri::command]
+pub fn get_setting(key: String, db: State<'_, Database>) -> Result<Option<String>, String> {
+    db.get_setting(&key).map_err(|e| e.to_string())
+}
+
+/// Set a setting value by key
+#[tauri::command]
+pub fn set_setting(key: String, value: String, db: State<'_, Database>) -> Result<(), String> {
+    db.set_setting(&key, &value).map_err(|e| e.to_string())
+}
+
+/// Get multiple settings at once
+#[tauri::command]
+pub fn get_settings(keys: Vec<String>, db: State<'_, Database>) -> Result<std::collections::HashMap<String, Option<String>>, String> {
+    let mut result = std::collections::HashMap::new();
+    for key in keys {
+        let value = db.get_setting(&key).map_err(|e| e.to_string())?;
+        result.insert(key, value);
+    }
+    Ok(result)
+}
+
 /// Get the autostart status
 #[tauri::command]
 pub fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {

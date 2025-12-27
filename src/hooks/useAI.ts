@@ -17,10 +17,11 @@ export function useOllama() {
   const error = useOllamaStore((state) => state.error);
   const checkStatus = useOllamaStore((state) => state.checkStatus);
   const selectModel = useOllamaStore((state) => state.selectModel);
+  const loadSettings = useOllamaStore((state) => state.loadSettings);
 
-  // Initialize on first mount - checkStatus will auto-restore saved model
+  // Initialize on first mount - load settings first, then checkStatus will auto-restore saved model
   useEffect(() => {
-    checkStatus();
+    loadSettings().then(() => checkStatus());
   }, []);
 
   return {
