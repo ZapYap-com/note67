@@ -1292,8 +1292,8 @@ function NoteView({
               </button>
             </>
           )}
-          {/* Ended/idle note controls - show Continue for any note not currently recording */}
-          {!isRecording && !isPaused && (
+          {/* Ended/idle note controls - show Listen for any note not currently recording or generating */}
+          {!isRecording && !isPaused && !isRegenerating && !isGenerating && (
             <>
               <button
                 onClick={onContinueRecording}
