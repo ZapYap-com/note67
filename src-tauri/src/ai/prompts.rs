@@ -199,7 +199,7 @@ KEY DECISIONS:"#,
     /// Generate a short, descriptive title for the note
     pub fn title(transcript: &str) -> String {
         format!(
-            r#"Write a 2-6 word plain text title. No markdown. Only use words from the transcript.
+            r#"Generate a 2-6 word title for this transcript. Just the title, nothing else.
 
 {}
 
@@ -211,7 +211,7 @@ Title:"#,
     /// Generate a short, descriptive title based on the note summary
     pub fn title_from_summary(summary: &str) -> String {
         format!(
-            r#"Write a 2-6 word plain text title. No markdown. Only use words from the summary.
+            r#"Generate a 2-6 word title for this summary. Just the title, nothing else.
 
 {}
 
