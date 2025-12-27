@@ -803,6 +803,20 @@ fn is_valid_title(title: &str) -> bool {
         "my suggestion",
         "based on the",
         "based on this",
+        "title idea",
+        "any other",
+        "name1",
+        "name2",
+        "option1",
+        "option2",
+        "alternative",
+        "suggested title",
+        "possible title",
+        "potential title",
+        "description",
+        "describe",
+        "we need",
+        "summary:",
     ];
     for pattern in prompt_leakage {
         if lower_trimmed.contains(pattern) {
