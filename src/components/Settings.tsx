@@ -3,6 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { useModels, useOllama } from "../hooks";
 import { useProfileStore } from "../stores/profileStore";
 import { useThemeStore } from "../stores/themeStore";
+import {
+  useWhisperStore,
+  WHISPER_LANGUAGES,
+  type WhisperLanguage,
+} from "../stores/whisperStore";
 import type { ModelInfo, ModelSize } from "../types";
 
 export type { UserProfile } from "../stores/profileStore";
@@ -329,7 +334,10 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB }: SettingsProps) {
           </div>
           <nav className="flex-1 px-2 overflow-y-auto">
             {sections.map((section, sectionIndex) => (
-              <div key={section.title} className={sectionIndex > 0 ? "mt-4" : ""}>
+              <div
+                key={section.title}
+                className={sectionIndex > 0 ? "mt-4" : ""}
+              >
                 <h3
                   className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
                   style={{ color: "var(--color-text-tertiary)" }}
@@ -478,7 +486,13 @@ function ProfileTab() {
           className="block text-sm font-medium mb-1"
           style={{ color: "var(--color-text)" }}
         >
-          Name <span className="font-normal" style={{ color: "var(--color-text-tertiary)" }}>(optional)</span>
+          Name{" "}
+          <span
+            className="font-normal"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
+            (optional)
+          </span>
         </label>
         <input
           type="text"
@@ -499,7 +513,13 @@ function ProfileTab() {
           className="block text-sm font-medium mb-1"
           style={{ color: "var(--color-text)" }}
         >
-          Email <span className="font-normal" style={{ color: "var(--color-text-tertiary)" }}>(optional)</span>
+          Email{" "}
+          <span
+            className="font-normal"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
+            (optional)
+          </span>
         </label>
         <input
           type="email"
@@ -517,7 +537,9 @@ function ProfileTab() {
           className="mt-1.5 text-xs"
           style={{ color: "var(--color-text-tertiary)" }}
         >
-          Used for receiving Note67 updates and other new app announcements. Will be used to signup for my newsletter. No need to signup if you do not feel like it.
+          Used for receiving Note67 updates and other new app announcements.
+          Will be used to signup for my newsletter. No need to signup if you do
+          not feel like it.
         </p>
       </div>
 
@@ -662,10 +684,7 @@ function AppearanceTab() {
               {option.icon}
             </span>
             <div className="flex-1 min-w-0">
-              <p
-                className="font-medium"
-                style={{ color: "var(--color-text)" }}
-              >
+              <p className="font-medium" style={{ color: "var(--color-text)" }}>
                 {option.label}
               </p>
               <p
@@ -818,10 +837,7 @@ function SystemTab() {
             </svg>
           </span>
           <div className="text-left">
-            <p
-              className="font-medium"
-              style={{ color: "var(--color-text)" }}
-            >
+            <p className="font-medium" style={{ color: "var(--color-text)" }}>
               Launch at login
             </p>
             <p
@@ -835,7 +851,9 @@ function SystemTab() {
         <div
           className="w-11 h-6 rounded-full transition-colors relative"
           style={{
-            backgroundColor: autostart ? "var(--color-accent)" : "var(--color-border)",
+            backgroundColor: autostart
+              ? "var(--color-accent)"
+              : "var(--color-border)",
           }}
         >
           <div
@@ -910,8 +928,8 @@ function SystemTab() {
                     {systemAudioLoading
                       ? "Checking..."
                       : systemAudioPermission
-                      ? "Granted - System audio capture enabled"
-                      : "Required to capture other participants' audio"}
+                        ? "Granted - System audio capture enabled"
+                        : "Required to capture other participants' audio"}
                   </p>
                 </div>
               </div>
@@ -971,8 +989,12 @@ function SystemTab() {
                   <li>Restart Note67 if prompted</li>
                   <li>Click "Refresh" to verify permission</li>
                 </ol>
-                <p className="mt-2" style={{ color: "var(--color-text-tertiary)" }}>
-                  This allows Note67 to capture system audio to distinguish your voice from other participants.
+                <p
+                  className="mt-2"
+                  style={{ color: "var(--color-text-tertiary)" }}
+                >
+                  This allows Note67 to capture system audio to distinguish your
+                  voice from other participants.
                 </p>
               </div>
             )}
@@ -1000,6 +1022,9 @@ function WhisperTab() {
     loadModel,
   } = useModels();
 
+  const language = useWhisperStore((state) => state.language);
+  const setLanguage = useWhisperStore((state) => state.setLanguage);
+
   const sizeLabels: Record<ModelSize, string> = {
     tiny: "Fastest, basic accuracy",
     base: "Fast, good accuracy",
@@ -1022,38 +1047,79 @@ function WhisperTab() {
         </div>
       )}
 
-      <p
-        className="text-sm mb-4"
-        style={{ color: "var(--color-text-secondary)" }}
-      >
-        Download a model for local transcription. Larger models are more
-        accurate but slower.
-      </p>
-
-      <div className="space-y-2">
-        {models.map((model) => (
-          <WhisperModelCard
-            key={model.size}
-            model={model}
-            isLoaded={loadedModel === model.size}
-            isDownloading={isDownloading && downloadingModel === model.size}
-            downloadProgress={downloadProgress}
-            sizeLabel={sizeLabels[model.size]}
-            isRecommended={model.size === "base"}
-            onDownload={() => downloadModel(model.size)}
-            onDelete={() => deleteModel(model.size)}
-            onLoad={() => loadModel(model.size)}
-            isAnyDownloading={isDownloading}
-          />
-        ))}
+      {/* Language Selection */}
+      <div className="mb-6">
+        <h3
+          className="text-sm font-medium mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
+          Language
+        </h3>
+        <p
+          className="text-sm mb-3"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Select the language for transcription.
+        </p>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as WhisperLanguage)}
+          className="w-full h-10 px-3 rounded-lg text-sm"
+          style={{
+            backgroundColor: "var(--color-bg-subtle)",
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border)",
+          }}
+        >
+          {WHISPER_LANGUAGES.map((lang) => (
+            <option key={lang.code} value={lang.code}>
+              {lang.name}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <p
-        className="mt-4 text-xs"
-        style={{ color: "var(--color-text-tertiary)" }}
-      >
-        {loadedModel ? `Active model: ${loadedModel}` : "No model loaded"}
-      </p>
+      {/* Model Selection */}
+      <div>
+        <h3
+          className="text-sm font-medium mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
+          Model
+        </h3>
+        <p
+          className="text-sm mb-3"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Download a model for local transcription. Larger models are more
+          accurate but slower.
+        </p>
+
+        <div className="space-y-2">
+          {models.map((model) => (
+            <WhisperModelCard
+              key={model.size}
+              model={model}
+              isLoaded={loadedModel === model.size}
+              isDownloading={isDownloading && downloadingModel === model.size}
+              downloadProgress={downloadProgress}
+              sizeLabel={sizeLabels[model.size]}
+              isRecommended={model.size === "base"}
+              onDownload={() => downloadModel(model.size)}
+              onDelete={() => deleteModel(model.size)}
+              onLoad={() => loadModel(model.size)}
+              isAnyDownloading={isDownloading}
+            />
+          ))}
+        </div>
+
+        <p
+          className="mt-4 text-xs"
+          style={{ color: "var(--color-text-tertiary)" }}
+        >
+          {loadedModel ? `Active model: ${loadedModel}` : "No model loaded"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1595,12 +1661,8 @@ function AboutTab() {
 
       {/* Credits */}
       <div className="space-y-3 text-center">
-        <p
-          className="text-xs"
-          style={{ color: "var(--color-text-tertiary)" }}
-        >
-          Built with{" "}
-          <span style={{ color: "#ef4444" }}>♥</span> by{" "}
+        <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+          Built with <span style={{ color: "#ef4444" }}>♥</span> by{" "}
           <a
             href="https://ctmakes.com"
             target="_blank"
@@ -1611,11 +1673,8 @@ function AboutTab() {
             @ctmakes
           </a>
         </p>
-        <p
-          className="text-xs"
-          style={{ color: "var(--color-text-tertiary)" }}
-        >
-          If you like this app, consider checking out {" "}
+        <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+          If you like this app, consider checking out{" "}
           <a
             href="https://leapcount.com"
             target="_blank"
@@ -1802,7 +1861,9 @@ function OllamaTab() {
     const lower = name.toLowerCase();
     return lower.includes("embed") || lower.includes("minilm");
   };
-  const generativeModels = models.filter((model) => !isEmbeddingModel(model.name));
+  const generativeModels = models.filter(
+    (model) => !isEmbeddingModel(model.name)
+  );
 
   return (
     <div>

@@ -89,8 +89,8 @@ export const transcriptionApi = {
   },
 
   // Live transcription
-  startLiveTranscription: (noteId: string): Promise<void> => {
-    return invoke("start_live_transcription", { noteId });
+  startLiveTranscription: (noteId: string, language?: string): Promise<void> => {
+    return invoke("start_live_transcription", { noteId, language });
   },
 
   stopLiveTranscription: (noteId: string): Promise<TranscriptionResult> => {

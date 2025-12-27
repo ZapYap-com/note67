@@ -120,6 +120,7 @@ pub struct TranscriptionUpdateEvent {
 pub async fn start_live_transcription(
     app: AppHandle,
     note_id: String,
+    language: Option<String>,
     recording_state: Arc<RecordingState>,
     live_state: Arc<LiveTranscriptionState>,
     whisper_ctx: Arc<WhisperContext>,
@@ -139,12 +140,14 @@ pub async fn start_live_transcription(
 
     let app_clone = app.clone();
     let note_id_clone = note_id.clone();
+    let language_clone = language.clone();
     let recording_state_clone = recording_state.clone();
     let live_state_clone = live_state.clone();
     let whisper_ctx_clone = whisper_ctx.clone();
 
     // Spawn the live transcription task
     tokio::spawn(async move {
+        let lang = language_clone;
         let mut ticker = interval(Duration::from_secs(3));
 
         loop {
@@ -234,11 +237,15 @@ pub async fn start_live_transcription(
             let whisper_ctx_mic = whisper_ctx_clone.clone();
             let whisper_ctx_sys = whisper_ctx_clone.clone();
 
+            let lang_mic = lang.clone();
+            let lang_sys = lang.clone();
+
             let mic_future = async {
                 if let Some((samples, time_offset)) = mic_data {
                     let ctx = whisper_ctx_mic;
+                    let language = lang_mic;
                     tokio::task::spawn_blocking(move || {
-                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset)
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset, language.as_deref())
                     })
                     .await
                     .ok()
@@ -251,8 +258,9 @@ pub async fn start_live_transcription(
             let system_future = async {
                 if let Some((samples, time_offset)) = system_data {
                     let ctx = whisper_ctx_sys;
+                    let language = lang_sys;
                     tokio::task::spawn_blocking(move || {
-                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset)
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset, language.as_deref())
                     })
                     .await
                     .ok()
@@ -396,6 +404,7 @@ fn transcribe_samples(
     sample_rate: u32,
     channels: usize,
     time_offset: f64,
+    language: Option<&str>,
 ) -> Result<TranscriptionResult, TranscriptionError> {
     // Convert to mono if needed
     let mono_samples: Vec<f32> = if channels > 1 {
@@ -422,7 +431,7 @@ fn transcribe_samples(
 
     // Set up transcription parameters
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_language(Some("en"));
+    params.set_language(language); // None = auto-detect
     params.set_translate(false);
     params.set_print_special(false);
     params.set_print_progress(false);
@@ -481,7 +490,7 @@ fn transcribe_samples(
     Ok(TranscriptionResult {
         segments,
         full_text,
-        language: Some("en".to_string()),
+        language: language.map(|s| s.to_string()),
     })
 }
 

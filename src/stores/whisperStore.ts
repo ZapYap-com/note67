@@ -3,6 +3,34 @@ import { transcriptionApi } from "../api";
 import type { ModelInfo, ModelSize } from "../types";
 
 const STORAGE_KEY = "note67_whisper_model";
+const LANGUAGE_STORAGE_KEY = "note67_whisper_language";
+
+export type WhisperLanguage = "auto" | string;
+
+// Common languages supported by Whisper (subset of ~99 total)
+export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
+  { code: "auto", name: "Auto-detect" },
+  { code: "en", name: "English" },
+  { code: "zh", name: "Chinese" },
+  { code: "es", name: "Spanish" },
+  { code: "fr", name: "French" },
+  { code: "de", name: "German" },
+  { code: "ja", name: "Japanese" },
+  { code: "ko", name: "Korean" },
+  { code: "pt", name: "Portuguese" },
+  { code: "ru", name: "Russian" },
+  { code: "it", name: "Italian" },
+  { code: "nl", name: "Dutch" },
+  { code: "pl", name: "Polish" },
+  { code: "tr", name: "Turkish" },
+  { code: "ar", name: "Arabic" },
+  { code: "hi", name: "Hindi" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "th", name: "Thai" },
+  { code: "id", name: "Indonesian" },
+  { code: "ms", name: "Malay" },
+  { code: "tl", name: "Tagalog" },
+];
 
 function getSavedModel(): ModelSize | null {
   try {
@@ -25,6 +53,23 @@ function saveModel(model: ModelSize | null): void {
   }
 }
 
+function getSavedLanguage(): WhisperLanguage {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return saved || "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function saveLanguage(language: WhisperLanguage): void {
+  try {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface WhisperState {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
@@ -34,6 +79,7 @@ interface WhisperState {
   error: string | null;
   progressInterval: number | null;
   initialized: boolean;
+  language: WhisperLanguage;
 
   // Actions
   refreshModels: () => Promise<void>;
@@ -41,6 +87,7 @@ interface WhisperState {
   deleteModel: (size: ModelSize) => Promise<void>;
   loadModel: (size: ModelSize) => Promise<void>;
   setError: (error: string | null) => void;
+  setLanguage: (language: WhisperLanguage) => void;
 }
 
 export const useWhisperStore = create<WhisperState>((set, get) => ({
@@ -52,6 +99,7 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
   error: null,
   progressInterval: null,
   initialized: false,
+  language: getSavedLanguage(),
 
   refreshModels: async () => {
     try {
@@ -129,4 +177,9 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
   },
 
   setError: (error) => set({ error }),
+
+  setLanguage: (language) => {
+    saveLanguage(language);
+    set({ language });
+  },
 }));

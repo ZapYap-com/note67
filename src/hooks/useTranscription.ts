@@ -300,7 +300,10 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
       setLiveSegments([]);
       currentNoteIdRef.current = noteId;
       speakerNameRef.current = speakerName || "Me";
-      await transcriptionApi.startLiveTranscription(noteId);
+      // Get language from store - "auto" becomes undefined for backend
+      const language = useWhisperStore.getState().language;
+      const langParam = language === "auto" ? undefined : language;
+      await transcriptionApi.startLiveTranscription(noteId, langParam);
       setIsLiveTranscribing(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

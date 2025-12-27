@@ -426,6 +426,7 @@ pub fn add_transcript_segment(
 pub async fn start_live_transcription(
     app: AppHandle,
     note_id: String,
+    language: Option<String>,
     state: State<'_, TranscriptionState>,
     audio_state: State<'_, AudioState>,
 ) -> Result<(), String> {
@@ -438,7 +439,7 @@ pub async fn start_live_transcription(
     let recording_state = audio_state.recording.clone();
     let live_state = state.live_state.clone();
 
-    live::start_live_transcription(app, note_id, recording_state, live_state, whisper_ctx)
+    live::start_live_transcription(app, note_id, language, recording_state, live_state, whisper_ctx)
         .await
         .map_err(|e| e.to_string())
 }
