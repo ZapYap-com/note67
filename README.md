@@ -67,7 +67,7 @@ When using speakers instead of headphones, your microphone picks up audio from y
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
-- [Rust](https://rustup.rs/)
+- [Rust](https://rust-lang.org/)
 - [Ollama](https://ollama.ai/) (for AI summaries)
 
 ```bash
