@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-pub const SCHEMA_VERSION: i32 = 3;
+pub const SCHEMA_VERSION: i32 = 4;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -13,6 +13,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 3 {
         migrate_v3(conn)?;
+    }
+    if version < 4 {
+        migrate_v4(conn)?;
     }
 
     Ok(())
@@ -176,6 +179,35 @@ fn migrate_v3(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 3)?;
+
+    Ok(())
+}
+
+fn migrate_v4(conn: &Connection) -> rusqlite::Result<()> {
+    // Audio segments table for multi-session recordings (pause/resume/continue)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audio_segments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id TEXT NOT NULL,
+            segment_index INTEGER NOT NULL,
+            mic_path TEXT NOT NULL,
+            system_path TEXT,
+            start_offset_ms INTEGER NOT NULL,
+            duration_ms INTEGER,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Index for faster segment lookups by note
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audio_segments_note
+         ON audio_segments(note_id)",
+        [],
+    )?;
+
+    set_schema_version(conn, 4)?;
 
     Ok(())
 }

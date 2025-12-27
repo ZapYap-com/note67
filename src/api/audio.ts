@@ -70,4 +70,33 @@ export const audioApi = {
   setAecEnabled: (enabled: boolean): Promise<void> => {
     return invoke("set_aec_enabled", { enabled });
   },
+
+  // ========== Pause/Resume/Continue Recording ==========
+
+  /** Get the current recording phase (0=Idle, 1=Recording, 2=Paused) */
+  getRecordingPhase: (): Promise<number> => {
+    return invoke("get_recording_phase");
+  },
+
+  /** Pause dual recording - returns duration of paused segment in ms */
+  pauseDualRecording: (): Promise<number> => {
+    return invoke("pause_dual_recording");
+  },
+
+  /** Resume dual recording after pause */
+  resumeDualRecording: (noteId: string): Promise<DualRecordingResult> => {
+    return invoke("resume_dual_recording", { noteId });
+  },
+
+  /** Start dual recording with segment tracking */
+  startDualRecordingWithSegments: (
+    noteId: string
+  ): Promise<DualRecordingResult> => {
+    return invoke("start_dual_recording_with_segments", { noteId });
+  },
+
+  /** Continue recording on an ended note */
+  continueNoteRecording: (noteId: string): Promise<DualRecordingResult> => {
+    return invoke("continue_note_recording", { noteId });
+  },
 };

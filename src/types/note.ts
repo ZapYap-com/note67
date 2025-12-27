@@ -83,3 +83,22 @@ export interface OllamaStatus {
   models: OllamaModel[];
   selected_model: string | null;
 }
+
+// Audio segment for pause/resume/continue recording
+export interface AudioSegment {
+  id: number;
+  note_id: string;
+  segment_index: number;
+  mic_path: string;
+  system_path: string | null;
+  start_offset_ms: number;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+// Recording phase enum (matches Rust RecordingPhase)
+export enum RecordingPhase {
+  Idle = 0,
+  Recording = 1,
+  Paused = 2,
+}

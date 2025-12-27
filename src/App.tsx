@@ -31,8 +31,16 @@ function App() {
     endNote,
     deleteNote,
   } = useNotes();
-  const { isRecording, audioLevel, startRecording, stopRecording } =
-    useRecording();
+  const {
+    isRecording,
+    isPaused,
+    audioLevel,
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    continueRecording,
+  } = useRecording();
   const { loadedModel } = useModels();
   const { loadTranscript } = useTranscription();
   const {
@@ -690,6 +698,7 @@ function App() {
             note={selectedNote}
             transcript={currentTranscript}
             isRecording={isRecording && recordingNoteId === selectedNote.id}
+            isPaused={isPaused && recordingNoteId === selectedNote.id}
             audioLevel={audioLevel}
             activeTab={activeTab}
             editingTitle={editingTitle}
@@ -703,6 +712,33 @@ function App() {
             onUpdateTitle={handleUpdateTitle}
             onUpdateDescription={handleUpdateDescription}
             onStopRecording={handleStopRecording}
+            onPauseRecording={async () => {
+              try {
+                await pauseRecording();
+              } catch (error) {
+                console.error("Pause recording failed:", error);
+              }
+            }}
+            onResumeRecording={async () => {
+              try {
+                if (recordingNoteId) {
+                  await resumeRecording(recordingNoteId);
+                  await startLiveTranscription(recordingNoteId);
+                }
+              } catch (error) {
+                console.error("Resume recording failed:", error);
+              }
+            }}
+            onContinueRecording={async () => {
+              try {
+                setRecordingNoteId(selectedNote.id);
+                await continueRecording(selectedNote.id);
+                await startLiveTranscription(selectedNote.id);
+                setActiveTab("transcript");
+              } catch (error) {
+                console.error("Continue recording failed:", error);
+              }
+            }}
             onDelete={() => setShowDeleteConfirm(true)}
             onExport={async () => {
               try {
@@ -750,6 +786,42 @@ function App() {
               >
                 Generating Summary
               </span>
+            </div>
+          ) : isPaused && recordingNote ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    if (recordingNoteId) {
+                      await resumeRecording(recordingNoteId);
+                      await startLiveTranscription(recordingNoteId);
+                    }
+                  } catch (error) {
+                    console.error("Resume recording failed:", error);
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                Resume
+              </button>
+              <button
+                onClick={handleStopRecording}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                }}
+              >
+                Stop
+              </button>
             </div>
           ) : isRecording && recordingNote ? (
             <button
@@ -1048,6 +1120,7 @@ interface NoteViewProps {
   note: Note;
   transcript: TranscriptSegment[];
   isRecording: boolean;
+  isPaused: boolean;
   audioLevel: number;
   activeTab: "notes" | "transcript" | "summary";
   editingTitle: boolean;
@@ -1061,6 +1134,9 @@ interface NoteViewProps {
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
   onStopRecording: () => void;
+  onPauseRecording: () => void;
+  onResumeRecording: () => void;
+  onContinueRecording: () => void;
   onDelete: () => void;
   onExport: () => void;
   onRegenerate: () => void;
@@ -1071,6 +1147,7 @@ function NoteView({
   note,
   transcript,
   isRecording,
+  isPaused,
   audioLevel,
   activeTab,
   editingTitle,
@@ -1084,6 +1161,9 @@ function NoteView({
   onUpdateTitle,
   onUpdateDescription,
   onStopRecording,
+  onPauseRecording,
+  onResumeRecording,
+  onContinueRecording,
   onDelete,
   onExport,
   onRegenerate,
@@ -1151,18 +1231,79 @@ function NoteView({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          {/* Recording controls */}
           {isRecording && (
-            <button
-              onClick={onStopRecording}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
-              style={{ backgroundColor: "var(--color-accent)", color: "white" }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-              Stop
-            </button>
-          )}
-          {!isRecording && note.ended_at && (
             <>
+              <button
+                onClick={onPauseRecording}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                }}
+                title="Pause recording"
+              >
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                </svg>
+                Pause
+              </button>
+              <button
+                onClick={onStopRecording}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
+                style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                Stop
+              </button>
+            </>
+          )}
+          {/* Paused controls */}
+          {isPaused && (
+            <>
+              <button
+                onClick={onResumeRecording}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
+                style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+                title="Resume recording"
+              >
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                Resume
+              </button>
+              <button
+                onClick={onStopRecording}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                }}
+              >
+                Stop
+              </button>
+            </>
+          )}
+          {/* Ended note controls */}
+          {!isRecording && !isPaused && note.ended_at && (
+            <>
+              <button
+                onClick={onContinueRecording}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium"
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
+                title="Continue recording"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+                Continue
+              </button>
               <button
                 onClick={onExport}
                 className="p-1 rounded-md hover:bg-black/5"
@@ -1185,7 +1326,7 @@ function NoteView({
               </button>
             </>
           )}
-          {!isRecording && (
+          {!isRecording && !isPaused && (
             <button
               onClick={onDelete}
               className="p-1 rounded-md hover:bg-black/5"
@@ -1238,6 +1379,24 @@ function NoteView({
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Paused indicator */}
+      {isPaused && (
+        <div
+          className="px-6 py-2 flex items-center gap-2"
+          style={{ backgroundColor: "var(--color-bg-elevated)" }}
+        >
+          <svg className="w-3 h-3" fill="var(--color-text-secondary)" viewBox="0 0 24 24">
+            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+          </svg>
+          <span
+            className="text-xs font-medium"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            Paused
+          </span>
         </div>
       )}
 

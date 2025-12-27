@@ -86,3 +86,25 @@ pub struct NewTranscriptSegment {
     pub text: String,
     pub speaker: Option<String>,
 }
+
+/// Audio segment for multi-session recordings (pause/resume/continue)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioSegment {
+    pub id: i64,
+    pub note_id: String,
+    pub segment_index: i32,
+    pub mic_path: String,
+    pub system_path: Option<String>,
+    pub start_offset_ms: i64,
+    pub duration_ms: Option<i64>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewAudioSegment {
+    pub note_id: String,
+    pub segment_index: i32,
+    pub mic_path: String,
+    pub system_path: Option<String>,
+    pub start_offset_ms: i64,
+}

@@ -8,7 +8,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
-use crate::db::models::{Summary, SummaryType, TranscriptSegment};
+use crate::db::models::{AudioSegment, Summary, SummaryType, TranscriptSegment};
 use crate::db::schema::run_migrations;
 
 pub struct Database {
@@ -243,6 +243,137 @@ impl Database {
             params![key, value],
         )?;
         Ok(())
+    }
+
+    // ========== Audio Segments (for pause/resume/continue) ==========
+
+    /// Add a new audio segment for a note
+    pub fn add_audio_segment(
+        &self,
+        note_id: &str,
+        segment_index: i32,
+        mic_path: &str,
+        system_path: Option<&str>,
+        start_offset_ms: i64,
+    ) -> anyhow::Result<i64> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now();
+
+        conn.execute(
+            "INSERT INTO audio_segments (note_id, segment_index, mic_path, system_path, start_offset_ms, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![note_id, segment_index, mic_path, system_path, start_offset_ms, now.to_rfc3339()],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Update segment duration when recording stops
+    pub fn update_segment_duration(&self, segment_id: i64, duration_ms: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "UPDATE audio_segments SET duration_ms = ?1 WHERE id = ?2",
+            params![duration_ms, segment_id],
+        )?;
+        Ok(())
+    }
+
+    /// Get all audio segments for a note, ordered by segment index
+    pub fn get_audio_segments(&self, note_id: &str) -> anyhow::Result<Vec<AudioSegment>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, created_at
+             FROM audio_segments
+             WHERE note_id = ?1
+             ORDER BY segment_index ASC",
+        )?;
+
+        let segments = stmt
+            .query_map([note_id], |row| {
+                Ok(AudioSegment {
+                    id: row.get(0)?,
+                    note_id: row.get(1)?,
+                    segment_index: row.get(2)?,
+                    mic_path: row.get(3)?,
+                    system_path: row.get(4)?,
+                    start_offset_ms: row.get(5)?,
+                    duration_ms: row.get(6)?,
+                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(segments)
+    }
+
+    /// Get the next segment index for a note
+    pub fn get_next_segment_index(&self, note_id: &str) -> anyhow::Result<i32> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let max_index: Option<i32> = conn
+            .query_row(
+                "SELECT MAX(segment_index) FROM audio_segments WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        Ok(max_index.map(|i| i + 1).unwrap_or(0))
+    }
+
+    /// Get total duration of all segments for a note (in ms)
+    pub fn get_total_segment_duration(&self, note_id: &str) -> anyhow::Result<i64> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let total: Option<i64> = conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_ms), 0) FROM audio_segments WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        Ok(total.unwrap_or(0))
+    }
+
+    /// Delete all audio segments for a note
+    pub fn delete_audio_segments(&self, note_id: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "DELETE FROM audio_segments WHERE note_id = ?1",
+            [note_id],
+        )?;
+        Ok(())
+    }
+
+    /// Get the latest (most recent) segment for a note
+    pub fn get_latest_segment(&self, note_id: &str) -> anyhow::Result<Option<AudioSegment>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        let segment = conn
+            .query_row(
+                "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, created_at
+                 FROM audio_segments
+                 WHERE note_id = ?1
+                 ORDER BY segment_index DESC
+                 LIMIT 1",
+                [note_id],
+                |row| {
+                    Ok(AudioSegment {
+                        id: row.get(0)?,
+                        note_id: row.get(1)?,
+                        segment_index: row.get(2)?,
+                        mic_path: row.get(3)?,
+                        system_path: row.get(4)?,
+                        start_offset_ms: row.get(5)?,
+                        duration_ms: row.get(6)?,
+                        created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                    })
+                },
+            )
+            .ok();
+
+        Ok(segment)
     }
 }
 

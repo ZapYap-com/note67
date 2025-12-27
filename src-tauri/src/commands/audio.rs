@@ -5,7 +5,11 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use crate::audio::{self, aec, is_system_audio_available, mix_wav_files, RecordingState, SystemAudioCapture};
+use crate::audio::{
+    self, aec, is_system_audio_available, mix_wav_files, RecordingPhase, RecordingState,
+    SystemAudioCapture,
+};
+use crate::db::Database;
 
 /// Result of dual recording containing paths to all recorded files
 #[derive(Debug, Clone, Serialize)]
@@ -258,4 +262,406 @@ pub fn is_aec_enabled() -> bool {
 #[tauri::command]
 pub fn set_aec_enabled(enabled: bool) {
     aec::set_aec_enabled(enabled);
+}
+
+// ========== Pause/Resume/Continue Recording Commands ==========
+
+/// Get the current recording phase
+#[tauri::command]
+pub fn get_recording_phase(state: State<AudioState>) -> u8 {
+    state.recording.get_phase() as u8
+}
+
+/// Pause the current recording (mic only)
+/// Returns the duration of the paused segment in milliseconds
+#[tauri::command]
+pub fn pause_recording_cmd(state: State<AudioState>) -> Result<i64, String> {
+    audio::pause_recording(&state.recording).map_err(|e| e.to_string())
+}
+
+/// Resume a paused recording (mic only)
+#[tauri::command]
+pub fn resume_recording_cmd(
+    app: AppHandle,
+    state: State<AudioState>,
+    note_id: String,
+) -> Result<String, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    // Get the next segment index
+    let segment_index = state.recording.current_segment_index.load(Ordering::SeqCst);
+
+    let filename = format!("{}_seg{}.wav", note_id, segment_index);
+    let output_path = recordings_dir.join(&filename);
+
+    audio::resume_recording(state.recording.clone(), output_path.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+/// Pause dual recording (mic + system audio)
+/// Returns the duration of the paused segment in milliseconds
+#[tauri::command]
+pub fn pause_dual_recording(
+    state: State<AudioState>,
+    db: State<Database>,
+) -> Result<i64, String> {
+    // Pause mic recording first
+    let duration_ms = audio::pause_recording(&state.recording).map_err(|e| e.to_string())?;
+
+    // Stop system audio capture
+    {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        if let Some(cap) = capture.as_ref() {
+            let _ = cap.stop();
+        }
+    }
+
+    // Update the segment duration in the database
+    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
+    if segment_id > 0 {
+        let _ = db.update_segment_duration(segment_id, duration_ms);
+    }
+
+    Ok(duration_ms)
+}
+
+/// Resume dual recording after pause
+/// Returns paths to the new segment files
+#[tauri::command]
+pub fn resume_dual_recording(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    let current_phase = state.recording.get_phase();
+    if current_phase != RecordingPhase::Paused {
+        return Err("Recording is not paused".to_string());
+    }
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    // Get the next segment index from database
+    let segment_index = db
+        .get_next_segment_index(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    // Calculate start offset from previous segments
+    let start_offset_ms = db
+        .get_total_segment_duration(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    // Update state with new segment info
+    state
+        .recording
+        .current_segment_index
+        .store(segment_index as u32, Ordering::SeqCst);
+    state
+        .recording
+        .segment_start_offset_ms
+        .store(start_offset_ms, Ordering::SeqCst);
+
+    // Mic recording path with segment index
+    let mic_filename = format!("{}_mic_seg{}.wav", note_id, segment_index);
+    let mic_path = recordings_dir.join(&mic_filename);
+
+    // System audio recording path with segment index
+    let system_filename = format!("{}_system_seg{}.wav", note_id, segment_index);
+    let system_path = recordings_dir.join(&system_filename);
+
+    // Add segment to database
+    let segment_id = db
+        .add_audio_segment(
+            &note_id,
+            segment_index,
+            mic_path.to_string_lossy().as_ref(),
+            Some(system_path.to_string_lossy().as_ref()),
+            start_offset_ms,
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Store segment ID for later duration update
+    state
+        .recording
+        .current_segment_db_id
+        .store(segment_id, Ordering::SeqCst);
+
+    // Start mic recording
+    audio::resume_recording(state.recording.clone(), mic_path.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Try to start system audio recording
+    let system_started = {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+
+        if let Some(cap) = capture.as_ref() {
+            match cap.start(system_path.clone()) {
+                Ok(()) => {
+                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+                    *sys_path = Some(system_path.clone());
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to start system audio capture: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    };
+
+    Ok(DualRecordingResult {
+        mic_path: mic_path.to_string_lossy().to_string(),
+        system_path: if system_started {
+            Some(system_path.to_string_lossy().to_string())
+        } else {
+            None
+        },
+        playback_path: None,
+    })
+}
+
+/// Continue recording on an ended note
+/// Reopens the note and starts a new recording segment
+#[tauri::command]
+pub fn continue_note_recording(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    // First, reopen the note (clear ended_at)
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now();
+
+        // Check if note exists
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM notes WHERE id = ?1)",
+                [&note_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        if !exists {
+            return Err("Note not found".to_string());
+        }
+
+        // Clear ended_at to reopen the note
+        conn.execute(
+            "UPDATE notes SET ended_at = NULL, updated_at = ?1 WHERE id = ?2",
+            (now.to_rfc3339(), &note_id),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    // Store note ID in state
+    {
+        let mut current_note = state
+            .recording
+            .current_note_id
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *current_note = Some(note_id.clone());
+    }
+
+    // Get the next segment index from database
+    let segment_index = db
+        .get_next_segment_index(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    // Calculate start offset from previous segments
+    let start_offset_ms = db
+        .get_total_segment_duration(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    // Update state with segment info
+    state
+        .recording
+        .current_segment_index
+        .store(segment_index as u32, Ordering::SeqCst);
+    state
+        .recording
+        .segment_start_offset_ms
+        .store(start_offset_ms, Ordering::SeqCst);
+
+    // Mic recording path with segment index
+    let mic_filename = format!("{}_mic_seg{}.wav", note_id, segment_index);
+    let mic_path = recordings_dir.join(&mic_filename);
+
+    // System audio recording path with segment index
+    let system_filename = format!("{}_system_seg{}.wav", note_id, segment_index);
+    let system_path = recordings_dir.join(&system_filename);
+
+    // Add segment to database
+    let segment_id = db
+        .add_audio_segment(
+            &note_id,
+            segment_index,
+            mic_path.to_string_lossy().as_ref(),
+            Some(system_path.to_string_lossy().as_ref()),
+            start_offset_ms,
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Store segment ID for later duration update
+    state
+        .recording
+        .current_segment_db_id
+        .store(segment_id, Ordering::SeqCst);
+
+    // Start mic recording
+    audio::start_recording(state.recording.clone(), mic_path.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Try to start system audio recording
+    let system_started = {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+
+        if let Some(cap) = capture.as_ref() {
+            match cap.start(system_path.clone()) {
+                Ok(()) => {
+                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+                    *sys_path = Some(system_path.clone());
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to start system audio capture: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    };
+
+    Ok(DualRecordingResult {
+        mic_path: mic_path.to_string_lossy().to_string(),
+        system_path: if system_started {
+            Some(system_path.to_string_lossy().to_string())
+        } else {
+            None
+        },
+        playback_path: None,
+    })
+}
+
+/// Start dual recording with segment tracking
+/// This is an enhanced version of start_dual_recording that tracks segments in the database
+#[tauri::command]
+pub fn start_dual_recording_with_segments(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    // Reset state for new recording session
+    state.recording.reset_for_new_session();
+
+    // Store note ID
+    {
+        let mut current_note = state
+            .recording
+            .current_note_id
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *current_note = Some(note_id.clone());
+    }
+
+    // Get segment index (should be 0 for new recording)
+    let segment_index = db
+        .get_next_segment_index(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    // Mic recording path with segment index
+    let mic_filename = format!("{}_mic_seg{}.wav", note_id, segment_index);
+    let mic_path = recordings_dir.join(&mic_filename);
+
+    // System audio recording path with segment index
+    let system_filename = format!("{}_system_seg{}.wav", note_id, segment_index);
+    let system_path = recordings_dir.join(&system_filename);
+
+    // Add segment to database (start_offset_ms is 0 for first segment)
+    let segment_id = db
+        .add_audio_segment(
+            &note_id,
+            segment_index,
+            mic_path.to_string_lossy().as_ref(),
+            Some(system_path.to_string_lossy().as_ref()),
+            0, // First segment starts at 0
+        )
+        .map_err(|e| e.to_string())?;
+
+    // Store segment ID for later duration update
+    state
+        .recording
+        .current_segment_db_id
+        .store(segment_id, Ordering::SeqCst);
+
+    // Start mic recording
+    audio::start_recording(state.recording.clone(), mic_path.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Try to start system audio recording
+    let system_started = {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+
+        if let Some(cap) = capture.as_ref() {
+            match cap.start(system_path.clone()) {
+                Ok(()) => {
+                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+                    *sys_path = Some(system_path.clone());
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to start system audio capture: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    };
+
+    Ok(DualRecordingResult {
+        mic_path: mic_path.to_string_lossy().to_string(),
+        system_path: if system_started {
+            Some(system_path.to_string_lossy().to_string())
+        } else {
+            None
+        },
+        playback_path: None,
+    })
 }

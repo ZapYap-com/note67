@@ -2,7 +2,7 @@ use chrono::Utc;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::db::models::{Note, NewNote, UpdateNote};
+use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
 
 #[tauri::command]
@@ -265,4 +265,78 @@ fn parse_datetime(s: String) -> chrono::DateTime<Utc> {
     chrono::DateTime::parse_from_rfc3339(&s)
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(|_| Utc::now())
+}
+
+// ========== Pause/Resume/Continue Recording Support ==========
+
+/// Reopen a note for continued recording
+/// Clears ended_at so the note can receive more audio
+#[tauri::command]
+pub fn reopen_note(db: State<Database>, id: String) -> Result<Note, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now();
+
+    // Check if note exists and has been ended
+    let ended_at: Option<String> = conn
+        .query_row(
+            "SELECT ended_at FROM notes WHERE id = ?1",
+            [&id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if ended_at.is_none() {
+        return Err("Note has not been ended yet".to_string());
+    }
+
+    // Clear ended_at to reopen the note
+    conn.execute(
+        "UPDATE notes SET ended_at = NULL, updated_at = ?1 WHERE id = ?2",
+        (now.to_rfc3339(), &id),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Return updated note
+    drop(conn);
+    get_note(db, id)?.ok_or_else(|| "Note not found".to_string())
+}
+
+/// Get all audio segments for a note
+#[tauri::command]
+pub fn get_note_audio_segments(db: State<Database>, note_id: String) -> Result<Vec<AudioSegment>, String> {
+    db.get_audio_segments(&note_id).map_err(|e| e.to_string())
+}
+
+/// Get total recording duration for a note (sum of all segment durations)
+#[tauri::command]
+pub fn get_note_total_duration(db: State<Database>, note_id: String) -> Result<i64, String> {
+    db.get_total_segment_duration(&note_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Delete all audio segment files and records for a note
+/// This is called when deleting a note or when starting a completely fresh recording
+#[tauri::command]
+pub fn delete_note_audio_segments(db: State<Database>, note_id: String) -> Result<(), String> {
+    // Get all segments first to delete files
+    let segments = db.get_audio_segments(&note_id).map_err(|e| e.to_string())?;
+
+    // Delete audio files
+    for segment in segments {
+        // Delete mic file
+        if let Err(e) = std::fs::remove_file(&segment.mic_path) {
+            eprintln!("Failed to delete mic segment file {}: {}", segment.mic_path, e);
+        }
+
+        // Delete system audio file if present
+        if let Some(ref sys_path) = segment.system_path {
+            if let Err(e) = std::fs::remove_file(sys_path) {
+                eprintln!("Failed to delete system segment file {}: {}", sys_path, e);
+            }
+        }
+    }
+
+    // Delete segment records from database
+    db.delete_audio_segments(&note_id)
+        .map_err(|e| e.to_string())
 }

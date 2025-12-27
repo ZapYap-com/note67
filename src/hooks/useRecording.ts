@@ -1,18 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audioApi } from "../api";
+import { RecordingPhase } from "../types";
 
 interface UseRecordingReturn {
   isRecording: boolean;
+  isPaused: boolean;
+  recordingPhase: RecordingPhase;
   audioLevel: number;
   audioPath: string | null;
   error: string | null;
   isDualRecording: boolean;
   startRecording: (noteId: string) => Promise<void>;
   stopRecording: (noteId?: string) => Promise<string | null>;
+  pauseRecording: () => Promise<void>;
+  resumeRecording: (noteId: string) => Promise<void>;
+  continueRecording: (noteId: string) => Promise<void>;
 }
 
 export function useRecording(): UseRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordingPhase, setRecordingPhase] = useState<RecordingPhase>(
+    RecordingPhase.Idle
+  );
   const [audioLevel, setAudioLevel] = useState(0);
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +83,8 @@ export function useRecording(): UseRecordingReturn {
 
         setAudioPath(path);
         setIsRecording(false);
+        setIsPaused(false);
+        setRecordingPhase(RecordingPhase.Idle);
         setIsDualRecording(false);
         setAudioLevel(0);
         currentNoteIdRef.current = null;
@@ -84,6 +96,52 @@ export function useRecording(): UseRecordingReturn {
     },
     [isDualRecording]
   );
+
+  const pauseRecording = useCallback(async () => {
+    try {
+      setError(null);
+      console.log("Pausing dual recording");
+      await audioApi.pauseDualRecording();
+      setIsRecording(false);
+      setIsPaused(true);
+      setRecordingPhase(RecordingPhase.Paused);
+      setAudioLevel(0);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const resumeRecording = useCallback(async (noteId: string) => {
+    try {
+      setError(null);
+      console.log("Resuming dual recording");
+      const result = await audioApi.resumeDualRecording(noteId);
+      setAudioPath(result.playbackPath || result.micPath);
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingPhase(RecordingPhase.Recording);
+      setIsDualRecording(result.systemPath !== null);
+      currentNoteIdRef.current = noteId;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const continueRecording = useCallback(async (noteId: string) => {
+    try {
+      setError(null);
+      console.log("Continuing recording on ended note");
+      const result = await audioApi.continueNoteRecording(noteId);
+      setAudioPath(result.playbackPath || result.micPath);
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingPhase(RecordingPhase.Recording);
+      setIsDualRecording(result.systemPath !== null);
+      currentNoteIdRef.current = noteId;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
 
   // Poll audio level while recording
   useEffect(() => {
@@ -117,11 +175,16 @@ export function useRecording(): UseRecordingReturn {
 
   return {
     isRecording,
+    isPaused,
+    recordingPhase,
     audioLevel,
     audioPath,
     error,
     isDualRecording,
     startRecording,
     stopRecording,
+    pauseRecording,
+    resumeRecording,
+    continueRecording,
   };
 }

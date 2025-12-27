@@ -11,4 +11,7 @@ export type {
   TranscriptionResult,
   OllamaModel,
   OllamaStatus,
+  AudioSegment,
 } from "./note";
+
+export { RecordingPhase } from "./note";
