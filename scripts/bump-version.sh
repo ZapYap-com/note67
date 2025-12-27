@@ -39,6 +39,10 @@ echo "  Updated src-tauri/Cargo.toml"
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/src-tauri/tauri.conf.json"
 echo "  Updated src-tauri/tauri.conf.json"
 
+# Update frontend constants
+sed -i '' "s/APP_VERSION = \"[^\"]*\"/APP_VERSION = \"$VERSION\"/" "$ROOT_DIR/src/components/settings/constants.ts"
+echo "  Updated src/components/settings/constants.ts"
+
 echo ""
 echo "Version updated to $VERSION"
 echo ""

@@ -12,6 +12,8 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "dialog:allow-save",
+    "updater:default",
+    "process:allow-restart",
     "fs:allow-write-text-file",
     "fs:allow-write-file",
     {

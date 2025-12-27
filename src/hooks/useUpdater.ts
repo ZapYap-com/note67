@@ -44,10 +44,18 @@ export function useUpdater() {
         return false;
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Make error messages more user-friendly
+      let friendlyError = message;
+      if (message.includes('fetch') || message.includes('JSON') || message.includes('network')) {
+        friendlyError = 'Unable to check for updates. Please try again later.';
+      } else if (message.includes('offline')) {
+        friendlyError = 'No internet connection.';
+      }
       setState(s => ({
         ...s,
         checking: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: friendlyError,
       }));
       return false;
     }
