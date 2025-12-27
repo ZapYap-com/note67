@@ -1039,6 +1039,7 @@ function WhisperTab() {
             isDownloading={isDownloading && downloadingModel === model.size}
             downloadProgress={downloadProgress}
             sizeLabel={sizeLabels[model.size]}
+            isRecommended={model.size === "base"}
             onDownload={() => downloadModel(model.size)}
             onDelete={() => deleteModel(model.size)}
             onLoad={() => loadModel(model.size)}
@@ -1063,6 +1064,7 @@ interface WhisperModelCardProps {
   isDownloading: boolean;
   downloadProgress: number;
   sizeLabel: string;
+  isRecommended: boolean;
   onDownload: () => void;
   onDelete: () => void;
   onLoad: () => void;
@@ -1075,6 +1077,7 @@ function WhisperModelCard({
   isDownloading,
   downloadProgress,
   sizeLabel,
+  isRecommended,
   onDownload,
   onDelete,
   onLoad,
@@ -1107,6 +1110,17 @@ function WhisperModelCard({
                 }}
               >
                 Active
+              </span>
+            )}
+            {isRecommended && (
+              <span
+                className="px-1.5 py-0.5 text-xs font-medium rounded"
+                style={{
+                  backgroundColor: "var(--color-accent-light)",
+                  color: "var(--color-accent)",
+                }}
+              >
+                Recommended
               </span>
             )}
           </div>
