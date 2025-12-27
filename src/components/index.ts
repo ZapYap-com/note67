@@ -7,3 +7,4 @@ export type { UserProfile } from "./Settings";
 export { SummaryPanel } from "./SummaryPanel";
 export { TranscriptViewer } from "./TranscriptViewer";
 export { TranscriptSearch } from "./TranscriptSearch";
+export { AudioPlayer } from "./AudioPlayer";

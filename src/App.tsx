@@ -5,6 +5,7 @@ import {
   SummaryPanel,
   TranscriptSearch,
   useProfile,
+  AudioPlayer,
 } from "./components";
 import { exportApi, aiApi } from "./api";
 import {
@@ -1303,6 +1304,11 @@ function NoteView({
           />
         )}
       </div>
+
+      {/* Audio Player - show when note has audio and not recording */}
+      {!isRecording && note.audio_path && (
+        <AudioPlayer audioPath={note.audio_path} title={note.title} />
+      )}
     </div>
   );
 }
