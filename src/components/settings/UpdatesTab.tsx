@@ -1,15 +1,23 @@
 import { useState } from "react";
+import { useUpdater } from "../../hooks";
 import { APP_VERSION } from "./constants";
 
 export function UpdatesTab() {
-  const [checking, setChecking] = useState(false);
+  const {
+    checking,
+    available,
+    version,
+    body,
+    downloading,
+    progress,
+    error,
+    checkForUpdates,
+    downloadAndInstall,
+  } = useUpdater();
   const [lastChecked, setLastChecked] = useState<string | null>(null);
 
   const handleCheckUpdates = async () => {
-    setChecking(true);
-    // Simulate checking for updates
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setChecking(false);
+    await checkForUpdates();
     setLastChecked(new Date().toLocaleTimeString());
   };
 
@@ -62,7 +70,82 @@ export function UpdatesTab() {
         </button>
       </div>
 
-      {lastChecked && (
+      {/* Update Available */}
+      {available && version && (
+        <div
+          className="p-4 rounded-xl"
+          style={{
+            backgroundColor: "var(--color-accent-light)",
+            border: "1px solid var(--color-accent)",
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--color-text)" }}
+            >
+              Update Available: v{version}
+            </p>
+            <button
+              onClick={downloadAndInstall}
+              disabled={downloading}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "white",
+              }}
+            >
+              {downloading ? "Installing..." : "Install Update"}
+            </button>
+          </div>
+          {body && (
+            <p
+              className="text-xs mt-2"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              {body}
+            </p>
+          )}
+          {downloading && (
+            <div className="mt-3">
+              <div
+                className="h-2 rounded-full overflow-hidden"
+                style={{ backgroundColor: "var(--color-border)" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${progress}%`,
+                    backgroundColor: "var(--color-accent)",
+                  }}
+                />
+              </div>
+              <p
+                className="text-xs mt-1 text-right"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {progress}%
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div
+          className="p-3 rounded-lg text-sm"
+          style={{
+            backgroundColor: "#fef2f2",
+            color: "#dc2626",
+            border: "1px solid #fecaca",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {lastChecked && !available && (
         <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
           Last checked: {lastChecked} — You're up to date!
         </p>

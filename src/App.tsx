@@ -7,6 +7,7 @@ import {
   TranscriptSearch,
   useProfile,
   AudioPlayer,
+  UpdateNotification,
 } from "./components";
 import { exportApi, aiApi } from "./api";
 import {
@@ -906,6 +907,14 @@ function App() {
           onAction={handleContextMenuAction}
         />
       )}
+
+      {/* Update Notification */}
+      <UpdateNotification
+        onOpenSettings={() => {
+          setSettingsTab("updates");
+          setShowSettings(true);
+        }}
+      />
     </div>
   );
 }
