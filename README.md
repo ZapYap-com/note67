@@ -2,16 +2,6 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## Screenshots
-
-| Light Mode | Dark Mode |
-|------------|-----------|
-| ![Main view - Light](public/screenshots/main-light.png) | ![Main view - Dark](public/screenshots/main-dark.png) |
-
-| AI Summary | Settings |
-|------------|----------|
-| ![Note with AI Summary](public/screenshots/note-summary.png) | ![Settings](public/screenshots/settings.png) |
-
 ## Features
 
 - [x] Meeting management (create, end, delete)
@@ -33,6 +23,16 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Custom context menus
 - [x] System tray support
 - [ ] Cross-platform system audio (Windows, Linux)
+
+## Screenshots
+
+| Light Mode | Dark Mode | Settings |
+|------------|-----------|----------|
+| ![Main view - Light](public/screenshots/main-light.png) | ![Main view - Dark](public/screenshots/main-dark.png) | ![Settings](public/screenshots/settings.png) |
+
+**AI Summary**
+
+![Note with AI Summary](public/screenshots/note-summary.png)
 
 ## Speaker Distinction (macOS)
 
