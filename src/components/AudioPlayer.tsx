@@ -6,7 +6,7 @@ interface AudioPlayerProps {
   title: string;
 }
 
-export function AudioPlayer({ audioPath, title }: AudioPlayerProps) {
+export function AudioPlayer({ audioPath }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -15,6 +15,19 @@ export function AudioPlayer({ audioPath, title }: AudioPlayerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+  const cyclePlaybackRate = () => {
+    const currentIndex = playbackRates.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % playbackRates.length;
+    const newRate = playbackRates[nextIndex];
+    setPlaybackRate(newRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = newRate;
+    }
+  };
 
   // Load audio file as blob URL
   useEffect(() => {
@@ -180,62 +193,25 @@ export function AudioPlayer({ audioPath, title }: AudioPlayerProps) {
       />
 
       <div className="flex items-center gap-4">
-        {/* Player controls - left side */}
-        <div className="flex items-center gap-2">
-          {/* Skip back 10s */}
-          <button
-            onClick={() => skip(-10)}
-            className="p-1.5 rounded-full hover:bg-black/5 transition-colors"
-            style={{ color: "var(--color-text-secondary)" }}
-            title="Back 10 seconds"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"
-              />
+        {/* Play/Pause - left side */}
+        <button
+          onClick={togglePlay}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
+          style={{
+            backgroundColor: "var(--color-text)",
+            color: "var(--color-bg)",
+          }}
+        >
+          {isPlaying ? (
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
             </svg>
-          </button>
-
-          {/* Play/Pause */}
-          <button
-            onClick={togglePlay}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-            style={{
-              backgroundColor: "var(--color-text)",
-              color: "var(--color-bg)",
-            }}
-          >
-            {isPlaying ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
-          </button>
-
-          {/* Skip forward 10s */}
-          <button
-            onClick={() => skip(10)}
-            className="p-1.5 rounded-full hover:bg-black/5 transition-colors"
-            style={{ color: "var(--color-text-secondary)" }}
-            title="Forward 10 seconds"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"
-              />
+          ) : (
+            <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
             </svg>
-          </button>
-        </div>
+          )}
+        </button>
 
         {/* Progress bar - takes remaining space */}
         <div className="flex-1 flex items-center gap-2">
@@ -276,41 +252,51 @@ export function AudioPlayer({ audioPath, title }: AudioPlayerProps) {
           </span>
         </div>
 
-        {/* Track info - right side */}
-        <div className="flex items-center gap-3 min-w-0 w-48">
-          <div
-            className="w-10 h-10 rounded-md flex items-center justify-center shrink-0"
-            style={{ backgroundColor: "var(--color-bg-subtle)" }}
+        {/* Controls - right side */}
+        <div className="flex items-center gap-1">
+          {/* Skip back 10s */}
+          <button
+            onClick={() => skip(-10)}
+            className="p-1.5 rounded-full hover:bg-black/5 transition-colors"
+            style={{ color: "var(--color-text-secondary)" }}
+            title="Back 10 seconds"
           >
-            <svg
-              className="w-5 h-5"
-              style={{ color: "var(--color-text-tertiary)" }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={1.5}
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"
               />
             </svg>
-          </div>
-          <div className="min-w-0">
-            <p
-              className="text-sm font-medium truncate"
-              style={{ color: "var(--color-text)" }}
-            >
-              {title}
-            </p>
-            <p
-              className="text-xs truncate"
-              style={{ color: "var(--color-text-tertiary)" }}
-            >
-              Recording
-            </p>
-          </div>
+          </button>
+
+          {/* Skip forward 10s */}
+          <button
+            onClick={() => skip(10)}
+            className="p-1.5 rounded-full hover:bg-black/5 transition-colors"
+            style={{ color: "var(--color-text-secondary)" }}
+            title="Forward 10 seconds"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"
+              />
+            </svg>
+          </button>
+
+          {/* Playback speed */}
+          <button
+            onClick={cyclePlaybackRate}
+            className="px-2 py-1 rounded-md hover:bg-black/5 transition-colors text-xs font-medium min-w-[3rem]"
+            style={{ color: "var(--color-text-secondary)" }}
+            title="Playback speed"
+          >
+            {playbackRate}x
+          </button>
         </div>
       </div>
     </div>
