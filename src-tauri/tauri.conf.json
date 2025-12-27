@@ -8,7 +8,7 @@
       "endpoints": [
         "https://github.com/ZapYap-com/note67/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_YOUR_PUBLIC_KEY"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk2NUY5Qzk2RDgxMUEzMUEKUldRYW94SFlscHhmbHN4WWU0REQzUTJYSjBLVk1KeWdWVjYvNWtSVC9FWDRhZlh6RW9iMzdaWk8K"
     }
   },
   "build": {

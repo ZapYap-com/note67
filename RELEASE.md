@@ -113,29 +113,45 @@ Follow [Semantic Versioning](https://semver.org/):
 - **MINOR** (0.1.0): New features, backwards compatible
 - **PATCH** (0.0.1): Bug fixes
 
-## Future: Automated Releases (CI/CD)
+## Automated Releases (CI/CD)
 
-When ready to automate with GitHub Actions:
+Releases are automated via GitHub Actions. When you push a tag, the workflow:
+1. Builds for macOS (both Apple Silicon and Intel)
+2. Signs with Developer ID certificate
+3. Notarizes with Apple
+4. Creates a draft GitHub release with all artifacts
 
-### Required Secrets
+### Triggering a Release
 
-| Secret | Description |
-|--------|-------------|
-| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/note67.key` |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the key |
+```bash
+./scripts/bump-version.sh 0.2.0
+git add -A
+git commit -m "chore: release v0.2.0"
+git tag v0.2.0
+git push origin main --tags
+```
 
-### For Apple Notarization (optional)
+The workflow runs automatically. Check **Actions** tab for progress.
+
+### After Workflow Completes
+
+1. Go to GitHub → **Releases**
+2. Find the draft release
+3. Edit release notes if needed
+4. Click **Publish release**
+
+### Required GitHub Secrets
 
 | Secret | Description |
 |--------|-------------|
 | `APPLE_CERTIFICATE` | Base64-encoded .p12 certificate |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for .p12 |
-| `APPLE_SIGNING_IDENTITY` | e.g., "Developer ID Application: Name (TEAMID)" |
+| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Name (TEAMID)` |
 | `APPLE_ID` | Apple ID email |
 | `APPLE_PASSWORD` | App-specific password |
-| `APPLE_TEAM_ID` | Team ID |
-
-See `plan/tauri-updater-implementation.md` for the full GitHub Actions workflow.
+| `APPLE_TEAM_ID` | 10-character Team ID |
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/note67.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the key |
 
 ## Troubleshooting
 
