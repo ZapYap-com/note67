@@ -105,9 +105,9 @@ function App() {
     notes.find((n) => n.id === selectedNoteId) || null;
   const recordingNote =
     notes.find((n) => n.id === recordingNoteId) || null;
-  // Show live segments during recording, otherwise show saved transcript
+  // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId
-    ? (isLiveTranscribing && recordingNoteId === selectedNoteId
+    ? ((isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
         ? liveSegments
         : noteTranscripts[selectedNoteId] || [])
     : [];
@@ -726,7 +726,8 @@ function App() {
               try {
                 if (recordingNoteId) {
                   await resumeRecording(recordingNoteId);
-                  await startLiveTranscription(recordingNoteId);
+                  // Pass current liveSegments to preserve them when resuming
+                  await startLiveTranscription(recordingNoteId, profile?.name || "Me", liveSegments);
                 }
               } catch (error) {
                 console.error("Resume recording failed:", error);
@@ -735,8 +736,10 @@ function App() {
             onContinueRecording={async () => {
               try {
                 setRecordingNoteId(selectedNote.id);
+                // Load existing transcripts before starting
+                const existingSegments = await loadTranscript(selectedNote.id);
                 await continueRecording(selectedNote.id);
-                await startLiveTranscription(selectedNote.id);
+                await startLiveTranscription(selectedNote.id, profile?.name || "Me", existingSegments);
                 setActiveTab("transcript");
               } catch (error) {
                 console.error("Continue recording failed:", error);

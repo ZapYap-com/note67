@@ -203,7 +203,7 @@ interface UseLiveTranscriptionReturn {
   isLiveTranscribing: boolean;
   liveSegments: TranscriptSegment[];
   error: string | null;
-  startLiveTranscription: (noteId: string, speakerName?: string) => Promise<void>;
+  startLiveTranscription: (noteId: string, speakerName?: string, initialSegments?: TranscriptSegment[]) => Promise<void>;
   stopLiveTranscription: (noteId: string) => Promise<TranscriptionResult | null>;
 }
 
@@ -295,10 +295,10 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
     };
   }, []);
 
-  const startLiveTranscription = useCallback(async (noteId: string, speakerName?: string) => {
+  const startLiveTranscription = useCallback(async (noteId: string, speakerName?: string, initialSegments?: TranscriptSegment[]) => {
     try {
       setError(null);
-      setLiveSegments([]);
+      setLiveSegments(initialSegments || []);
       currentNoteIdRef.current = noteId;
       speakerNameRef.current = speakerName || "Me";
       // Get language from store - "auto" becomes undefined for backend
