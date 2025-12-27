@@ -778,11 +778,38 @@ fn is_valid_title(title: &str) -> bool {
         "meeting title",
         "the title",
         "a title",
+        "discussion",
+        "conversation",
+        "audio",
+        "recording",
+        "call",
+        "chat",
+        "talk",
+        "overview",
+        "review",
+        "update",
+        "general",
+        "misc",
+        "miscellaneous",
+        "various",
+        "topics",
+        "items",
+        "agenda",
+        "content",
+        "text",
+        "document",
     ];
     for pattern in nonsense_exact {
         if lower_trimmed == pattern {
             return false;
         }
+    }
+
+    // Check for compound generic phrases (contains) - reject if title is ONLY these generic words
+    let generic_only_words = ["meeting", "discussion", "summary", "overview", "notes", "update", "review", "call", "conversation", "talk", "general", "team", "weekly", "daily", "monthly"];
+    let words: Vec<&str> = lower_trimmed.split_whitespace().collect();
+    if !words.is_empty() && words.iter().all(|w| generic_only_words.contains(w)) {
+        return false;
     }
 
     // Check for patterns that might leak from the prompt (contains)
@@ -817,6 +844,9 @@ fn is_valid_title(title: &str) -> bool {
         "describe",
         "we need",
         "summary:",
+        "main topic",
+        "key points",
+        "important",
     ];
     for pattern in prompt_leakage {
         if lower_trimmed.contains(pattern) {
