@@ -95,9 +95,9 @@ pub fn run() {
             }
 
             // Setup system tray menu
-            let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
-            let new_note = MenuItem::with_id(app, "new_note", "New Note", true, None::<&str>)?;
-            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open", true, Some("CmdOrCtrl+O"))?;
+            let new_note = MenuItem::with_id(app, "new_note", "New Note", true, Some("CmdOrCtrl+N"))?;
+            let settings = MenuItem::with_id(app, "settings", "Settings", true, Some("CmdOrCtrl+,"))?;
             let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
 
             let menu = Menu::with_items(app, &[&open, &new_note, &settings, &exit])?;
