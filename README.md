@@ -11,6 +11,8 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Speaker distinction (You vs Others) on macOS
 - [x] Acoustic Echo Cancellation (AEC) for speaker usage
 - [x] Live transcription during recording
+- [x] Pause/Resume recording
+- [x] Continue recording on existing notes (Listen)
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
@@ -102,33 +104,6 @@ npm run tauri build
 | `npm run tauri build` | Build production app |
 | `npm run lint` | Run ESLint |
 | `npm run format` | Format code with Prettier |
-
-## Project Structure
-
-```
-note67/
-├── src/                      # React frontend
-│   ├── api/                  # Tauri invoke wrappers
-│   ├── components/           # React components
-│   ├── hooks/                # React hooks
-│   ├── stores/               # Zustand state
-│   ├── types/                # TypeScript interfaces
-│   └── App.tsx
-├── src-tauri/                # Rust backend
-│   ├── src/
-│   │   ├── audio/            # Audio recording, system capture & AEC
-│   │   │   ├── aec.rs        # Acoustic echo cancellation
-│   │   │   ├── macos.rs      # ScreenCaptureKit integration
-│   │   │   └── recorder.rs   # Microphone recording
-│   │   ├── commands/         # Tauri commands
-│   │   ├── db/               # SQLite database
-│   │   ├── transcription/    # Whisper integration & live transcription
-│   │   └── lib.rs
-│   ├── Info.plist            # macOS permission descriptions
-│   ├── entitlements.plist    # macOS app entitlements
-│   └── Cargo.toml
-└── package.json
-```
 
 ## macOS Permissions
 

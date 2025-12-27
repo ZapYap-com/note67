@@ -67,6 +67,50 @@ fn should_skip_segment(text: &str) -> bool {
         || text.trim().is_empty()
 }
 
+/// Fast check if a mic segment is likely an echo of system audio
+/// Uses simple first-words comparison for speed
+fn is_echo_of_system(
+    mic_text: &str,
+    mic_start: f64,
+    mic_end: f64,
+    system_segments: &[(f64, f64, String)], // (start, end, text)
+) -> bool {
+    // Quick early exit
+    if system_segments.is_empty() {
+        return false;
+    }
+
+    let mic_lower = mic_text.to_lowercase();
+    let mic_words: Vec<&str> = mic_lower.split_whitespace().take(5).collect();
+    if mic_words.is_empty() {
+        return false;
+    }
+
+    for (sys_start, sys_end, sys_text) in system_segments {
+        // Quick time overlap check (must overlap by at least 1 second)
+        let overlap_start = mic_start.max(*sys_start);
+        let overlap_end = mic_end.min(*sys_end);
+        if overlap_end - overlap_start < 1.0 {
+            continue;
+        }
+
+        // Fast text check: compare first 3-5 words
+        let sys_lower = sys_text.to_lowercase();
+        let sys_words: Vec<&str> = sys_lower.split_whitespace().take(5).collect();
+
+        // Count matching words in first 5
+        let matches = mic_words.iter()
+            .filter(|w| sys_words.contains(w))
+            .count();
+
+        // If 3+ words match out of first 5, it's likely echo
+        if matches >= 3 || (matches >= 2 && mic_words.len() <= 3) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Live transcription state
 pub struct LiveTranscriptionState {
     pub is_running: AtomicBool,
@@ -199,7 +243,9 @@ pub async fn start_live_transcription(
 
                     // Apply AEC to remove speaker echo from mic (only if enabled)
                     let cleaned_mic = if aec::is_aec_enabled() {
-                        let reference = get_reference_samples(mic_16k.len());
+                        // Get enough reference samples for delay estimation (mic length + 150ms buffer)
+                        let extra_samples = 16000 * 150 / 1000; // 150ms at 16kHz = 2400 samples
+                        let reference = get_reference_samples(mic_16k.len() + extra_samples);
                         if !reference.is_empty() {
                             aec::apply_aec(&mic_16k, &reference)
                         } else {
@@ -277,17 +323,39 @@ pub async fn start_live_transcription(
             let mut db_segments: Vec<(String, f64, f64, String, Option<String>)> = Vec::new();
             let mut all_events: Vec<TranscriptionUpdateEvent> = Vec::new();
 
-            // Process mic results
+            // Process system results FIRST to collect current batch for echo detection
+            let mut current_system_segments: Vec<TranscriptionSegment> = Vec::new();
+            let mut system_segments_for_echo_check: Vec<(f64, f64, String)> = Vec::new();
+
+            if let Some(transcription) = &system_result {
+                if !transcription.segments.is_empty() {
+                    let valid: Vec<_> = transcription
+                        .segments
+                        .iter()
+                        .filter(|s| !should_skip_segment(&s.text))
+                        .cloned()
+                        .collect();
+
+                    for seg in &valid {
+                        system_segments_for_echo_check.push((seg.start_time, seg.end_time, seg.text.clone()));
+                    }
+                    current_system_segments = valid;
+                }
+            }
+
+            // Process mic results with echo filtering
             if let Some(transcription) = mic_result {
                 if !transcription.segments.is_empty() {
                     if let Some(last) = transcription.segments.last() {
                         *live_state_clone.mic_time_offset.lock().await = last.end_time;
                     }
 
+                    // Filter out blank segments AND echo duplicates
                     let valid_segments: Vec<_> = transcription
                         .segments
                         .into_iter()
                         .filter(|s| !should_skip_segment(&s.text))
+                        .filter(|s| !is_echo_of_system(&s.text, s.start_time, s.end_time, &system_segments_for_echo_check))
                         .collect();
 
                     if !valid_segments.is_empty() {
@@ -317,44 +385,34 @@ pub async fn start_live_transcription(
                 }
             }
 
-            // Process system results
-            if let Some(transcription) = system_result {
-                if !transcription.segments.is_empty() {
-                    if let Some(last) = transcription.segments.last() {
-                        *live_state_clone.system_time_offset.lock().await = last.end_time;
-                    }
-
-                    let valid_segments: Vec<_> = transcription
-                        .segments
-                        .into_iter()
-                        .filter(|s| !should_skip_segment(&s.text))
-                        .collect();
-
-                    if !valid_segments.is_empty() {
-                        for segment in &valid_segments {
-                            db_segments.push((
-                                note_id_clone.clone(),
-                                segment.start_time,
-                                segment.end_time,
-                                segment.text.clone(),
-                                Some("Others".to_string()),
-                            ));
-                        }
-
-                        live_state_clone
-                            .segments
-                            .lock()
-                            .await
-                            .extend(valid_segments.clone());
-
-                        all_events.push(TranscriptionUpdateEvent {
-                            note_id: note_id_clone.clone(),
-                            segments: valid_segments,
-                            is_final: false,
-                            audio_source: AudioSource::System,
-                        });
-                    }
+            // Now add system results to state and events (using already-filtered current_system_segments)
+            if !current_system_segments.is_empty() {
+                if let Some(last) = current_system_segments.last() {
+                    *live_state_clone.system_time_offset.lock().await = last.end_time;
                 }
+
+                for segment in &current_system_segments {
+                    db_segments.push((
+                        note_id_clone.clone(),
+                        segment.start_time,
+                        segment.end_time,
+                        segment.text.clone(),
+                        Some("Others".to_string()),
+                    ));
+                }
+
+                live_state_clone
+                    .segments
+                    .lock()
+                    .await
+                    .extend(current_system_segments.clone());
+
+                all_events.push(TranscriptionUpdateEvent {
+                    note_id: note_id_clone.clone(),
+                    segments: current_system_segments,
+                    is_final: false,
+                    audio_source: AudioSource::System,
+                });
             }
 
             // Batch insert all segments into database
