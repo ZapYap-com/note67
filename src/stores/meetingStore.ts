@@ -27,7 +27,11 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
 
   setDetectedMeeting: (meeting) => set({ detectedMeeting: meeting, dismissed: false }),
 
-  dismissMeeting: () => set({ dismissed: true }),
+  dismissMeeting: () => {
+    set({ dismissed: true });
+    // Don't clear detection cache - prevents popup from showing again for same meeting
+    // New/different meetings will still trigger (they have different window titles)
+  },
 
   setEnabled: async (enabled) => {
     try {

@@ -20,9 +20,11 @@ export function MeetingDetectedPopup({
 
   // Listen for meeting-detected events from Rust
   useEffect(() => {
+    console.log("[MeetingDetectedPopup] Setting up event listener");
     const unlisten = listen<MeetingDetectedPayload>(
       "meeting-detected",
       (event) => {
+        console.log("[MeetingDetectedPopup] Received event:", event.payload);
         setDetectedMeeting(event.payload);
       }
     );
@@ -31,6 +33,9 @@ export function MeetingDetectedPopup({
       unlisten.then((fn) => fn());
     };
   }, [setDetectedMeeting]);
+
+  // Debug: log render state
+  console.log("[MeetingDetectedPopup] Render state:", { detectedMeeting, dismissed });
 
   if (!detectedMeeting || dismissed) return null;
 

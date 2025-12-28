@@ -324,6 +324,7 @@ pub fn run() {
             // Meeting detection commands
             meeting_detection::set_meeting_detection_enabled,
             meeting_detection::is_meeting_detection_enabled,
+            meeting_detection::clear_detected_meetings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

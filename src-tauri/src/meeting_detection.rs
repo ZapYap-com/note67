@@ -21,6 +21,9 @@ const MEETING_PATTERNS: &[(&str, &str)] = &[
     // Format: "Microsoft Teams meeting | Microsoft Teams" or "Chat | Name | Microsoft Teams🔊"
     ("Microsoft Teams meeting", "Microsoft Teams"),
     ("Teams meeting", "Microsoft Teams"),
+    // Slack - when in a huddle
+    // Format: "Huddle: #channel – Workspace – Slack 🎤"
+    ("Huddle:", "Slack Huddle"),
     // Other meeting apps
     ("Discord | ", "Discord"),
 ];
@@ -57,6 +60,7 @@ pub struct MeetingDetected {
 pub struct MeetingDetectionState {
     enabled: AtomicBool,
     running: AtomicBool,
+    detected_meetings: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 impl Default for MeetingDetectionState {
@@ -64,6 +68,7 @@ impl Default for MeetingDetectionState {
         Self {
             enabled: AtomicBool::new(true),
             running: AtomicBool::new(false),
+            detected_meetings: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 }
@@ -75,6 +80,20 @@ impl MeetingDetectionState {
 
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst)
+    }
+
+    /// Clear a meeting from detected set so it can be detected again
+    pub fn clear_detected(&self, key: &str) {
+        if let Ok(mut detected) = self.detected_meetings.lock() {
+            detected.remove(key);
+        }
+    }
+
+    /// Clear all detected meetings
+    pub fn clear_all_detected(&self) {
+        if let Ok(mut detected) = self.detected_meetings.lock() {
+            detected.clear();
+        }
     }
 }
 
@@ -101,16 +120,24 @@ fn start_window_title_detection(app: AppHandle) {
         kCGNullWindowID, kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo,
     };
 
-    let detected_meetings: Arc<std::sync::Mutex<std::collections::HashSet<String>>> =
-        Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
-
     thread::spawn(move || {
         loop {
-            let state = app.try_state::<Arc<MeetingDetectionState>>();
-            if state.is_none() || !state.unwrap().is_enabled() {
+            let state = match app.try_state::<Arc<MeetingDetectionState>>() {
+                Some(s) => s,
+                None => {
+                    thread::sleep(Duration::from_secs(5));
+                    continue;
+                }
+            };
+
+            if !state.is_enabled() {
                 thread::sleep(Duration::from_secs(5));
                 continue;
             }
+
+            let detected_meetings = &state.detected_meetings;
+            let mut active_meetings: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
 
             // Get all on-screen windows
             let windows_ptr = unsafe {
@@ -149,7 +176,9 @@ fn start_window_title_detection(app: AppHandle) {
                             if !title_str.is_empty()
                                 && (title_str.to_lowercase().contains("meet")
                                     || title_str.to_lowercase().contains("zoom")
-                                    || title_str.to_lowercase().contains("teams"))
+                                    || title_str.to_lowercase().contains("teams")
+                                    || title_str.to_lowercase().contains("slack")
+                                    || title_str.to_lowercase().contains("huddle"))
                             {
                                 println!("[meeting-detection] Found window: '{}'", title_str);
                             }
@@ -185,13 +214,25 @@ fn start_window_title_detection(app: AppHandle) {
                             }
 
                             if let Some(meeting_name) = detected_app {
-                                let mut detected = detected_meetings.lock().unwrap();
                                 // Use title without emoji as key (emoji changes during call)
-                                let key = title_str.replace(AUDIO_ACTIVE_INDICATOR, "").trim().to_string();
+                                let key = title_str
+                                    .replace(AUDIO_ACTIVE_INDICATOR, "")
+                                    .replace("🎤", "")
+                                    .trim()
+                                    .to_string();
+                                active_meetings.insert(key.clone());
 
-                                if !detected.contains(&key) {
-                                    detected.insert(key.clone());
+                                let should_emit = {
+                                    let mut detected = detected_meetings.lock().unwrap();
+                                    if !detected.contains(&key) {
+                                        detected.insert(key.clone());
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                };
 
+                                if should_emit {
                                     println!(
                                         "[meeting-detection] Detected {} meeting: '{}'",
                                         meeting_name, title_str
@@ -204,19 +245,17 @@ fn start_window_title_detection(app: AppHandle) {
                                     };
 
                                     let _ = app.emit("meeting-detected", &meeting);
-
-                                    // Remove from detected after 5 minutes to allow re-detection
-                                    let detected_clone = detected_meetings.clone();
-                                    let key_clone = key.clone();
-                                    thread::spawn(move || {
-                                        thread::sleep(Duration::from_secs(300));
-                                        detected_clone.lock().unwrap().remove(&key_clone);
-                                    });
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // Remove meetings from cache that are no longer active
+            {
+                let mut detected = detected_meetings.lock().unwrap();
+                detected.retain(|key| active_meetings.contains(key));
             }
 
             thread::sleep(Duration::from_secs(3));
@@ -237,4 +276,11 @@ pub fn set_meeting_detection_enabled(
 #[tauri::command]
 pub fn is_meeting_detection_enabled(state: tauri::State<Arc<MeetingDetectionState>>) -> bool {
     state.is_enabled()
+}
+
+/// Tauri command to clear all detected meetings (allows re-detection)
+#[tauri::command]
+pub fn clear_detected_meetings(state: tauri::State<Arc<MeetingDetectionState>>) {
+    state.clear_all_detected();
+    println!("[meeting-detection] Cleared all detected meetings");
 }
