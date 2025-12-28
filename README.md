@@ -1,4 +1,4 @@
-# Note67
+# ![Note67](public/logo-readme.png)
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
