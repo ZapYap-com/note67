@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { readFile } from "@tauri-apps/plugin-fs";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface AudioPlayerProps {
   audioPath: string;
@@ -13,11 +13,19 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
 
   const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+  // Convert file path to asset URL for the webview
+  const audioSrc = useMemo(() => {
+    try {
+      return convertFileSrc(audioPath);
+    } catch {
+      return null;
+    }
+  }, [audioPath]);
 
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate);
@@ -28,32 +36,6 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
       audioRef.current.playbackRate = newRate;
     }
   };
-
-  // Load audio file as blob URL
-  useEffect(() => {
-    let blobUrl: string | null = null;
-
-    const loadAudio = async () => {
-      try {
-        const data = await readFile(audioPath);
-        const blob = new Blob([data], { type: "audio/wav" });
-        blobUrl = URL.createObjectURL(blob);
-        setAudioSrc(blobUrl);
-        setLoadError(null);
-      } catch (err) {
-        console.error("Failed to load audio:", err);
-        setLoadError("Failed to load audio file");
-      }
-    };
-
-    loadAudio();
-
-    return () => {
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
-      }
-    };
-  }, [audioPath]);
 
   const formatTime = (seconds: number) => {
     if (!isFinite(seconds) || isNaN(seconds)) return "0:00";
@@ -189,7 +171,10 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
         onEnded={handleEnded}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onError={(e) => console.error("Audio error:", e.currentTarget.error, "src:", audioSrc)}
+        onError={(e) => {
+          console.error("Audio error:", e.currentTarget.error, "src:", audioSrc);
+          setLoadError("Failed to load audio file");
+        }}
       />
 
       <div className="flex items-center gap-4">
