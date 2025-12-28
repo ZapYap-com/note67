@@ -2,12 +2,6 @@ export function DisclaimerTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3
-          className="text-sm font-semibold mb-3"
-          style={{ color: "var(--color-text)" }}
-        >
-          Disclaimer
-        </h3>
         <p
           className="text-sm mb-4"
           style={{ color: "var(--color-text-secondary)" }}
