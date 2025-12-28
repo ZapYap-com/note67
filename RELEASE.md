@@ -47,8 +47,28 @@ This updates:
 - `package.json`
 - `src-tauri/Cargo.toml`
 - `src-tauri/tauri.conf.json`
+- `src/components/settings/constants.ts`
 
-### 2. Commit and Tag
+### 2. Update What's New
+
+Edit `src/components/settings/UpdatesTab.tsx` and add a new entry to `recentChanges`:
+
+```typescript
+const recentChanges = [
+  {
+    version: "0.2.0",  // New release first
+    date: "January 2025",
+    changes: [
+      "Feature 1",
+      "Feature 2",
+      "Bug fixes",
+    ],
+  },
+  // ... older releases below
+];
+```
+
+### 3. Commit and Tag
 
 ```bash
 git add -A
@@ -58,7 +78,7 @@ git push origin v0.2.0
 git push origin main
 ```
 
-### 3. Build Release
+### 4. Build Release
 
 ```bash
 # Set signing key environment variable
@@ -72,7 +92,7 @@ npm run tauri build
 Build artifacts are located in:
 - macOS: `src-tauri/target/release/bundle/dmg/` and `src-tauri/target/release/bundle/macos/`
 
-### 4. Create GitHub Release
+### 5. Create GitHub Release
 
 1. Go to GitHub → Releases → Draft a new release
 2. Select the tag you just pushed (e.g., `v0.2.0`)
@@ -82,7 +102,7 @@ Build artifacts are located in:
    - `.app.tar.gz.sig` file (signature)
    - `latest.json` file (update manifest)
 
-### 5. Generate latest.json
+### 6. Generate latest.json
 
 Create `latest.json` for the updater:
 
