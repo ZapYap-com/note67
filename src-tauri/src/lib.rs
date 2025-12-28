@@ -79,6 +79,9 @@ fn update_tray_for_update(app: &tauri::AppHandle, available: bool, version: Opti
 
         if let Ok(icon) = icon_result {
             let _ = tray.set_icon(Some(icon));
+            // Re-apply template mode for proper dark/light mode support on macOS
+            #[cfg(target_os = "macos")]
+            let _ = tray.set_icon_as_template(true);
         }
     }
 }
