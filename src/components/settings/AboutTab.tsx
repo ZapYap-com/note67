@@ -5,14 +5,29 @@ export function AboutTab() {
   return (
     <div className="space-y-6">
       {/* Logo and App Name */}
-      <div className="text-center pb-4">
-        <LogoImage className="w-32 h-auto mx-auto mb-4" />
+      <div className="text-center">
+        <a
+          href="https://note67.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <LogoImage className="w-32 h-auto mx-auto mb-4 hover:opacity-80 transition-opacity" />
+        </a>
         <p
           className="text-sm mt-1"
           style={{ color: "var(--color-text-secondary)" }}
         >
           Version {APP_VERSION}
         </p>
+        <a
+          href="https://note67.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm mt-2 inline-block underline"
+          style={{ color: "var(--color-accent)" }}
+        >
+          Visit Website
+        </a>
       </div>
 
       {/* Description */}
