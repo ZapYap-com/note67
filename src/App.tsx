@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
+  LogoImage,
   LogoWithWordmark,
   Settings,
   SummaryPanel,
@@ -928,7 +929,7 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center pb-20">
       <div className="text-center max-w-sm px-6">
-        <LogoWithWordmark className="w-44 h-auto mx-auto mb-4" />
+        <LogoImage className="w-32 h-auto mx-auto mb-4" />
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Select a note or start a new one
         </p>

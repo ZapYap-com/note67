@@ -1,4 +1,5 @@
 export { LogoIcon, LogoWithWordmark } from "./Logo";
+export { LogoImage } from "./LogoImage";
 export { NoteEditor } from "./NoteEditor";
 export { NoteSearch } from "./NoteSearch";
 export { ModelManager } from "./ModelManager";
