@@ -8,6 +8,7 @@ import {
   useProfile,
   AudioPlayer,
   UpdateNotification,
+  MeetingDetectedPopup,
 } from "./components";
 import { exportApi, aiApi } from "./api";
 import {
@@ -945,6 +946,9 @@ function App() {
           setShowSettings(true);
         }}
       />
+
+      {/* Meeting Detected Popup */}
+      <MeetingDetectedPopup onStartListening={handleStartRecording} />
     </div>
   );
 }

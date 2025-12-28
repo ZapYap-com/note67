@@ -10,3 +10,4 @@ export { TranscriptViewer } from "./TranscriptViewer";
 export { TranscriptSearch } from "./TranscriptSearch";
 export { AudioPlayer } from "./AudioPlayer";
 export { UpdateNotification } from "./UpdateNotification";
+export { MeetingDetectedPopup } from "./MeetingDetectedPopup";

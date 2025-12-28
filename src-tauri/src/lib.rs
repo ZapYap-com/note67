@@ -2,11 +2,14 @@ mod ai;
 mod audio;
 mod commands;
 mod db;
+mod meeting_detection;
 mod transcription;
 
 use commands::{init_transcription_state, AiState, AudioState};
 use db::Database;
+use meeting_detection::MeetingDetectionState;
 use serde::Deserialize;
+use std::sync::Arc;
 use tauri::{
     image::Image,
     menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder},
@@ -111,6 +114,12 @@ pub fn run() {
             app.manage(AiState::default());
             let transcription_state = init_transcription_state(app.handle());
             app.manage(transcription_state);
+
+            // Meeting detection state
+            app.manage(Arc::new(MeetingDetectionState::default()));
+
+            // Start meeting detection
+            meeting_detection::start_meeting_detection(app.handle());
 
             // Create custom application menu (macOS) with Hide instead of Quit on Cmd+Q
             #[cfg(target_os = "macos")]
@@ -312,6 +321,9 @@ pub fn run() {
             commands::set_autostart_enabled,
             commands::open_screen_recording_settings,
             commands::open_microphone_settings,
+            // Meeting detection commands
+            meeting_detection::set_meeting_detection_enabled,
+            meeting_detection::is_meeting_detection_enabled,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

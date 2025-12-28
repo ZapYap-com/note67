@@ -40,11 +40,14 @@ scopeguard = "1.2"
 # macOS-specific dependencies for system audio capture via ScreenCaptureKit
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSArray", "NSDictionary"] }
+objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSArray", "NSDictionary", "NSNotification", "NSThread"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication"] }
 objc2-core-media = { version = "0.3", features = ["CMSampleBuffer", "CMFormatDescription", "CMTime"] }
 objc2-core-audio-types = "0.3"
 block2 = "0.6"
 dispatch = "0.2"
+core-graphics = "0.24"
+core-foundation = "0.10"
 
 [profile.dev]
 incremental = true
