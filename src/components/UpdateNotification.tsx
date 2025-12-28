@@ -15,7 +15,6 @@ export function UpdateNotification({ onOpenSettings }: UpdateNotificationProps) 
     error,
     checkForUpdates,
     downloadAndInstall,
-    dismissUpdate,
   } = useUpdater();
   const [dismissed, setDismissed] = useState(false);
 
@@ -56,7 +55,7 @@ export function UpdateNotification({ onOpenSettings }: UpdateNotificationProps) 
 
   const handleDismiss = () => {
     setDismissed(true);
-    dismissUpdate();
+    // Store state remains intact - other warnings stay visible
   };
 
   return (
