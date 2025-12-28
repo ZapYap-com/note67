@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useModels, useOllama, useUpdater } from "../../hooks";
+import { useModels, useOllama, useUpdater, useSystemStatus } from "../../hooks";
 import { useProfile } from "./useProfile";
 import { WarningIcon } from "./WarningIcon";
 import { ProfileTab } from "./ProfileTab";
@@ -51,11 +51,13 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
   const { loadedModel } = useModels();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
   const { available: updateAvailable } = useUpdater();
+  const { micAvailable, micPermission, systemAudioSupported, systemAudioPermission, loading: systemLoading } = useSystemStatus();
 
   // Check if each setting needs attention
   const profileNeedsSetup = !profile.name;
   const whisperNeedsSetup = !loadedModel;
   const ollamaNeedsSetup = !ollamaRunning || !ollamaModel;
+  const systemNeedsSetup = !systemLoading && (!micAvailable || !micPermission || (systemAudioSupported && !systemAudioPermission));
 
   type TabItem = {
     id: SettingsTab;
@@ -116,7 +118,7 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
         {
           id: "system",
           label: "System",
-          warning: false,
+          warning: systemNeedsSetup,
           icon: (
             <svg
               className="w-4 h-4"

@@ -19,6 +19,7 @@ import {
   useTranscription,
   useLiveTranscription,
   useUpdater,
+  useSystemStatus,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment } from "./types";
@@ -54,6 +55,8 @@ function App() {
   } = useLiveTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
   const { available: updateAvailable } = useUpdater();
+  const { micAvailable, micPermission, systemAudioSupported, systemAudioPermission, loading: systemLoading } = useSystemStatus();
+  const systemNeedsSetup = !systemLoading && (!micAvailable || !micPermission || (systemAudioSupported && !systemAudioPermission));
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
@@ -655,7 +658,7 @@ function App() {
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {(!profile.name || !loadedModel || !ollamaRunning || !ollamaModel || updateAvailable) && (
+              {(!profile.name || !loadedModel || !ollamaRunning || !ollamaModel || updateAvailable || systemNeedsSetup) && (
                 <svg
                   className="w-4 h-4 mt-0.5"
                   style={{ color: "#f59e0b" }}
