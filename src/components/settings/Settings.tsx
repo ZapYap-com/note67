@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useModels, useOllama } from "../../hooks";
+import { useModels, useOllama, useUpdater } from "../../hooks";
 import { useProfile } from "./useProfile";
 import { WarningIcon } from "./WarningIcon";
 import { ProfileTab } from "./ProfileTab";
@@ -50,6 +50,7 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
 
   const { loadedModel } = useModels();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
+  const { available: updateAvailable } = useUpdater();
 
   // Check if each setting needs attention
   const profileNeedsSetup = !profile.name;
@@ -251,7 +252,7 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
         {
           id: "updates",
           label: "Updates",
-          warning: false,
+          warning: updateAvailable,
           icon: (
             <svg
               className="w-4 h-4"

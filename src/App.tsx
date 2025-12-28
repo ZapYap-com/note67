@@ -18,6 +18,7 @@ import {
   useSummaries,
   useTranscription,
   useLiveTranscription,
+  useUpdater,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment } from "./types";
@@ -52,6 +53,7 @@ function App() {
     stopLiveTranscription
   } = useLiveTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
+  const { available: updateAvailable } = useUpdater();
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
@@ -653,7 +655,7 @@ function App() {
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {(!profile.name || !loadedModel || !ollamaRunning || !ollamaModel) && (
+              {(!profile.name || !loadedModel || !ollamaRunning || !ollamaModel || updateAvailable) && (
                 <svg
                   className="w-4 h-4 mt-0.5"
                   style={{ color: "#f59e0b" }}
