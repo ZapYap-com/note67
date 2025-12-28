@@ -55,7 +55,7 @@ function App() {
   } = useLiveTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
   const { available: updateAvailable } = useUpdater();
-  const { micAvailable, micPermission, systemAudioSupported, systemAudioPermission, loading: systemLoading } = useSystemStatus();
+  const { micAvailable, micPermission, systemAudioSupported, systemAudioPermission, loading: systemLoading, refresh: refreshSystemStatus } = useSystemStatus();
   const systemNeedsSetup = !systemLoading && (!micAvailable || !micPermission || (systemAudioSupported && !systemAudioPermission));
 
   const { profile } = useProfile();
@@ -163,6 +163,14 @@ function App() {
   }, [createNote]);
 
   const handleStartRecording = useCallback(async () => {
+    // Refresh and check microphone permission before starting
+    const status = await refreshSystemStatus();
+    if (!status.micAvailable || !status.micPermission) {
+      setSettingsTab("system");
+      setShowSettings(true);
+      return;
+    }
+
     const note = await createNote("Untitled");
     setSelectedNoteId(note.id);
     setRecordingNoteId(note.id);
@@ -170,7 +178,7 @@ function App() {
     await startRecording(note.id);
     // Start live transcription
     await startLiveTranscription(note.id, profile?.name || "Me");
-  }, [createNote, startRecording, startLiveTranscription, profile?.name]);
+  }, [createNote, startRecording, startLiveTranscription, profile?.name, refreshSystemStatus]);
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
   useEffect(() => {
@@ -731,6 +739,14 @@ function App() {
             }}
             onResumeRecording={async () => {
               try {
+                // Check microphone permission before resuming
+                const status = await refreshSystemStatus();
+                if (!status.micAvailable || !status.micPermission) {
+                  setSettingsTab("system");
+                  setShowSettings(true);
+                  return;
+                }
+
                 if (recordingNoteId) {
                   await resumeRecording(recordingNoteId);
                   // Pass current liveSegments to preserve them when resuming
@@ -742,6 +758,14 @@ function App() {
             }}
             onContinueRecording={async () => {
               try {
+                // Check microphone permission before continuing
+                const status = await refreshSystemStatus();
+                if (!status.micAvailable || !status.micPermission) {
+                  setSettingsTab("system");
+                  setShowSettings(true);
+                  return;
+                }
+
                 setRecordingNoteId(selectedNote.id);
                 // Load existing transcripts before starting
                 const existingSegments = await loadTranscript(selectedNote.id);
