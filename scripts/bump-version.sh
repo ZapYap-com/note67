@@ -35,6 +35,15 @@ echo "  Updated package.json"
 sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/src-tauri/Cargo.toml"
 echo "  Updated src-tauri/Cargo.toml"
 
+# Update Cargo.lock by running cargo check
+echo "  Updating Cargo.lock..."
+# Source cargo environment if available
+if [ -f "$HOME/.cargo/env" ]; then
+  source "$HOME/.cargo/env"
+fi
+(cd "$ROOT_DIR/src-tauri" && cargo check --quiet)
+echo "  Updated src-tauri/Cargo.lock"
+
 # Update tauri.conf.json
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/src-tauri/tauri.conf.json"
 echo "  Updated src-tauri/tauri.conf.json"
@@ -50,21 +59,28 @@ echo ""
 # Git operations
 cd "$ROOT_DIR"
 
+echo ""
 echo "Committing changes..."
 git add -A
 git commit -m "chore: bump version to $VERSION"
 
+echo ""
 echo "Creating tag v$VERSION..."
 git tag "v$VERSION"
 
+echo ""
 echo "Pushing to development..."
-git push origin development
-
-echo "Pushing development to main..."
-git push origin development:main
-
-echo "Pushing tag v$VERSION..."
-git push origin "v$VERSION"
+git push origin development && echo "  ✓ Pushed to development"
 
 echo ""
+echo "Pushing development to main..."
+git push origin development:main && echo "  ✓ Pushed development to main"
+
+echo ""
+echo "Pushing tag v$VERSION..."
+git push origin "v$VERSION" && echo "  ✓ Pushed tag v$VERSION"
+
+echo ""
+echo "============================================"
 echo "Done! Version $VERSION has been released."
+echo "============================================"
