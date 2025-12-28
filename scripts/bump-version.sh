@@ -1,18 +1,40 @@
 #!/bin/bash
 # Usage: ./scripts/bump-version.sh 0.2.0
+#        ./scripts/bump-version.sh 0.2.0 --local
 #
 # This script updates the version in all configuration files:
 # - package.json
 # - src-tauri/Cargo.toml
 # - src-tauri/tauri.conf.json
+#
+# Options:
+#   --local, -l    Skip git commit, tag, and push (for local testing)
 
 set -e
 
-VERSION=$1
+VERSION=""
+LOCAL_ONLY=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --local|-l)
+      LOCAL_ONLY=true
+      shift
+      ;;
+    *)
+      if [ -z "$VERSION" ]; then
+        VERSION=$1
+      fi
+      shift
+      ;;
+  esac
+done
 
 if [ -z "$VERSION" ]; then
-  echo "Usage: $0 <version>"
+  echo "Usage: $0 <version> [--local]"
   echo "Example: $0 0.2.0"
+  echo "Example: $0 0.2.0 --local  (skip git operations)"
   exit 1
 fi
 
@@ -54,7 +76,15 @@ echo "  Updated src/components/settings/constants.ts"
 
 echo ""
 echo "Version updated to $VERSION"
-echo ""
+
+if [ "$LOCAL_ONLY" = true ]; then
+  echo ""
+  echo "============================================"
+  echo "Done! Version $VERSION updated locally."
+  echo "(--local flag: skipped git operations)"
+  echo "============================================"
+  exit 0
+fi
 
 # Git operations
 cd "$ROOT_DIR"

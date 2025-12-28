@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { emit, listen } from "@tauri-apps/api/event";
 import { useUpdater } from "../hooks";
 
 interface UpdateNotificationProps {
@@ -18,13 +19,38 @@ export function UpdateNotification({ onOpenSettings }: UpdateNotificationProps) 
   } = useUpdater();
   const [dismissed, setDismissed] = useState(false);
 
-  // Check for updates on mount (with a small delay to not block startup)
+  // Check for updates on mount and periodically (every hour)
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // Initial check with a small delay to not block startup
+    const initialTimer = setTimeout(() => {
       checkForUpdates();
     }, 3000);
-    return () => clearTimeout(timer);
+
+    // Periodic check every hour
+    const intervalTimer = setInterval(() => {
+      checkForUpdates();
+    }, 60 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+    };
   }, [checkForUpdates]);
+
+  // Emit update status to Rust for tray indicator
+  useEffect(() => {
+    emit("update-status-changed", { available, version: version || null });
+  }, [available, version]);
+
+  // Listen for tray install action
+  useEffect(() => {
+    const unlisten = listen("tray-install-update", () => {
+      downloadAndInstall();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [downloadAndInstall]);
 
   if (!available || dismissed) return null;
 

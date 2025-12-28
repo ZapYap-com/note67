@@ -6,13 +6,82 @@ mod transcription;
 
 use commands::{init_transcription_state, AiState, AudioState};
 use db::Database;
+use serde::Deserialize;
 use tauri::{
     image::Image,
     menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder},
     tray::TrayIconBuilder,
-    Emitter, Manager, RunEvent, WindowEvent,
+    Emitter, Listener, Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_autostart::MacosLauncher;
+
+#[derive(Debug, Deserialize)]
+struct UpdateStatus {
+    available: bool,
+    version: Option<String>,
+}
+
+/// Updates the system tray icon and menu based on update availability
+fn update_tray_for_update(app: &tauri::AppHandle, available: bool, version: Option<String>) {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        // Rebuild menu with or without update item
+        let menu_result: Result<Menu<tauri::Wry>, tauri::Error> = (|| {
+            if available {
+                let version_str = version.unwrap_or_else(|| "new".to_string());
+                let install_update = MenuItem::with_id(
+                    app,
+                    "install_update",
+                    format!("Install Update (v{})", version_str),
+                    true,
+                    None::<&str>,
+                )?;
+                let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
+                let open = MenuItem::with_id(app, "open", "Open", true, Some("CmdOrCtrl+O"))?;
+                let new_note =
+                    MenuItem::with_id(app, "new_note", "New Note", true, Some("CmdOrCtrl+N"))?;
+                let settings =
+                    MenuItem::with_id(app, "settings", "Settings", true, Some("CmdOrCtrl+,"))?;
+                let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
+
+                Menu::with_items(
+                    app,
+                    &[
+                        &install_update,
+                        &separator,
+                        &open,
+                        &new_note,
+                        &settings,
+                        &exit,
+                    ],
+                )
+            } else {
+                let open = MenuItem::with_id(app, "open", "Open", true, Some("CmdOrCtrl+O"))?;
+                let new_note =
+                    MenuItem::with_id(app, "new_note", "New Note", true, Some("CmdOrCtrl+N"))?;
+                let settings =
+                    MenuItem::with_id(app, "settings", "Settings", true, Some("CmdOrCtrl+,"))?;
+                let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
+
+                Menu::with_items(app, &[&open, &new_note, &settings, &exit])
+            }
+        })();
+
+        if let Ok(menu) = menu_result {
+            let _ = tray.set_menu(Some(menu));
+        }
+
+        // Swap icon based on update availability
+        let icon_result = if available {
+            Image::from_bytes(include_bytes!("../icons/icon_tray_update.png"))
+        } else {
+            Image::from_bytes(include_bytes!("../icons/icon_tray.png"))
+        };
+
+        if let Ok(icon) = icon_result {
+            let _ = tray.set_icon(Some(icon));
+        }
+    }
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -106,12 +175,12 @@ pub fn run() {
 
             let icon = Image::from_bytes(include_bytes!("../icons/icon_tray.png"))?;
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
                 .icon_as_template(true)
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .on_menu_event(|app: &tauri::AppHandle, event| match event.id.as_ref() {
                     "open" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
@@ -132,12 +201,26 @@ pub fn run() {
                             let _ = window.emit("tray-open-settings", ());
                         }
                     }
+                    "install_update" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("tray-install-update", ());
+                        }
+                    }
                     "exit" => {
                         std::process::exit(0);
                     }
                     _ => {}
                 })
                 .build(app)?;
+
+            // Listen for update status changes from frontend
+            let app_handle = app.handle().clone();
+            app.listen("update-status-changed", move |event| {
+                let payload = event.payload();
+                if let Ok(status) = serde_json::from_str::<UpdateStatus>(payload) {
+                    update_tray_for_update(&app_handle, status.available, status.version);
+                }
+            });
 
             Ok(())
         })
