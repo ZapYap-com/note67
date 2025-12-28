@@ -164,6 +164,9 @@ pub fn run() {
             commands::is_system_audio_supported,
             commands::has_system_audio_permission,
             commands::request_system_audio_permission,
+            commands::has_microphone_available,
+            commands::has_microphone_permission,
+            commands::get_microphone_auth_status,
             commands::start_dual_recording,
             commands::stop_dual_recording,
             commands::is_dual_recording,
@@ -221,6 +224,7 @@ pub fn run() {
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
             commands::open_screen_recording_settings,
+            commands::open_microphone_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

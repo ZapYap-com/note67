@@ -8,6 +8,12 @@ export function SystemTab() {
   const [systemAudioPermission, setSystemAudioPermission] = useState(false);
   const [systemAudioLoading, setSystemAudioLoading] = useState(true);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  // Microphone state
+  const [micAvailable, setMicAvailable] = useState(false);
+  const [micPermission, setMicPermission] = useState(false);
+  const [micAuthStatus, setMicAuthStatus] = useState<number>(0); // 0=NotDetermined, 1=Restricted, 2=Denied, 3=Authorized
+  const [micLoading, setMicLoading] = useState(true);
+  const [refreshingMic, setRefreshingMic] = useState(false);
 
   useEffect(() => {
     invoke<boolean>("get_autostart_enabled")
@@ -36,6 +42,23 @@ export function SystemTab() {
       .catch((err) => {
         console.error("Failed to check system audio:", err);
         setSystemAudioLoading(false);
+      });
+
+    // Check microphone availability and permission
+    Promise.all([
+      invoke<boolean>("has_microphone_available"),
+      invoke<boolean>("has_microphone_permission"),
+      invoke<number>("get_microphone_auth_status"),
+    ])
+      .then(([available, permission, status]) => {
+        setMicAvailable(available);
+        setMicPermission(permission);
+        setMicAuthStatus(status);
+        setMicLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to check microphone:", err);
+        setMicLoading(false);
       });
   }, []);
 
@@ -66,6 +89,42 @@ export function SystemTab() {
     } finally {
       setRequestingPermission(false);
     }
+  };
+
+  const handleOpenMicSettings = async () => {
+    try {
+      await invoke("open_microphone_settings");
+    } catch (err) {
+      console.error("Failed to open Microphone settings:", err);
+    }
+  };
+
+  const handleCheckMicPermission = async () => {
+    setRefreshingMic(true);
+    try {
+      const [available, permission, status] = await Promise.all([
+        invoke<boolean>("has_microphone_available"),
+        invoke<boolean>("has_microphone_permission"),
+        invoke<number>("get_microphone_auth_status"),
+      ]);
+      setMicAvailable(available);
+      setMicPermission(permission);
+      setMicAuthStatus(status);
+    } catch (err) {
+      console.error("Failed to check microphone:", err);
+    } finally {
+      setRefreshingMic(false);
+    }
+  };
+
+  const getMicStatusText = () => {
+    if (micLoading) return "Checking...";
+    if (!micAvailable) return "No microphone detected";
+    if (micAuthStatus === 0) return "Permission not requested yet";
+    if (micAuthStatus === 1) return "Restricted by system policy";
+    if (micAuthStatus === 2) return "Permission denied";
+    if (micAuthStatus === 3) return "Granted - Microphone enabled";
+    return "Unknown status";
   };
 
   return (
@@ -146,6 +205,148 @@ export function SystemTab() {
           />
         </div>
       </button>
+
+      {/* Microphone Section */}
+      <div className="pt-4">
+        <h3
+          className="text-sm font-semibold mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
+          Microphone
+        </h3>
+        <p
+          className="text-sm mb-4"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Capture your voice during recordings.
+        </p>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span
+              className="w-10 h-10 rounded-lg flex items-center justify-center"
+              style={{
+                backgroundColor:
+                  micAvailable && micPermission
+                    ? "rgba(34, 197, 94, 0.15)"
+                    : !micAvailable
+                      ? "rgba(239, 68, 68, 0.15)"
+                      : "var(--color-bg-elevated)",
+                color:
+                  micAvailable && micPermission
+                    ? "#22c55e"
+                    : !micAvailable
+                      ? "#ef4444"
+                      : "var(--color-text-secondary)",
+              }}
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                />
+              </svg>
+            </span>
+            <div>
+              <p
+                className="font-medium"
+                style={{ color: "var(--color-text)" }}
+              >
+                Microphone Access
+              </p>
+              <p
+                className="text-xs"
+                style={{ color: "var(--color-text-tertiary)" }}
+              >
+                {getMicStatusText()}
+              </p>
+            </div>
+          </div>
+          {!micLoading && (!micAvailable || !micPermission) && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCheckMicPermission}
+                disabled={refreshingMic}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                {refreshingMic ? "Checking..." : "Refresh"}
+              </button>
+              <button
+                onClick={handleOpenMicSettings}
+                className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
+              >
+                Open Settings
+              </button>
+            </div>
+          )}
+          {!micLoading && micAvailable && micPermission && (
+            <span
+              className="px-3 py-1.5 text-xs font-medium rounded-lg"
+              style={{
+                backgroundColor: "rgba(34, 197, 94, 0.15)",
+                color: "#16a34a",
+              }}
+            >
+              Enabled
+            </span>
+          )}
+        </div>
+
+        {!micLoading && !micAvailable && (
+          <div
+            className="mt-3 p-3 rounded-lg text-xs"
+            style={{
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            <p>
+              <strong>No microphone detected.</strong> Connect an external
+              microphone or headset to record your voice.
+            </p>
+          </div>
+        )}
+
+        {!micLoading && micAvailable && !micPermission && (
+          <div
+            className="mt-3 p-3 rounded-lg text-xs"
+            style={{
+              backgroundColor: "rgba(59, 130, 246, 0.08)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            <p className="mb-2">
+              <strong>How to enable:</strong>
+            </p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Click "Open Settings" to open System Settings</li>
+              <li>Find Note67 in the Microphone list and toggle it on</li>
+              <li>Click "Refresh" to verify permission</li>
+            </ol>
+          </div>
+        )}
+      </div>
 
       {/* System Audio Section (macOS only) */}
       {systemAudioSupported && (

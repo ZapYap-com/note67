@@ -113,6 +113,75 @@ pub fn request_system_audio_permission(state: State<AudioState>) -> Result<bool,
     }
 }
 
+// ========== Microphone Permission Commands ==========
+
+/// Check if a microphone is available on this device
+#[tauri::command]
+pub fn has_microphone_available() -> bool {
+    use cpal::traits::HostTrait;
+
+    let host = cpal::default_host();
+
+    // Check if there's a default input device
+    if host.default_input_device().is_some() {
+        return true;
+    }
+
+    // If no default, check if there are any input devices at all
+    if let Ok(devices) = host.input_devices() {
+        return devices.count() > 0;
+    }
+
+    false
+}
+
+/// Check if the app has microphone permission (macOS)
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn has_microphone_permission() -> bool {
+    use objc2::{class, msg_send};
+    use objc2_foundation::NSString;
+
+    unsafe {
+        // AVAuthorizationStatus values:
+        // 0 = NotDetermined, 1 = Restricted, 2 = Denied, 3 = Authorized
+        let cls = class!(AVCaptureDevice);
+        let media_type = NSString::from_str("soun"); // AVMediaTypeAudio = "soun"
+        let status: i64 = msg_send![cls, authorizationStatusForMediaType: &*media_type];
+        status == 3 // Authorized
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn has_microphone_permission() -> bool {
+    // On non-macOS platforms, assume permission is granted if mic is available
+    has_microphone_available()
+}
+
+/// Get microphone authorization status (macOS)
+/// Returns: 0 = NotDetermined, 1 = Restricted, 2 = Denied, 3 = Authorized
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn get_microphone_auth_status() -> i64 {
+    use objc2::{class, msg_send};
+    use objc2_foundation::NSString;
+
+    unsafe {
+        let cls = class!(AVCaptureDevice);
+        let media_type = NSString::from_str("soun"); // AVMediaTypeAudio
+        let status: i64 = msg_send![cls, authorizationStatusForMediaType: &*media_type];
+        status
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn get_microphone_auth_status() -> i64 {
+    // Return "Authorized" on non-macOS if mic is available
+    if has_microphone_available() { 3 } else { 2 }
+}
+
 /// Start dual recording (mic + system audio)
 /// Returns paths to both recording files
 #[tauri::command]

@@ -20,6 +20,23 @@ pub fn open_screen_recording_settings() -> Result<(), String> {
     Err("Screen recording settings are only available on macOS".to_string())
 }
 
+/// Open the macOS Microphone privacy settings
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn open_microphone_settings() -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn open_microphone_settings() -> Result<(), String> {
+    Err("Microphone settings are only available on macOS".to_string())
+}
+
 /// Get the theme preference from settings
 #[tauri::command]
 pub fn get_theme_preference(db: State<'_, Database>) -> Result<String, String> {
