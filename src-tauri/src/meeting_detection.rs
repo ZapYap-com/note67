@@ -83,13 +83,6 @@ impl MeetingDetectionState {
         self.enabled.load(Ordering::SeqCst)
     }
 
-    /// Clear a meeting from detected set so it can be detected again
-    pub fn clear_detected(&self, key: &str) {
-        if let Ok(mut detected) = self.detected_meetings.lock() {
-            detected.remove(key);
-        }
-    }
-
     /// Clear all detected meetings
     pub fn clear_all_detected(&self) {
         if let Ok(mut detected) = self.detected_meetings.lock() {
