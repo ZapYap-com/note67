@@ -17,6 +17,7 @@ use objc2::runtime::{AnyClass, AnyObject, Bool, Sel};
 use objc2::{class, msg_send, sel};
 // CMSampleBuffer is an opaque type, we use a raw pointer
 type CMSampleBufferRef = *mut c_void;
+
 use objc2_foundation::{NSArray, NSError, NSObject};
 
 use super::system_audio::{SystemAudioCapture, SystemAudioResult};
@@ -400,7 +401,8 @@ impl MacOSSystemAudioCapture {
             // Some versions of ScreenCaptureKit don't like 1x1
             let _: () = msg_send![config, setWidth: 2_u32];
             let _: () = msg_send![config, setHeight: 2_u32];
-            let _: () = msg_send![config, setMinimumFrameInterval: 1.0_f64 / 1.0_f64]; // 1 FPS minimum
+            // Skip setMinimumFrameInterval - not needed for audio-only capture
+            // and requires CMTime which has complex encoding requirements
             let _: () = msg_send![config, setShowsCursor: Bool::NO];
 
             // Set audio configuration - use 48kHz stereo float
