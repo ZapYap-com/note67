@@ -18,9 +18,10 @@ const MEETING_PATTERNS: &[(&str, &str)] = &[
     ("Zoom Meeting", "Zoom"),
     (" - Zoom Meeting", "Zoom"),
     // Microsoft Teams - when in a call/meeting
-    // Format: "Microsoft Teams meeting | Microsoft Teams" or "Chat | Name | Microsoft Teams🔊"
+    // Format: "Microsoft Teams meeting | Microsoft Teams" or "Name | Personal | email | Microsoft Teams"
     ("Microsoft Teams meeting", "Microsoft Teams"),
     ("Teams meeting", "Microsoft Teams"),
+    ("| Personal |", "Microsoft Teams"),  // Personal meetings in desktop app
     // Slack - when in a huddle
     // Format: "Huddle: #channel – Workspace – Slack 🎤"
     ("Huddle:", "Slack Huddle"),
