@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useModels, useOllama } from "../../hooks";
 import { useProfile } from "./useProfile";
 import { WarningIcon } from "./WarningIcon";
@@ -28,13 +28,26 @@ type SettingsTab =
 interface SettingsProps {
   onClose: () => void;
   initialTab?: SettingsTab;
+  onTabChange?: (tab: SettingsTab) => void;
 }
 
 const DEFAULT_TAB: SettingsTab = "about";
 
-export function Settings({ onClose, initialTab = DEFAULT_TAB }: SettingsProps) {
+export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const { profile } = useProfile();
+
+  // Sync activeTab when initialTab changes (e.g., clicking Details while modal is open)
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  // Handle tab change and notify parent to keep state in sync
+  const handleTabChange = (tab: SettingsTab) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
+
   const { loadedModel } = useModels();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
 
@@ -327,7 +340,7 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB }: SettingsProps) {
                 {section.tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleTabChange(tab.id)}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium transition-colors mb-1"
                     style={{
                       backgroundColor:

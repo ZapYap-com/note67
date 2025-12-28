@@ -874,7 +874,7 @@ function App() {
       </main>
 
       {/* Modals */}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} initialTab={settingsTab} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} initialTab={settingsTab} onTabChange={setSettingsTab} />}
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Note"
