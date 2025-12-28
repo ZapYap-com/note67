@@ -249,6 +249,7 @@ function App() {
           setNoteToDelete(null);
         } else if (showSettings) {
           setShowSettings(false);
+          refreshSystemStatus();
         } else if (selectedNoteId) {
           setSelectedNoteId(null);
         }
@@ -257,7 +258,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [contextMenu, showDeleteConfirm, showSettings, selectedNoteId]);
+  }, [contextMenu, showDeleteConfirm, showSettings, selectedNoteId, refreshSystemStatus]);
 
   // Keyboard shortcut: Cmd/Ctrl + , to toggle settings
   useEffect(() => {
@@ -903,7 +904,7 @@ function App() {
       </main>
 
       {/* Modals */}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} initialTab={settingsTab} onTabChange={setSettingsTab} />}
+      {showSettings && <Settings onClose={() => { setShowSettings(false); refreshSystemStatus(); }} initialTab={settingsTab} onTabChange={setSettingsTab} />}
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Note"

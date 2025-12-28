@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-export function SystemTab() {
+interface SystemTabProps {
+  onPermissionChange?: () => void;
+}
+
+export function SystemTab({ onPermissionChange }: SystemTabProps) {
   const [autostart, setAutostart] = useState(false);
   const [autostartLoading, setAutostartLoading] = useState(true);
   const [systemAudioSupported, setSystemAudioSupported] = useState(false);
@@ -84,6 +88,8 @@ export function SystemTab() {
     try {
       const granted = await invoke<boolean>("has_system_audio_permission");
       setSystemAudioPermission(granted);
+      // Notify parent of permission change
+      onPermissionChange?.();
     } catch (err) {
       console.error("Failed to check permission:", err);
     } finally {
@@ -110,6 +116,8 @@ export function SystemTab() {
       setMicAvailable(available);
       setMicPermission(permission);
       setMicAuthStatus(status);
+      // Notify parent of permission change
+      onPermissionChange?.();
     } catch (err) {
       console.error("Failed to check microphone:", err);
     } finally {
@@ -130,6 +138,8 @@ export function SystemTab() {
         const status = await invoke<number>("get_microphone_auth_status");
         setMicAuthStatus(status);
       }
+      // Notify parent of permission change
+      onPermissionChange?.();
     } catch (err) {
       console.error("Failed to request microphone permission:", err);
     } finally {
