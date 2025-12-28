@@ -46,8 +46,25 @@ echo "  Updated src/components/settings/constants.ts"
 echo ""
 echo "Version updated to $VERSION"
 echo ""
-echo "Next steps:"
-echo "  1. git add -A"
-echo "  2. git commit -m \"chore: bump version to $VERSION\""
-echo "  3. git tag v$VERSION"
-echo "  4. git push origin main --tags"
+
+# Git operations
+cd "$ROOT_DIR"
+
+echo "Committing changes..."
+git add -A
+git commit -m "chore: bump version to $VERSION"
+
+echo "Creating tag v$VERSION..."
+git tag "v$VERSION"
+
+echo "Pushing to development..."
+git push origin development
+
+echo "Pushing development to main..."
+git push origin development:main
+
+echo "Pushing tag v$VERSION..."
+git push origin "v$VERSION"
+
+echo ""
+echo "Done! Version $VERSION has been released."

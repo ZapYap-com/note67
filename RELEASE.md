@@ -68,17 +68,14 @@ const recentChanges = [
 ];
 ```
 
-### 3. Commit and Tag
+The bump script automatically:
+- Commits all changes
+- Creates the version tag
+- Pushes to `development`
+- Pushes `development` to `main`
+- Pushes the tag
 
-```bash
-git add -A
-git commit -m "chore: release v0.2.0"
-git tag v0.2.0
-git push origin v0.2.0
-git push origin main
-```
-
-### 4. Build Release
+### 3. Build Release
 
 ```bash
 # Set signing key environment variable
@@ -146,13 +143,9 @@ Releases are automated via GitHub Actions. When you push a tag, the workflow:
 
 ```bash
 ./scripts/bump-version.sh 0.2.0
-git add -A
-git commit -m "chore: release v0.2.0"
-git tag v0.2.0
-git push origin main --tags
 ```
 
-The workflow runs automatically. Check **Actions** tab for progress.
+The bump script handles everything: version updates, commit, tag, and pushing to `development`, `main`, and the tag. The workflow runs automatically. Check **Actions** tab for progress.
 
 ### After Workflow Completes
 
