@@ -1,14 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Note67",
-  "version": "0.1.2",
+  "version": "0.1.0",
   "identifier": "com.note67.app",
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/ZapYap-com/note67/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk2NUY5Qzk2RDgxMUEzMUEKUldRYW94SFlscHhmbHN4WWU0REQzUTJYSjBLVk1KeWdWVjYvNWtSVC9FWDRhZlh6RW9iMzdaWk8K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDREVBRjNFN0U4OTAzREMKUldUY0E0bCtQcS9lTEQ1SnhwYVVtMFlUQ1ZPMVR5aUdwc3l6R0cyVkE0bFBvanh5NjFTaXpvL08K"
     }
   },
   "build": {
