@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   LogoImage,
-  LogoWithWordmark,
   Settings,
   SummaryPanel,
   TranscriptSearch,
