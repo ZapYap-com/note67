@@ -172,7 +172,7 @@ The workflow runs automatically. Check **Actions** tab for progress.
 | `APPLE_PASSWORD` | App-specific password |
 | `APPLE_TEAM_ID` | 10-character Team ID |
 | `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/note67.key` |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the key |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the key (no special characters) |
 
 ## Troubleshooting
 
