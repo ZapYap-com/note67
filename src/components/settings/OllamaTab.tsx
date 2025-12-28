@@ -71,38 +71,19 @@ export function OllamaTab() {
               color: "#b45309",
             }}
           >
-            <p className="font-medium mb-2">Start Ollama first:</p>
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-              <li>
-                Install from{" "}
-                <a
-                  href="https://ollama.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  ollama.ai
-                </a>
-              </li>
-              <li>
-                Run{" "}
-                <code
-                  className="px-1 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}
-                >
-                  ollama serve
-                </code>
-              </li>
-              <li>
-                Pull a model:{" "}
-                <code
-                  className="px-1 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}
-                >
-                  ollama pull llama3.2
-                </code>
-              </li>
-            </ol>
+            <p className="font-medium mb-1">Ollama is not running</p>
+            <p className="text-xs">
+              Follow our{" "}
+              <a
+                href="https://note67.com/ollama-setup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-medium"
+              >
+                Ollama setup guide
+              </a>{" "}
+              to get started.
+            </p>
           </div>
         )}
       </div>
@@ -134,19 +115,6 @@ export function OllamaTab() {
               with GPU
             </li>
           </ul>
-          <p
-            className="mt-2 text-xs"
-            style={{ color: "var(--color-text-tertiary)" }}
-          >
-            Run{" "}
-            <code
-              className="px-1 py-0.5 rounded"
-              style={{ backgroundColor: "rgba(59, 130, 246, 0.15)" }}
-            >
-              ollama pull gemma3:latest
-            </code>{" "}
-            to download
-          </p>
         </div>
       )}
 
@@ -184,12 +152,22 @@ export function OllamaTab() {
               >
                 No models found
               </p>
-              <code
+              <p
                 className="text-xs"
                 style={{ color: "var(--color-text-tertiary)" }}
               >
-                ollama pull llama3.2
-              </code>
+                Follow our{" "}
+                <a
+                  href="https://note67.com/ollama-setup"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-medium"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  setup guide
+                </a>{" "}
+                to download a model.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
