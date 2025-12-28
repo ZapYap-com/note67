@@ -46,7 +46,7 @@ export function useRecording(): UseRecordingReturn {
         console.log("Starting dual recording (mic + system audio)");
         const result = await audioApi.startDualRecording(noteId);
         // Use the playback path if available, otherwise mic path
-        setAudioPath(result.playbackPath || result.micPath);
+        setAudioPath(result.playbackPath || result.systemPath || result.micPath);
         setIsDualRecording(true);
       } else {
         // Fall back to mic-only recording
@@ -73,8 +73,8 @@ export function useRecording(): UseRecordingReturn {
           // Stop dual recording
           console.log("Stopping dual recording");
           const result = await audioApi.stopDualRecording(id);
-          // Use the merged playback path, or fall back to mic path
-          path = result.playbackPath || result.micPath;
+          // Use the merged playback path, or fall back to system path, then mic path
+          path = result.playbackPath || result.systemPath || result.micPath;
         } else {
           // Stop mic-only recording
           console.log("Stopping mic-only recording");
@@ -116,7 +116,7 @@ export function useRecording(): UseRecordingReturn {
       setError(null);
       console.log("Resuming dual recording");
       const result = await audioApi.resumeDualRecording(noteId);
-      setAudioPath(result.playbackPath || result.micPath);
+      setAudioPath(result.playbackPath || result.systemPath || result.micPath);
       setIsRecording(true);
       setIsPaused(false);
       setRecordingPhase(RecordingPhase.Recording);
@@ -132,7 +132,7 @@ export function useRecording(): UseRecordingReturn {
       setError(null);
       console.log("Continuing recording on ended note");
       const result = await audioApi.continueNoteRecording(noteId);
-      setAudioPath(result.playbackPath || result.micPath);
+      setAudioPath(result.playbackPath || result.systemPath || result.micPath);
       setIsRecording(true);
       setIsPaused(false);
       setRecordingPhase(RecordingPhase.Recording);
