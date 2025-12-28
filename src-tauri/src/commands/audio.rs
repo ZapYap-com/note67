@@ -182,6 +182,41 @@ pub fn get_microphone_auth_status() -> i64 {
     if has_microphone_available() { 3 } else { 2 }
 }
 
+/// Request microphone permission (macOS)
+/// This triggers the system permission dialog and makes the app appear in System Settings
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn request_microphone_permission() -> bool {
+    use objc2::{class, msg_send};
+    use objc2::runtime::Bool;
+    use objc2_foundation::NSString;
+
+    unsafe {
+        let cls = class!(AVCaptureDevice);
+        let media_type = NSString::from_str("soun"); // AVMediaTypeAudio
+
+        // Create a block for the completion handler
+        // We use a no-op block since we'll have the user refresh the status
+        let block = block2::RcBlock::new(|_granted: Bool| {
+            // Permission dialog shown, user will refresh to check status
+        });
+
+        // Request access - this triggers the permission dialog
+        let _: () = msg_send![cls, requestAccessForMediaType: &*media_type, completionHandler: &*block];
+    }
+
+    // Return current status after triggering the dialog
+    // User should refresh to get the final result
+    has_microphone_permission()
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn request_microphone_permission() -> bool {
+    // On non-macOS platforms, just check if mic is available
+    has_microphone_available()
+}
+
 /// Start dual recording (mic + system audio)
 /// Returns paths to both recording files
 #[tauri::command]

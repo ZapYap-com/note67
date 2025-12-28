@@ -117,6 +117,26 @@ export function SystemTab() {
     }
   };
 
+  const handleRequestMicPermission = async () => {
+    setRefreshingMic(true);
+    try {
+      // This will trigger the macOS permission dialog
+      const granted = await invoke<boolean>("request_microphone_permission");
+      setMicPermission(granted);
+      if (granted) {
+        setMicAuthStatus(3); // Authorized
+      } else {
+        // Refresh to get the actual status (could be denied or still not determined)
+        const status = await invoke<number>("get_microphone_auth_status");
+        setMicAuthStatus(status);
+      }
+    } catch (err) {
+      console.error("Failed to request microphone permission:", err);
+    } finally {
+      setRefreshingMic(false);
+    }
+  };
+
   const getMicStatusText = () => {
     if (micLoading) return "Checking...";
     if (!micAvailable) return "No microphone detected";
@@ -288,16 +308,30 @@ export function SystemTab() {
               >
                 {refreshingMic ? "Checking..." : "Refresh"}
               </button>
-              <button
-                onClick={handleOpenMicSettings}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors"
-                style={{
-                  backgroundColor: "var(--color-accent)",
-                  color: "white",
-                }}
-              >
-                Open Settings
-              </button>
+              {micAvailable && micAuthStatus === 0 ? (
+                <button
+                  onClick={handleRequestMicPermission}
+                  disabled={refreshingMic}
+                  className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
+                >
+                  Request Permission
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenMicSettings}
+                  className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
+                >
+                  Open Settings
+                </button>
+              )}
             </div>
           )}
           {!micLoading && micAvailable && micPermission && (
@@ -336,14 +370,23 @@ export function SystemTab() {
               color: "var(--color-text-secondary)",
             }}
           >
-            <p className="mb-2">
-              <strong>How to enable:</strong>
-            </p>
-            <ol className="list-decimal list-inside space-y-1">
-              <li>Click "Open Settings" to open System Settings</li>
-              <li>Find Note67 in the Microphone list and toggle it on</li>
-              <li>Click "Refresh" to verify permission</li>
-            </ol>
+            {micAuthStatus === 0 ? (
+              <p>
+                Click <strong>"Request Permission"</strong> to allow Note67 to
+                access your microphone. A system dialog will appear.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2">
+                  <strong>How to enable:</strong>
+                </p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Click "Open Settings" to open System Settings</li>
+                  <li>Find Note67 in the Microphone list and toggle it on</li>
+                  <li>Click "Refresh" to verify permission</li>
+                </ol>
+              </>
+            )}
           </div>
         )}
       </div>

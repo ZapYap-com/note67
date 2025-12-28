@@ -167,6 +167,7 @@ pub fn run() {
             commands::has_microphone_available,
             commands::has_microphone_permission,
             commands::get_microphone_auth_status,
+            commands::request_microphone_permission,
             commands::start_dual_recording,
             commands::stop_dual_recording,
             commands::is_dual_recording,
