@@ -2,6 +2,10 @@
 
 [Visit Website](https://note67.com)
 
+<a href="https://www.producthunt.com/products/note67-private-meeting-notes-assistant?utm_source=badge-follow&utm_medium=badge&utm_souce=badge-note67" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/follow.svg?product_id=763215&theme=light" alt="Note67 - Private meeting notes assistant | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
+**🚀 We're on Product Hunt!** If you find Note67 useful, please consider [upvoting us on Product Hunt](https://www.producthunt.com/products/note67-private-meeting-notes-assistant) — it helps others discover the project!
+
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
 ## Features
