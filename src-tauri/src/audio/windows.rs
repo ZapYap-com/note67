@@ -5,6 +5,7 @@
 
 #![cfg(target_os = "windows")]
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -12,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use hound::{WavSpec, WavWriter};
-use wasapi::{Device, DeviceCollection, Direction, SampleType, ShareMode, WaveFormat};
+use wasapi::{Device, DeviceCollection, Direction, SampleType, ShareMode};
 
 use super::system_audio::{SystemAudioCapture, SystemAudioResult};
 use crate::audio::AudioError;
@@ -118,8 +119,13 @@ impl WindowsSystemAudioCapture {
         output_path: PathBuf,
     ) -> Result<(), AudioError> {
         // Initialize COM for this thread
-        wasapi::initialize_mta()
-            .map_err(|e| AudioError::PermissionDenied(format!("Failed to initialize COM: {}", e)))?;
+        let hr = wasapi::initialize_mta();
+        if hr.is_err() {
+            return Err(AudioError::PermissionDenied(format!(
+                "Failed to initialize COM: {:?}",
+                hr
+            )));
+        }
 
         // Get default render device
         let device = get_default_render_device()?;
@@ -200,21 +206,28 @@ impl WindowsSystemAudioCapture {
             AudioError::PermissionDenied(format!("Failed to get sample format: {}", e))
         })?;
 
+        // Buffer for reading audio data
+        let mut audio_data: VecDeque<u8> = VecDeque::new();
+
         // Capture loop
         while is_capturing.load(Ordering::Relaxed) {
             // Check for available frames
             match capture_client.get_next_nbr_frames() {
                 Ok(Some(frames)) if frames > 0 => {
-                    // Read the audio data
-                    match capture_client.read_from_device_to_deinterleaved(frames, false) {
-                        Ok(channel_data) => {
-                            // Process the audio data
-                            process_audio_data(
-                                &channel_data,
-                                sample_rate,
-                                channels,
-                                &sample_type,
-                            );
+                    // Read the audio data into the buffer
+                    match capture_client.read_from_device_to_deque(&mut audio_data) {
+                        Ok(_buffer_flags) => {
+                            // Convert VecDeque to Vec for processing
+                            let data: Vec<u8> = audio_data.drain(..).collect();
+                            if !data.is_empty() {
+                                // Process the audio data
+                                process_audio_data(
+                                    &data,
+                                    sample_rate,
+                                    channels,
+                                    &sample_type,
+                                );
+                            }
                         }
                         Err(e) => {
                             eprintln!("WASAPI: Error reading frames: {}", e);
@@ -253,101 +266,61 @@ impl WindowsSystemAudioCapture {
 }
 
 /// Process audio data from WASAPI and write to file/buffer
-fn process_audio_data(
-    channel_data: &[Vec<u8>],
-    sample_rate: u32,
-    channels: u16,
-    sample_type: &SampleType,
-) {
-    // Convert raw bytes to f32 samples based on sample type
-    let float_samples: Vec<f32> = match sample_type {
-        SampleType::Float => {
-            // 32-bit float samples
-            channel_data
-                .iter()
-                .flat_map(|ch| {
-                    ch.chunks(4)
-                        .map(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-                })
-                .collect()
-        }
-        SampleType::Int => {
-            // Assume 16-bit int samples
-            channel_data
-                .iter()
-                .flat_map(|ch| {
-                    ch.chunks(2)
-                        .map(|bytes| i16::from_le_bytes([bytes[0], bytes[1]]) as f32 / 32768.0)
-                })
-                .collect()
-        }
-    };
-
-    if float_samples.is_empty() {
+/// Data is interleaved: [L0, R0, L1, R1, ...] for stereo
+fn process_audio_data(data: &[u8], sample_rate: u32, channels: u16, sample_type: &SampleType) {
+    if data.is_empty() {
         return;
     }
 
-    // Write to WAV file (convert to interleaved stereo i16)
+    // Determine bytes per sample
+    let bytes_per_sample = match sample_type {
+        SampleType::Float => 4,
+        SampleType::Int => 2,
+    };
+
+    let bytes_per_frame = bytes_per_sample * channels as usize;
+    let num_frames = data.len() / bytes_per_frame;
+
+    if num_frames == 0 {
+        return;
+    }
+
+    // Convert raw bytes to f32 samples (interleaved)
+    let float_samples: Vec<f32> = match sample_type {
+        SampleType::Float => data
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect(),
+        SampleType::Int => data
+            .chunks_exact(2)
+            .map(|bytes| i16::from_le_bytes([bytes[0], bytes[1]]) as f32 / 32768.0)
+            .collect(),
+    };
+
+    // Write to WAV file
     if let Ok(mut guard) = get_audio_writer().lock() {
         if let Some(ref mut state) = *guard {
             if state.is_active {
                 if let Some(ref mut writer) = state.writer {
-                    // The channel_data is de-interleaved, so we need to interleave it
-                    let samples_per_channel = channel_data
-                        .first()
-                        .map(|ch| match sample_type {
-                            SampleType::Float => ch.len() / 4,
-                            SampleType::Int => ch.len() / 2,
-                        })
-                        .unwrap_or(0);
+                    // Extract left and right channels from interleaved data
+                    let mut left_samples = Vec::with_capacity(num_frames);
+                    let mut right_samples = Vec::with_capacity(num_frames);
 
-                    // Get left and right channels (or duplicate mono)
-                    let left: Vec<f32> = match sample_type {
-                        SampleType::Float => channel_data
-                            .first()
-                            .map(|ch| {
-                                ch.chunks(4)
-                                    .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                        SampleType::Int => channel_data
-                            .first()
-                            .map(|ch| {
-                                ch.chunks(2)
-                                    .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                    };
-
-                    let right: Vec<f32> = if channel_data.len() > 1 {
-                        match sample_type {
-                            SampleType::Float => channel_data
-                                .get(1)
-                                .map(|ch| {
-                                    ch.chunks(4)
-                                        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
-                            SampleType::Int => channel_data
-                                .get(1)
-                                .map(|ch| {
-                                    ch.chunks(2)
-                                        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
-                        }
-                    } else {
-                        left.clone() // Mono: duplicate left channel
-                    };
+                    for frame in float_samples.chunks(channels as usize) {
+                        let left = frame.first().copied().unwrap_or(0.0);
+                        let right = if channels >= 2 {
+                            frame.get(1).copied().unwrap_or(left)
+                        } else {
+                            left
+                        };
+                        left_samples.push(left);
+                        right_samples.push(right);
+                    }
 
                     // Resample if needed (device might not be 48kHz)
                     let (left_resampled, right_resampled) = if sample_rate != 48000 {
                         let ratio = sample_rate as f32 / 48000.0;
-                        let new_len = (samples_per_channel as f32 / ratio) as usize;
+                        let new_len = (num_frames as f32 / ratio) as usize;
 
                         let resample = |src: &[f32]| -> Vec<f32> {
                             (0..new_len)
@@ -358,15 +331,15 @@ fn process_audio_data(
                                 .collect()
                         };
 
-                        (resample(&left), resample(&right))
+                        (resample(&left_samples), resample(&right_samples))
                     } else {
-                        (left, right)
+                        (left_samples, right_samples)
                     };
 
                     // Write interleaved stereo samples
                     for i in 0..left_resampled.len().min(right_resampled.len()) {
-                        let left_sample = left_resampled.get(i).copied().unwrap_or(0.0);
-                        let right_sample = right_resampled.get(i).copied().unwrap_or(0.0);
+                        let left_sample = left_resampled[i];
+                        let right_sample = right_resampled[i];
 
                         let left_i16 = (left_sample.clamp(-1.0, 1.0) * 32767.0) as i16;
                         let right_i16 = (right_sample.clamp(-1.0, 1.0) * 32767.0) as i16;
