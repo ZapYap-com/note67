@@ -43,7 +43,13 @@ pub fn create_system_audio_capture() -> SystemAudioResult<Arc<dyn SystemAudioCap
     Ok(Arc::new(MacOSSystemAudioCapture::new()))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn create_system_audio_capture() -> SystemAudioResult<Arc<dyn SystemAudioCapture>> {
+    use super::windows::WindowsSystemAudioCapture;
+    Ok(Arc::new(WindowsSystemAudioCapture::new()?))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn create_system_audio_capture() -> SystemAudioResult<Arc<dyn SystemAudioCapture>> {
     Err(AudioError::UnsupportedPlatform)
 }
@@ -54,7 +60,11 @@ pub fn is_system_audio_available() -> bool {
     {
         super::macos::MacOSSystemAudioCapture::is_supported()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        super::windows::WindowsSystemAudioCapture::is_supported()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         false
     }

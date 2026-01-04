@@ -6,6 +6,9 @@ pub mod system_audio;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
+#[cfg(target_os = "windows")]
+pub mod windows;
+
 pub use mixer::mix_wav_files;
 pub use recorder::{
     pause_recording, resume_recording, start_recording, stop_recording, RecordingPhase,
@@ -17,7 +20,10 @@ pub use system_audio::{create_system_audio_capture, is_system_audio_available, S
 #[cfg(target_os = "macos")]
 pub use macos::take_system_audio_samples;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub use windows::take_system_audio_samples;
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn take_system_audio_samples() -> Vec<f32> {
     Vec::new()
 }

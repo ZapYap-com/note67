@@ -49,6 +49,10 @@ dispatch = "0.2"
 core-graphics = "0.24"
 core-foundation = "0.10"
 
+# Windows-specific dependencies for system audio capture via WASAPI loopback
+[target.'cfg(target_os = "windows")'.dependencies]
+wasapi = "0.16"
+
 [profile.dev]
 incremental = true
 
