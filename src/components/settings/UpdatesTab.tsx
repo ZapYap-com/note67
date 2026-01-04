@@ -29,7 +29,6 @@ export function UpdatesTab() {
         "Windows support with system audio capture (WASAPI)",
         "Cross-platform speaker distinction (You vs Others)",
         "Windows microphone settings integration",
-        "Improved CI/CD with Windows builds",
       ],
     },
     {
