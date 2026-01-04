@@ -88,6 +88,7 @@ npm run tauri build
 
 Build artifacts are located in:
 - macOS: `src-tauri/target/release/bundle/dmg/` and `src-tauri/target/release/bundle/macos/`
+- Windows: `src-tauri/target/release/bundle/msi/` and `src-tauri/target/release/bundle/nsis/`
 
 ### 5. Create GitHub Release
 
@@ -116,6 +117,10 @@ Create `latest.json` for the updater:
     "darwin-x86_64": {
       "signature": "CONTENTS_OF_SIG_FILE",
       "url": "https://github.com/ZapYap-com/note67/releases/download/v0.2.0/Note67_0.2.0_x64.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "CONTENTS_OF_SIG_FILE",
+      "url": "https://github.com/ZapYap-com/note67/releases/download/v0.2.0/Note67_0.2.0_x64-setup.nsis.zip"
     }
   }
 }
@@ -135,9 +140,12 @@ Follow [Semantic Versioning](https://semver.org/):
 
 Releases are automated via GitHub Actions. When you push a tag, the workflow:
 1. Builds for macOS (both Apple Silicon and Intel)
-2. Signs with Developer ID certificate
-3. Notarizes with Apple
-4. Creates a draft GitHub release with all artifacts
+2. Builds for Windows (x64)
+3. Signs macOS builds with Developer ID certificate
+4. Notarizes macOS builds with Apple
+5. Creates a draft GitHub release with all artifacts
+
+Note: Windows builds are not code-signed. Users will see a SmartScreen warning on first install.
 
 ### Triggering a Release
 
@@ -151,8 +159,9 @@ The bump script handles everything: version updates, commit, tag, and pushing to
 
 1. Go to GitHub → **Releases**
 2. Find the draft release
-3. Edit release notes if needed
-4. Click **Publish release**
+3. Test the Windows build locally before publishing
+4. Edit release notes if needed
+5. Click **Publish release**
 
 ### Required GitHub Secrets
 

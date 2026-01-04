@@ -28,7 +28,8 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Dark mode support
 - [x] Custom context menus
 - [x] System tray support
-- [ ] Cross-platform system audio (Windows, Linux)
+- [x] Cross-platform system audio (Windows via WASAPI)
+- [ ] Linux system audio support
 
 ## Screenshots
 
@@ -40,19 +41,24 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 
 ![Note with AI Summary](public/screenshots/note-summary.png)
 
-## Speaker Distinction (macOS)
+## Speaker Distinction
 
-On macOS 13+, Note67 can distinguish between your voice and other meeting participants:
+Note67 can distinguish between your voice and other meeting participants:
 
 | Source | Speaker Label | How it works |
 |--------|---------------|--------------|
 | Microphone | "You" | Your voice via mic input |
-| System Audio | "Others" | Meeting participants via ScreenCaptureKit |
+| System Audio | "Others" | Meeting participants via system audio capture |
 
-**Requirements:**
+### macOS Requirements
 - macOS 13.0 (Ventura) or later
 - Screen Recording permission (System Settings → Privacy & Security → Screen Recording)
 - Microphone permission
+
+### Windows Requirements
+- Windows 10 or later
+- Microphone permission
+- No additional permissions needed for system audio (WASAPI loopback)
 
 ## Echo Handling
 
@@ -77,7 +83,7 @@ When using speakers instead of headphones, your microphone picks up audio from y
 | Database | SQLite (rusqlite) |
 | Transcription | whisper-rs (local Whisper models) |
 | AI Summaries | Ollama (local LLMs) |
-| System Audio | ScreenCaptureKit (macOS), objc2 bindings |
+| System Audio | ScreenCaptureKit (macOS), WASAPI loopback (Windows) |
 | Echo Handling | VAD + post-processing deduplication |
 
 ## Prerequisites
@@ -120,14 +126,22 @@ npm run tauri build
 | `npm run lint` | Run ESLint |
 | `npm run format` | Format code with Prettier |
 
-## macOS Permissions
+## Permissions
 
-Note67 requires the following permissions on macOS:
+### macOS
 
 | Permission | Purpose | When prompted |
 |------------|---------|---------------|
 | Microphone | Record your voice | First recording |
 | Screen Recording | Capture system audio (others' voices) | When enabling speaker distinction |
+
+### Windows
+
+| Permission | Purpose | When prompted |
+|------------|---------|---------------|
+| Microphone | Record your voice | First recording |
+
+Note: Windows system audio capture via WASAPI loopback does not require additional permissions.
 
 ## License
 
