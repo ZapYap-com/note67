@@ -31,10 +31,21 @@ pub fn open_microphone_settings() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Open the Windows Microphone privacy settings
+#[cfg(target_os = "windows")]
 #[tauri::command]
 pub fn open_microphone_settings() -> Result<(), String> {
-    Err("Microphone settings are only available on macOS".to_string())
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "ms-settings:privacy-microphone"])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[tauri::command]
+pub fn open_microphone_settings() -> Result<(), String> {
+    Err("Microphone settings are not available on this platform".to_string())
 }
 
 /// Get the theme preference from settings
