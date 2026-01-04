@@ -77,25 +77,17 @@ fn get_default_render_device() -> Result<Device, AudioError> {
     // Ensure COM is initialized before device enumeration
     ensure_com_initialized();
 
-    eprintln!("WASAPI: Attempting to enumerate render devices...");
+    eprintln!("WASAPI: Getting default render device...");
 
-    let collection = match DeviceCollection::new(&Direction::Render) {
-        Ok(c) => {
-            eprintln!("WASAPI: Device collection created");
-            c
-        }
-        Err(e) => {
-            eprintln!("WASAPI: Failed to enumerate devices: {}", e);
-            return Err(AudioError::PermissionDenied(format!(
-                "Failed to enumerate devices: {}",
-                e
-            )));
-        }
-    };
-
-    match collection.get_device_at_index(0) {
+    // Use get_default_device to get the actual Windows default, not just index 0
+    match wasapi::get_default_device(&Direction::Render) {
         Ok(device) => {
-            eprintln!("WASAPI: Got default render device");
+            // Try to get device name for debugging
+            if let Ok(name) = device.get_friendlyname() {
+                eprintln!("WASAPI: Default render device: {}", name);
+            } else {
+                eprintln!("WASAPI: Got default render device (name unavailable)");
+            }
             Ok(device)
         }
         Err(e) => {
@@ -295,21 +287,32 @@ impl WindowsSystemAudioCapture {
         // Buffer for reading audio data
         let mut audio_data: VecDeque<u8> = VecDeque::new();
 
-        // Capture loop - use event-driven waiting
+        // Capture loop - use polling mode (event-driven may not work well with loopback)
         eprintln!("WASAPI: Entering capture loop");
+        let mut total_frames_captured: u64 = 0;
+        let mut loop_iterations: u64 = 0;
+
         while is_capturing.load(Ordering::Relaxed) {
-            // Wait for audio data to be available (up to 100ms timeout)
-            if event_handle.wait_for_event(100).is_err() {
-                // Timeout - check if we should stop
-                continue;
-            }
+            loop_iterations += 1;
+
+            // Use short sleep for polling instead of event waiting
+            // Event-driven mode may not work correctly for loopback capture
+            thread::sleep(Duration::from_millis(10));
 
             // Read available frames
             match capture_client.get_next_nbr_frames() {
                 Ok(Some(frames)) if frames > 0 => {
+                    total_frames_captured += frames as u64;
+                    if loop_iterations <= 5 {
+                        eprintln!("WASAPI: Got {} frames", frames);
+                    }
+
                     // Read the audio data into the buffer
                     match capture_client.read_from_device_to_deque(&mut audio_data) {
-                        Ok(_buffer_flags) => {
+                        Ok(buffer_flags) => {
+                            if loop_iterations <= 5 {
+                                eprintln!("WASAPI: Read data, flags: {:?}, buffer size: {}", buffer_flags, audio_data.len());
+                            }
                             // Convert VecDeque to Vec for processing
                             let data: Vec<u8> = audio_data.drain(..).collect();
                             if !data.is_empty() {
@@ -327,15 +330,25 @@ impl WindowsSystemAudioCapture {
                         }
                     }
                 }
-                Ok(Some(_)) | Ok(None) => {
-                    // No frames available
+                Ok(Some(frames)) => {
+                    if loop_iterations <= 5 {
+                        eprintln!("WASAPI: get_next_nbr_frames returned 0 frames");
+                    }
+                }
+                Ok(None) => {
+                    if loop_iterations <= 5 {
+                        eprintln!("WASAPI: get_next_nbr_frames returned None");
+                    }
                 }
                 Err(e) => {
                     eprintln!("WASAPI: Error checking frames: {}", e);
                 }
             }
         }
-        eprintln!("WASAPI: Exiting capture loop");
+        eprintln!(
+            "WASAPI: Exiting capture loop. Iterations: {}, Total frames: {}",
+            loop_iterations, total_frames_captured
+        );
 
         // Stop the stream
         let _ = audio_client.stop_stream();
