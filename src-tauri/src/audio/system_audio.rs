@@ -46,7 +46,17 @@ pub fn create_system_audio_capture() -> SystemAudioResult<Arc<dyn SystemAudioCap
 #[cfg(target_os = "windows")]
 pub fn create_system_audio_capture() -> SystemAudioResult<Arc<dyn SystemAudioCapture>> {
     use super::windows::WindowsSystemAudioCapture;
-    Ok(Arc::new(WindowsSystemAudioCapture::new()?))
+    eprintln!("create_system_audio_capture() called on Windows");
+    match WindowsSystemAudioCapture::new() {
+        Ok(capture) => {
+            eprintln!("WindowsSystemAudioCapture created successfully");
+            Ok(Arc::new(capture))
+        }
+        Err(e) => {
+            eprintln!("Failed to create WindowsSystemAudioCapture: {}", e);
+            Err(e)
+        }
+    }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -62,7 +72,9 @@ pub fn is_system_audio_available() -> bool {
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows::WindowsSystemAudioCapture::is_supported()
+        let available = super::windows::WindowsSystemAudioCapture::is_supported();
+        eprintln!("is_system_audio_available() on Windows: {}", available);
+        available
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
