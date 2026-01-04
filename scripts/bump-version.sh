@@ -47,14 +47,24 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Cross-platform sed in-place edit function
+# macOS uses BSD sed which requires -i '', GNU sed uses -i
+sedi() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 echo "Updating version to $VERSION..."
 
 # Update package.json
-sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/package.json"
+sedi "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/package.json"
 echo "  Updated package.json"
 
 # Update Cargo.toml (only the package version, not dependencies)
-sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/src-tauri/Cargo.toml"
+sedi "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$ROOT_DIR/src-tauri/Cargo.toml"
 echo "  Updated src-tauri/Cargo.toml"
 
 # Update Cargo.lock by running cargo check
@@ -67,11 +77,11 @@ fi
 echo "  Updated src-tauri/Cargo.lock"
 
 # Update tauri.conf.json
-sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/src-tauri/tauri.conf.json"
+sedi "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$ROOT_DIR/src-tauri/tauri.conf.json"
 echo "  Updated src-tauri/tauri.conf.json"
 
 # Update frontend constants
-sed -i '' "s/APP_VERSION = \"[^\"]*\"/APP_VERSION = \"$VERSION\"/" "$ROOT_DIR/src/components/settings/constants.ts"
+sedi "s/APP_VERSION = \"[^\"]*\"/APP_VERSION = \"$VERSION\"/" "$ROOT_DIR/src/components/settings/constants.ts"
 echo "  Updated src/components/settings/constants.ts"
 
 echo ""
