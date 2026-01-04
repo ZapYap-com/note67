@@ -23,7 +23,17 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
-      version: "0.1.0",
+      version: "0.1.13",
+      date: "January 2026",
+      changes: [
+        "Windows support with system audio capture (WASAPI)",
+        "Cross-platform speaker distinction (You vs Others)",
+        "Windows microphone settings integration",
+        "Improved CI/CD with Windows builds",
+      ],
+    },
+    {
+      version: "0.1.12",
       date: "December 2025",
       changes: [
         "Initial release",
