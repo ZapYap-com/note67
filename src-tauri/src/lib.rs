@@ -78,6 +78,12 @@ fn update_tray_for_update(app: &tauri::AppHandle, available: bool, version: Opti
         }
 
         // Swap icon based on update availability
+        // Windows: use colored icon.png (visible on both dark/light taskbars)
+        // macOS: use template icons for automatic dark/light adaptation
+        #[cfg(target_os = "windows")]
+        let icon_result = Image::from_bytes(include_bytes!("../icons/icon.png"));
+
+        #[cfg(not(target_os = "windows"))]
         let icon_result = if available {
             Image::from_bytes(include_bytes!("../icons/icon_tray_update.png"))
         } else {
@@ -210,8 +216,54 @@ pub fn run() {
 
             let menu = Menu::with_items(app, &[&open, &new_note, &settings, &exit])?;
 
+            // Use colored icon on Windows (visible on both dark/light), template icon on macOS
+            #[cfg(target_os = "windows")]
+            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
+
+            #[cfg(not(target_os = "windows"))]
             let icon = Image::from_bytes(include_bytes!("../icons/icon_tray.png"))?;
 
+            // Windows: no template mode, use white icon directly
+            #[cfg(target_os = "windows")]
+            let _tray = TrayIconBuilder::with_id("main-tray")
+                .icon(icon)
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app: &tauri::AppHandle, event| match event.id.as_ref() {
+                    "open" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "new_note" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.emit("tray-new-note", ());
+                        }
+                    }
+                    "settings" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.emit("tray-open-settings", ());
+                        }
+                    }
+                    "install_update" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("tray-install-update", ());
+                        }
+                    }
+                    "exit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
+            // macOS/Linux: use template mode for automatic dark/light adaptation
+            #[cfg(not(target_os = "windows"))]
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
                 .icon_as_template(true)
