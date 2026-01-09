@@ -9,7 +9,11 @@ use commands::{init_transcription_state, AiState, AudioState};
 use db::Database;
 use meeting_detection::MeetingDetectionState;
 use serde::Deserialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+/// Tracks whether the app was launched with --minimized flag (e.g., via autostart)
+static STARTED_MINIMIZED: AtomicBool = AtomicBool::new(false);
 use tauri::{
     image::Image,
     menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder},
@@ -94,6 +98,21 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Note67.", name)
 }
 
+/// Show the main window when frontend is ready.
+/// Only shows if the app was NOT started with --minimized flag.
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) {
+    // Don't show window if started with --minimized (autostart)
+    if STARTED_MINIMIZED.load(Ordering::Relaxed) {
+        return;
+    }
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -108,6 +127,12 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Check if app was launched with --minimized flag (from autostart)
+            let args: Vec<String> = std::env::args().collect();
+            if args.iter().any(|arg| arg == "--minimized") {
+                STARTED_MINIMIZED.store(true, Ordering::Relaxed);
+            }
+
             let db = Database::new(app.handle())?;
             app.manage(db);
             app.manage(AudioState::default());
@@ -245,6 +270,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            show_main_window,
             commands::create_note,
             commands::get_note,
             commands::list_notes,

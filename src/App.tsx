@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import {
   LogoImage,
   Settings,
@@ -68,6 +69,13 @@ function App() {
   useEffect(() => {
     loadTheme();
   }, [loadTheme]);
+
+  // Show main window once frontend is ready (handles autostart gracefully)
+  useEffect(() => {
+    invoke("show_main_window").catch((err) => {
+      console.error("Failed to show main window:", err);
+    });
+  }, []);
 
   // Listen for system preference changes when theme is "system"
   useEffect(() => {
