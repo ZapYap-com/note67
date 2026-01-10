@@ -23,6 +23,14 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.14",
+      date: "January 2026",
+      changes: [
+        "Windows executable release (.exe)",
+        "Fixed autostart (Launch at Login) initialization",
+      ],
+    },
+    {
       version: "0.1.13",
       date: "January 2026",
       changes: [
