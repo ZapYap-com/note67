@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use hound::{WavSpec, WavWriter};
-use wasapi::{Device, DeviceCollection, Direction, SampleType, ShareMode};
+use wasapi::{Device, Direction, SampleType, ShareMode};
 
 use super::system_audio::{SystemAudioCapture, SystemAudioResult};
 use crate::audio::AudioError;
@@ -59,10 +59,8 @@ pub fn clear_system_audio_buffer() {
 fn ensure_com_initialized() -> bool {
     // initialize_mta returns HRESULT directly
     // S_OK (0) = success, S_FALSE (1) = already initialized, negative = error
-    let hr = wasapi::initialize_mta();
-
-    // HRESULT >= 0 is success (includes S_OK and S_FALSE)
     // Try to proceed even on error - COM might already be initialized differently
+    let _ = wasapi::initialize_mta();
     true
 }
 
