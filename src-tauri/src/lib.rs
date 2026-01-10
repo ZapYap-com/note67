@@ -126,10 +126,6 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
-        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
@@ -138,6 +134,13 @@ pub fn run() {
             if args.iter().any(|arg| arg == "--minimized") {
                 STARTED_MINIMIZED.store(true, Ordering::Relaxed);
             }
+
+            // Initialize autostart plugin (desktop only)
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_autostart::init(
+                MacosLauncher::LaunchAgent,
+                Some(vec!["--minimized"]),
+            ))?;
 
             let db = Database::new(app.handle())?;
             app.manage(db);
