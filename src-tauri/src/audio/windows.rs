@@ -62,14 +62,8 @@ fn ensure_com_initialized() -> bool {
     let hr = wasapi::initialize_mta();
 
     // HRESULT >= 0 is success (includes S_OK and S_FALSE)
-    if hr.is_ok() {
-        eprintln!("COM initialized (HRESULT: {:?})", hr);
-        true
-    } else {
-        eprintln!("COM init returned error HRESULT: {:?}, trying to proceed anyway", hr);
-        // Try to proceed - COM might already be initialized differently
-        true
-    }
+    // Try to proceed even on error - COM might already be initialized differently
+    true
 }
 
 /// Get the default audio render device (speakers/headphones)
@@ -77,27 +71,10 @@ fn get_default_render_device() -> Result<Device, AudioError> {
     // Ensure COM is initialized before device enumeration
     ensure_com_initialized();
 
-    eprintln!("WASAPI: Getting default render device...");
-
     // Use get_default_device to get the actual Windows default, not just index 0
-    match wasapi::get_default_device(&Direction::Render) {
-        Ok(device) => {
-            // Try to get device name for debugging
-            if let Ok(name) = device.get_friendlyname() {
-                eprintln!("WASAPI: Default render device: {}", name);
-            } else {
-                eprintln!("WASAPI: Got default render device (name unavailable)");
-            }
-            Ok(device)
-        }
-        Err(e) => {
-            eprintln!("WASAPI: Failed to get default device: {}", e);
-            Err(AudioError::PermissionDenied(format!(
-                "Failed to get default device: {}",
-                e
-            )))
-        }
-    }
+    wasapi::get_default_device(&Direction::Render).map_err(|e| {
+        AudioError::PermissionDenied(format!("Failed to get default device: {}", e))
+    })
 }
 
 /// Downsample audio from source rate to 16kHz mono for Whisper
@@ -136,7 +113,6 @@ pub struct WindowsSystemAudioCapture {
 
 impl WindowsSystemAudioCapture {
     pub fn new() -> Result<Self, AudioError> {
-        eprintln!("WindowsSystemAudioCapture::new() called");
         Ok(Self {
             is_capturing: Arc::new(AtomicBool::new(false)),
             capture_thread: Mutex::new(None),
@@ -145,18 +121,7 @@ impl WindowsSystemAudioCapture {
 
     /// Check if WASAPI loopback is available (Windows Vista+)
     pub fn is_available() -> bool {
-        eprintln!("WindowsSystemAudioCapture::is_available() called");
-        // Try to get the default render device
-        match get_default_render_device() {
-            Ok(_) => {
-                eprintln!("WASAPI: Device available");
-                true
-            }
-            Err(e) => {
-                eprintln!("WASAPI: Device not available: {}", e);
-                false
-            }
-        }
+        get_default_render_device().is_ok()
     }
 
     /// Run the capture loop in a separate thread
@@ -175,8 +140,6 @@ impl WindowsSystemAudioCapture {
         // Get default render device
         let device = get_default_render_device()?;
 
-        eprintln!("WASAPI: Got default render device");
-
         // Get the audio client for loopback capture
         let mut audio_client = device.get_iaudioclient().map_err(|e| {
             AudioError::PermissionDenied(format!("Failed to get audio client: {}", e))
@@ -189,18 +152,11 @@ impl WindowsSystemAudioCapture {
 
         let sample_rate = wave_format.get_samplespersec();
         let channels = wave_format.get_nchannels();
-        let bits_per_sample = wave_format.get_bitspersample();
-
-        eprintln!(
-            "WASAPI: Device format - {}Hz, {} channels, {} bits",
-            sample_rate, channels, bits_per_sample
-        );
 
         // Get the default device period for buffer sizing
         let default_period = audio_client.get_periods().map_err(|e| {
             AudioError::PermissionDenied(format!("Failed to get device periods: {}", e))
         })?;
-        eprintln!("WASAPI: Default period: {} 100ns units", default_period.0);
 
         // Initialize the audio client in loopback mode with event callback
         // Direction::Capture adds AUDCLNT_STREAMFLAGS_EVENTCALLBACK which requires an event handle
@@ -216,26 +172,15 @@ impl WindowsSystemAudioCapture {
                 AudioError::PermissionDenied(format!("Failed to initialize audio client: {}", e))
             })?;
 
-        eprintln!("WASAPI: Audio client initialized in loopback mode");
-
-        // Get buffer size
-        let buffer_size = audio_client.get_bufferframecount().map_err(|e| {
-            AudioError::PermissionDenied(format!("Failed to get buffer size: {}", e))
-        })?;
-        eprintln!("WASAPI: Buffer size: {} frames", buffer_size);
-
         // Set up event handle for event-driven capture (required when using EVENTCALLBACK flag)
-        let event_handle = audio_client.set_get_eventhandle().map_err(|e| {
+        let _event_handle = audio_client.set_get_eventhandle().map_err(|e| {
             AudioError::PermissionDenied(format!("Failed to set event handle: {}", e))
         })?;
-        eprintln!("WASAPI: Event handle set up");
 
         // Get the capture client
         let capture_client = audio_client.get_audiocaptureclient().map_err(|e| {
             AudioError::PermissionDenied(format!("Failed to get capture client: {}", e))
         })?;
-
-        eprintln!("WASAPI: Got capture client");
 
         // Create WAV writer with standard format (48kHz stereo 16-bit)
         let spec = WavSpec {
@@ -260,24 +205,13 @@ impl WindowsSystemAudioCapture {
         }
 
         // Ensure stream is in clean state before starting
-        eprintln!("WASAPI: Resetting stream state...");
         let _ = audio_client.stop_stream(); // Ignore error if not running
         let _ = audio_client.reset_stream(); // Reset to clean state
 
         // Start the audio stream
-        eprintln!("WASAPI: Starting audio stream...");
-        match audio_client.start_stream() {
-            Ok(()) => eprintln!("WASAPI: Audio stream started successfully"),
-            Err(e) => {
-                eprintln!("WASAPI: start_stream failed: {:?}", e);
-                return Err(AudioError::PermissionDenied(format!(
-                    "Failed to start audio stream: {}",
-                    e
-                )));
-            }
-        }
-
-        eprintln!("WASAPI: Capture started");
+        audio_client.start_stream().map_err(|e| {
+            AudioError::PermissionDenied(format!("Failed to start audio stream: {}", e))
+        })?;
 
         // Determine the sample format
         let sample_type = wave_format.get_subformat().map_err(|e| {
@@ -288,71 +222,32 @@ impl WindowsSystemAudioCapture {
         let mut audio_data: VecDeque<u8> = VecDeque::new();
 
         // Capture loop - use polling mode (event-driven may not work well with loopback)
-        eprintln!("WASAPI: Entering capture loop");
-        let mut total_frames_captured: u64 = 0;
-        let mut loop_iterations: u64 = 0;
-
         while is_capturing.load(Ordering::Relaxed) {
-            loop_iterations += 1;
-
             // Use short sleep for polling instead of event waiting
             // Event-driven mode may not work correctly for loopback capture
             thread::sleep(Duration::from_millis(10));
 
             // Read available frames
-            match capture_client.get_next_nbr_frames() {
-                Ok(Some(frames)) if frames > 0 => {
-                    total_frames_captured += frames as u64;
-                    if loop_iterations <= 5 {
-                        eprintln!("WASAPI: Got {} frames", frames);
-                    }
-
+            if let Ok(Some(frames)) = capture_client.get_next_nbr_frames() {
+                if frames > 0 {
                     // Read the audio data into the buffer
-                    match capture_client.read_from_device_to_deque(&mut audio_data) {
-                        Ok(buffer_flags) => {
-                            if loop_iterations <= 5 {
-                                eprintln!("WASAPI: Read data, flags: {:?}, buffer size: {}", buffer_flags, audio_data.len());
-                            }
-                            // Convert VecDeque to Vec for processing
-                            let data: Vec<u8> = audio_data.drain(..).collect();
-                            if !data.is_empty() {
-                                // Process the audio data
-                                process_audio_data(
-                                    &data,
-                                    sample_rate,
-                                    channels,
-                                    &sample_type,
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("WASAPI: Error reading frames: {}", e);
+                    if capture_client
+                        .read_from_device_to_deque(&mut audio_data)
+                        .is_ok()
+                    {
+                        // Convert VecDeque to Vec for processing
+                        let data: Vec<u8> = audio_data.drain(..).collect();
+                        if !data.is_empty() {
+                            // Process the audio data
+                            process_audio_data(&data, sample_rate, channels, &sample_type);
                         }
                     }
-                }
-                Ok(Some(frames)) => {
-                    if loop_iterations <= 5 {
-                        eprintln!("WASAPI: get_next_nbr_frames returned 0 frames");
-                    }
-                }
-                Ok(None) => {
-                    if loop_iterations <= 5 {
-                        eprintln!("WASAPI: get_next_nbr_frames returned None");
-                    }
-                }
-                Err(e) => {
-                    eprintln!("WASAPI: Error checking frames: {}", e);
                 }
             }
         }
-        eprintln!(
-            "WASAPI: Exiting capture loop. Iterations: {}, Total frames: {}",
-            loop_iterations, total_frames_captured
-        );
 
         // Stop the stream
         let _ = audio_client.stop_stream();
-        eprintln!("WASAPI: Capture stopped");
 
         // Finalize WAV file
         {
@@ -361,7 +256,6 @@ impl WindowsSystemAudioCapture {
                 state.is_active = false;
                 if let Some(writer) = state.writer.take() {
                     let _ = writer.finalize();
-                    eprintln!("WASAPI: WAV file finalized");
                 }
             }
         }
@@ -480,16 +374,12 @@ impl SystemAudioCapture for WindowsSystemAudioCapture {
     }
 
     fn start(&self, output_path: PathBuf) -> SystemAudioResult<()> {
-        eprintln!("WASAPI: start() called with path: {:?}", output_path);
-
         if self.is_capturing.load(Ordering::SeqCst) {
-            eprintln!("WASAPI: Already recording!");
             return Err(AudioError::AlreadyRecording);
         }
 
         // Check if WASAPI is available
         if !Self::is_available() {
-            eprintln!("WASAPI: Platform not supported!");
             return Err(AudioError::UnsupportedPlatform);
         }
 
@@ -498,19 +388,13 @@ impl SystemAudioCapture for WindowsSystemAudioCapture {
         // Clone for the capture thread
         let is_capturing = Arc::clone(&self.is_capturing);
 
-        eprintln!("WASAPI: Spawning capture thread...");
-
         // Spawn capture thread
         let handle = thread::Builder::new()
             .name("wasapi-loopback-capture".to_string())
             .spawn(move || {
-                eprintln!("WASAPI: Capture thread started");
-                if let Err(e) = Self::run_capture_loop(is_capturing, output_path) {
-                    eprintln!("WASAPI capture error: {}", e);
-                }
-                eprintln!("WASAPI: Capture thread ended");
+                let _ = Self::run_capture_loop(is_capturing, output_path);
             })
-            .map_err(|e| AudioError::IoError(e))?;
+            .map_err(AudioError::IoError)?;
 
         // Store thread handle
         {
@@ -518,7 +402,6 @@ impl SystemAudioCapture for WindowsSystemAudioCapture {
             *guard = Some(handle);
         }
 
-        eprintln!("WASAPI: start() completed successfully");
         Ok(())
     }
 
