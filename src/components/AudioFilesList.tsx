@@ -1,8 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { UploadedAudio, AudioSegment, AudioItem } from "../types";
 import { uploadApi } from "../api/upload";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
+
+interface DeleteConfirmState {
+  isOpen: boolean;
+  uploadId: number | null;
+  fileName: string;
+}
 
 interface AudioFilesListProps {
   uploads: UploadedAudio[];
@@ -144,6 +150,71 @@ function DownloadButton({ onDownload }: { onDownload: () => void }) {
   );
 }
 
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = "Delete",
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl p-5"
+        style={{
+          backgroundColor: "var(--color-bg-elevated)",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
+        <h3
+          className="text-lg font-semibold mb-2"
+          style={{ color: "var(--color-text)" }}
+        >
+          {title}
+        </h3>
+        <p
+          className="text-sm mb-5"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          {message}
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg transition-colors"
+            style={{
+              backgroundColor: "var(--color-sidebar)",
+              color: "var(--color-text)",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg transition-colors"
+            style={{
+              backgroundColor: "#dc2626",
+              color: "white",
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AudioFilesList({
   uploads,
   segments,
@@ -159,6 +230,32 @@ export function AudioFilesList({
 }: AudioFilesListProps) {
   // Check if we have a main recording (legacy format - no segments)
   const hasMainRecording = mainAudioPath && segments.length === 0;
+
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
+    isOpen: false,
+    uploadId: null,
+    fileName: "",
+  });
+
+  const handleDeleteClick = (uploadId: number, fileName: string) => {
+    setDeleteConfirm({
+      isOpen: true,
+      uploadId,
+      fileName,
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm.uploadId !== null) {
+      onDeleteUpload(deleteConfirm.uploadId);
+    }
+    setDeleteConfirm({ isOpen: false, uploadId: null, fileName: "" });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ isOpen: false, uploadId: null, fileName: "" });
+  };
 
   // Combine segments and uploads into a single sorted list
   const items = useMemo<AudioItem[]>(() => {
@@ -431,7 +528,7 @@ export function AudioFilesList({
                   }}
                 />
                 <button
-                  onClick={() => onDeleteUpload(upload.id)}
+                  onClick={() => handleDeleteClick(upload.id, upload.original_filename)}
                   className="p-1 rounded hover:bg-black/5 transition-colors"
                   title="Delete"
                 >
@@ -455,6 +552,17 @@ export function AudioFilesList({
           );
         })}
       </ul>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm.isOpen && (
+        <ConfirmDialog
+          title="Delete Audio File"
+          message={`Are you sure you want to delete "${deleteConfirm.fileName}"? This will permanently remove the audio file from your system.`}
+          confirmLabel="Delete"
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+        />
+      )}
     </div>
   );
 }
