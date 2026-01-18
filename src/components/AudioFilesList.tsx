@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { UploadedAudio, AudioSegment, AudioItem } from "../types";
 import { uploadApi } from "../api/upload";
+import { save } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 
 interface AudioFilesListProps {
   uploads: UploadedAudio[];
@@ -117,6 +119,31 @@ function MoveButtons({
   );
 }
 
+function DownloadButton({ onDownload }: { onDownload: () => void }) {
+  return (
+    <button
+      onClick={onDownload}
+      className="p-1 rounded hover:bg-black/5 transition-colors"
+      title="Download"
+    >
+      <svg
+        className="w-3.5 h-3.5"
+        style={{ color: "var(--color-text-tertiary)" }}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+        />
+      </svg>
+    </button>
+  );
+}
+
 export function AudioFilesList({
   uploads,
   segments,
@@ -143,6 +170,28 @@ export function AudioFilesList({
 
   const handlePlay = (filePath: string) => {
     onPlayAudio?.(filePath);
+  };
+
+  const handleDownload = async (filePath: string, suggestedName: string) => {
+    try {
+      // Get file extension from the original path
+      const ext = filePath.split(".").pop() || "wav";
+      const defaultName = `${suggestedName}.${ext}`;
+
+      // Open save dialog
+      const destPath = await save({
+        defaultPath: defaultName,
+        filters: [{ name: "Audio Files", extensions: [ext] }],
+      });
+
+      if (!destPath) return; // User cancelled
+
+      // Read source file and write to destination
+      const contents = await readFile(filePath);
+      await writeFile(destPath, contents);
+    } catch (err) {
+      console.error("Failed to download audio file:", err);
+    }
   };
 
   const handleMove = async (index: number, direction: "up" | "down") => {
@@ -228,6 +277,9 @@ export function AudioFilesList({
                 </span>
               </div>
             </div>
+            <div className="flex gap-1.5 shrink-0">
+              <DownloadButton onDownload={() => handleDownload(mainAudioPath!, "main-recording")} />
+            </div>
           </li>
         )}
         {items.map((item, index) => {
@@ -284,6 +336,9 @@ export function AudioFilesList({
                       Recorded
                     </span>
                   </div>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <DownloadButton onDownload={() => handleDownload(segment.mic_path, `recording-${segment.segment_index + 1}`)} />
                 </div>
               </li>
             );
@@ -368,6 +423,13 @@ export function AudioFilesList({
                     }}
                   />
                 )}
+                <DownloadButton
+                  onDownload={() => {
+                    // Remove extension from original filename for suggested name
+                    const nameWithoutExt = upload.original_filename.replace(/\.[^/.]+$/, "");
+                    handleDownload(upload.file_path, nameWithoutExt);
+                  }}
+                />
                 <button
                   onClick={() => onDeleteUpload(upload.id)}
                   className="p-1 rounded hover:bg-black/5 transition-colors"
