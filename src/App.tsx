@@ -1249,11 +1249,26 @@ function NoteView({
     note.audio_path || null
   );
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const audioPlayerRef = useRef<{
     play: () => void;
     pause: () => void;
     toggle: () => void;
   } | null>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    if (showMoreMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMoreMenu]);
 
   // Update playingAudioPath when note changes (don't auto-play)
   useEffect(() => {
@@ -1475,59 +1490,6 @@ function NoteView({
                 </svg>
                 Record
               </button>
-              <button
-                onClick={() => uploadAudio()}
-                disabled={isUploading}
-                className="px-2 py-1 rounded-md hover:bg-black/5 disabled:opacity-50 flex items-center gap-1 text-xs"
-                style={{ color: "var(--color-text-secondary)" }}
-                title="Upload Audio"
-              >
-                {isUploading ? (
-                  <div
-                    className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
-                    style={{
-                      borderColor: "var(--color-text-secondary)",
-                      borderTopColor: "transparent",
-                    }}
-                  />
-                ) : (
-                  <svg
-                    className="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                    />
-                  </svg>
-                )}
-                Upload
-              </button>
-              <button
-                onClick={onExport}
-                className="px-2 py-1 rounded-md hover:bg-black/5 flex items-center gap-1 text-xs"
-                style={{ color: "var(--color-text-secondary)" }}
-                title="Export"
-              >
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Export
-              </button>
             </>
           )}
           {/* Generate/Regenerate button */}
@@ -1540,38 +1502,110 @@ function NoteView({
             ollamaRunning && (
               <button
                 onClick={onRegenerate}
-                className="px-2.5 py-1 text-xs font-medium rounded-md transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium"
                 style={{
                   backgroundColor: "#374151",
                   color: "white",
                 }}
-                title={summaries.length === 0 ? "Generate summary" : "Regenerate summary"}
+                title="Summarize"
               >
-                {summaries.length === 0 ? "Generate" : "Regenerate"}
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                  />
+                </svg>
+                Summarize
               </button>
             )}
+          {/* More menu */}
           {!isRecording && !isPaused && (
-            <button
-              onClick={onDelete}
-              className="px-2 py-1 rounded-md hover:bg-black/5 flex items-center gap-1 text-xs"
-              style={{ color: "var(--color-text-secondary)" }}
-              title="Delete"
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="p-1.5 rounded-md hover:bg-black/5"
+                title="More actions"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              Delete
-            </button>
+                <svg
+                  className="w-4 h-4"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+              {showMoreMenu && (
+                <div
+                  className="absolute right-0 top-full mt-1 py-1 rounded-lg shadow-lg min-w-[140px] z-50"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      uploadAudio();
+                      setShowMoreMenu(false);
+                    }}
+                    disabled={isUploading}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2 disabled:opacity-50"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    {isUploading ? (
+                      <div
+                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                        style={{
+                          borderColor: "var(--color-text-secondary)",
+                          borderTopColor: "transparent",
+                        }}
+                      />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    )}
+                    Upload Audio
+                  </button>
+                  <button
+                    onClick={() => {
+                      onExport();
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export Note
+                  </button>
+                  <div className="my-1 border-t" style={{ borderColor: "var(--color-border)" }} />
+                  <button
+                    onClick={() => {
+                      onDelete();
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </header>
