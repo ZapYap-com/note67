@@ -557,7 +557,7 @@ export function AudioFilesList({
       {deleteConfirm.isOpen && (
         <ConfirmDialog
           title="Delete Audio File"
-          message={`Are you sure you want to delete "${deleteConfirm.fileName}"? This will permanently remove the audio file from your system.`}
+          message={`Are you sure you want to delete "${deleteConfirm.fileName}"? The audio file and its transcripts will be permanently removed.`}
           confirmLabel="Delete"
           onConfirm={handleDeleteConfirm}
           onCancel={handleDeleteCancel}
