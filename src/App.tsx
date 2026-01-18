@@ -1723,7 +1723,12 @@ function NoteView({
 
         {activeTab === "transcript" &&
           (transcript.length > 0 ? (
-            <TranscriptSearch segments={transcript} isLive={isRecording} />
+            <TranscriptSearch
+              segments={transcript}
+              audioSegments={audioSegments}
+              uploads={uploads}
+              isLive={isRecording}
+            />
           ) : (
             <div
               className="text-center py-12 text-sm"

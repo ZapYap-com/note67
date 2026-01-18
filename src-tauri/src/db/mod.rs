@@ -95,7 +95,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, note_id, start_time, end_time, text, speaker, created_at
+            "SELECT id, note_id, start_time, end_time, text, speaker, source_type, source_id, created_at
              FROM transcript_segments
              WHERE note_id = ?1
              ORDER BY start_time ASC",
@@ -110,7 +110,9 @@ impl Database {
                     end_time: row.get(3)?,
                     text: row.get(4)?,
                     speaker: row.get(5)?,
-                    created_at: row.get::<_, String>(6)?.parse().unwrap_or_else(|_| Utc::now()),
+                    source_type: row.get(6)?,
+                    source_id: row.get(7)?,
+                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
                 })
             })?
             .filter_map(|r| r.ok())

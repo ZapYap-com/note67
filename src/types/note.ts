@@ -25,10 +25,12 @@ export interface UpdateNote {
 export interface TranscriptSegment {
   id: number;
   note_id: string;
-  start_time: number; // seconds from note start
+  start_time: number; // seconds from audio file start
   end_time: number;
   text: string;
   speaker: string | null;
+  source_type: string | null; // 'upload', 'segment', 'live', or null for legacy
+  source_id: number | null; // ID of the source audio (uploaded_audio.id or audio_segments.id)
   created_at: string;
 }
 

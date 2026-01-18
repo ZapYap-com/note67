@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import type { TranscriptSegment } from "../types";
+import type { TranscriptSegment, AudioSegment, UploadedAudio, AudioItem } from "../types";
 
 type SpeakerFilter = "all" | "you" | "others";
 
@@ -9,6 +9,15 @@ interface GroupedSegment {
   texts: string[];
   ids: number[];
   segments: TranscriptSegment[];
+}
+
+interface AudioSourceSection {
+  key: string;
+  label: string;
+  sourceType: string | null;
+  sourceId: number | null;
+  displayOrder: number;
+  transcripts: TranscriptSegment[];
 }
 
 function groupConsecutiveSegments(segments: TranscriptSegment[]): GroupedSegment[] {
@@ -39,6 +48,89 @@ function groupConsecutiveSegments(segments: TranscriptSegment[]): GroupedSegment
   return groups;
 }
 
+function groupTranscriptsBySource(
+  segments: TranscriptSegment[],
+  audioSegments: AudioSegment[],
+  uploads: UploadedAudio[]
+): AudioSourceSection[] {
+  // Build audio items list sorted by display_order
+  const audioItems: AudioItem[] = [
+    ...audioSegments.map((s) => ({ type: "segment" as const, data: s })),
+    ...uploads.map((u) => ({ type: "upload" as const, data: u })),
+  ].sort((a, b) => a.data.display_order - b.data.display_order);
+
+  // Create a map for quick lookup of display_order
+  const orderMap = new Map<string, { order: number; label: string }>();
+  audioItems.forEach((item, index) => {
+    if (item.type === "segment") {
+      const key = `segment-${item.data.id}`;
+      orderMap.set(key, {
+        order: index,
+        label: `Recording ${item.data.segment_index + 1}`,
+      });
+    } else {
+      const key = `upload-${item.data.id}`;
+      orderMap.set(key, {
+        order: index,
+        label: item.data.original_filename,
+      });
+    }
+  });
+
+  // Group transcripts by source
+  const sourceGroups = new Map<string, AudioSourceSection>();
+
+  for (const segment of segments) {
+    let key: string;
+    let label: string;
+    let displayOrder: number;
+
+    if (segment.source_type === "upload" && segment.source_id !== null) {
+      key = `upload-${segment.source_id}`;
+      const info = orderMap.get(key);
+      label = info?.label || "Uploaded Audio";
+      displayOrder = info?.order ?? 999;
+    } else if (segment.source_type === "segment" && segment.source_id !== null) {
+      key = `segment-${segment.source_id}`;
+      const info = orderMap.get(key);
+      label = info?.label || "Recording";
+      displayOrder = info?.order ?? 999;
+    } else if (segment.source_type === "live") {
+      // Live transcripts - group with the current recording session
+      key = "live";
+      label = "Live Transcription";
+      displayOrder = -1; // Show at top during recording
+    } else {
+      // Legacy transcripts without source info
+      key = "legacy";
+      label = "Transcript";
+      displayOrder = 1000;
+    }
+
+    if (!sourceGroups.has(key)) {
+      sourceGroups.set(key, {
+        key,
+        label,
+        sourceType: segment.source_type,
+        sourceId: segment.source_id,
+        displayOrder,
+        transcripts: [],
+      });
+    }
+    sourceGroups.get(key)!.transcripts.push(segment);
+  }
+
+  // Sort sections by display_order, then sort transcripts within each section by start_time
+  const sections = Array.from(sourceGroups.values())
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map((section) => ({
+      ...section,
+      transcripts: section.transcripts.sort((a, b) => a.start_time - b.start_time),
+    }));
+
+  return sections;
+}
+
 function SpeakerLabel({ speaker }: { speaker: string | null }) {
   if (!speaker) return null;
 
@@ -58,11 +150,19 @@ function SpeakerLabel({ speaker }: { speaker: string | null }) {
 
 interface TranscriptSearchProps {
   segments: TranscriptSegment[];
+  audioSegments?: AudioSegment[];
+  uploads?: UploadedAudio[];
   onSegmentClick?: (segment: TranscriptSegment) => void;
   isLive?: boolean;
 }
 
-export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: TranscriptSearchProps) {
+export function TranscriptSearch({
+  segments,
+  audioSegments = [],
+  uploads = [],
+  onSegmentClick,
+  isLive = false,
+}: TranscriptSearchProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [speakerFilter, setSpeakerFilter] = useState<SpeakerFilter>("all");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -109,11 +209,14 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
     return result;
   }, [segments, searchQuery, speakerFilter]);
 
-  // Group consecutive segments by speaker
-  const groupedSegments = useMemo(
-    () => groupConsecutiveSegments(filteredSegments),
-    [filteredSegments]
+  // Group transcripts by audio source, then by consecutive speaker
+  const sourceSections = useMemo(
+    () => groupTranscriptsBySource(filteredSegments, audioSegments, uploads),
+    [filteredSegments, audioSegments, uploads]
   );
+
+  // Check if we have multiple sources (to decide whether to show section headers)
+  const hasMultipleSources = sourceSections.length > 1;
 
   const highlightMatch = (text: string, query: string): React.ReactNode => {
     if (!query.trim()) return text;
@@ -243,36 +346,57 @@ export function TranscriptSearch({ segments, onSegmentClick, isLive = false }: T
         </p>
       )}
 
-      {/* Segments */}
-      <div ref={scrollContainerRef} className="space-y-2 max-h-[60vh] overflow-y-auto">
-        {groupedSegments.map((group) => {
-          const combinedText = group.texts.join(" ");
+      {/* Segments grouped by audio source */}
+      <div ref={scrollContainerRef} className="space-y-4 max-h-[60vh] overflow-y-auto">
+        {sourceSections.map((section) => {
+          const groupedSegments = groupConsecutiveSegments(section.transcripts);
           return (
-            <div
-              key={group.ids[0]}
-              onClick={() => onSegmentClick?.(group.segments[0])}
-              className="w-full flex gap-4 text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5 cursor-pointer"
-            >
-              <span
-                className="text-sm font-mono shrink-0 pt-0.5"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                {formatTime(group.startTime)}
-              </span>
-              <div className="flex-1 min-w-0">
-                {group.speaker && (
-                  <div className="mb-0.5">
-                    <SpeakerLabel speaker={group.speaker} />
+            <div key={section.key} className="space-y-2">
+              {/* Section header - only show if multiple sources */}
+              {hasMultipleSources && (
+                <div
+                  className="sticky top-0 z-10 px-3 py-1.5 text-xs font-medium rounded-lg"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    color: "var(--color-text-secondary)",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  {section.label}
+                </div>
+              )}
+              {/* Transcript segments within this source */}
+              {groupedSegments.map((group) => {
+                const combinedText = group.texts.join(" ");
+                return (
+                  <div
+                    key={group.ids[0]}
+                    onClick={() => onSegmentClick?.(group.segments[0])}
+                    className="w-full flex gap-4 text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5 cursor-pointer"
+                  >
+                    <span
+                      className="text-sm font-mono shrink-0 pt-0.5"
+                      style={{ color: "var(--color-text-secondary)" }}
+                    >
+                      {formatTime(group.startTime)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      {group.speaker && (
+                        <div className="mb-0.5">
+                          <SpeakerLabel speaker={group.speaker} />
+                        </div>
+                      )}
+                      <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
+                        {highlightMatch(combinedText, searchQuery)}
+                      </p>
+                    </div>
                   </div>
-                )}
-                <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
-                  {highlightMatch(combinedText, searchQuery)}
-                </p>
-              </div>
+                );
+              })}
             </div>
           );
         })}
-        {groupedSegments.length === 0 && searchQuery && (
+        {sourceSections.length === 0 && searchQuery && (
           <p className="text-center py-8" style={{ color: "var(--color-text-secondary)" }}>
             No matches found.
           </p>

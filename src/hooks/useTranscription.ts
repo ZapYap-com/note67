@@ -100,6 +100,8 @@ export function useTranscription(): UseTranscriptionReturn {
           end_time: s.end_time,
           text: s.text,
           speaker: null,
+          source_type: null,
+          source_id: null,
           created_at: new Date().toISOString(),
         }));
         setTranscript(segments);
@@ -244,6 +246,8 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
               end_time: s.end_time,
               text: s.text,
               speaker,
+              source_type: "live",
+              source_id: null,
               created_at: new Date().toISOString(),
             }));
 

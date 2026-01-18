@@ -18,10 +18,12 @@ pub struct Note {
 pub struct TranscriptSegment {
     pub id: i64,
     pub note_id: String,
-    pub start_time: f64,  // seconds from note start
+    pub start_time: f64,  // seconds from audio file start
     pub end_time: f64,
     pub text: String,
     pub speaker: Option<String>,
+    pub source_type: Option<String>, // 'upload', 'segment', 'live', or null for legacy
+    pub source_id: Option<i64>,      // ID of the source audio
     pub created_at: DateTime<Utc>,
 }
 
