@@ -1164,6 +1164,7 @@ function NoteView({
   const [descValue, setDescValue] = useState(note.description || "");
   const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   // Update playingAudioPath when note changes (don't auto-play)
   useEffect(() => {
@@ -1540,6 +1541,7 @@ function NoteView({
               mainAudioPath={note.audio_path}
               isTranscribing={isTranscribingUpload}
               activeAudioPath={playingAudioPath}
+              isPlaying={isAudioPlaying}
               onTranscribe={async (uploadId) => {
                 await transcribeUpload(uploadId);
                 onTranscriptUpdated?.();
@@ -1589,6 +1591,7 @@ function NoteView({
           title={note.title}
           autoPlay={shouldAutoPlay}
           onAutoPlayHandled={() => setShouldAutoPlay(false)}
+          onPlayingChange={setIsAudioPlaying}
         />
       )}
     </div>

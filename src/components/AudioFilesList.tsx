@@ -7,7 +7,8 @@ interface AudioFilesListProps {
   segments: AudioSegment[];
   mainAudioPath?: string | null; // Legacy main recording
   isTranscribing: boolean;
-  activeAudioPath?: string | null; // Currently playing in main player
+  activeAudioPath?: string | null; // Currently selected in main player
+  isPlaying?: boolean; // Whether main player is playing
   onTranscribe: (uploadId: number) => void;
   onDeleteUpload: (uploadId: number) => void;
   onReorder?: () => void;
@@ -40,10 +41,12 @@ function StatusBadge({ status }: { status: UploadedAudio["transcription_status"]
   );
 }
 
-function PlayButton({ isActive, onPlay }: {
+function PlayButton({ isActive, isPlaying, onPlay }: {
   isActive: boolean;
+  isPlaying: boolean;
   onPlay: () => void;
 }) {
+  const showPause = isActive && isPlaying;
   return (
     <button
       onClick={onPlay}
@@ -51,16 +54,27 @@ function PlayButton({ isActive, onPlay }: {
       style={{
         backgroundColor: isActive ? "var(--color-accent)" : "var(--color-accent-light)"
       }}
-      title="Play"
+      title={showPause ? "Playing" : "Play"}
     >
-      <svg
-        className="w-3.5 h-3.5"
-        style={{ color: isActive ? "white" : "var(--color-accent)" }}
-        fill="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path d="M8 5v14l11-7z" />
-      </svg>
+      {showPause ? (
+        <svg
+          className="w-3.5 h-3.5"
+          style={{ color: "white" }}
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+        </svg>
+      ) : (
+        <svg
+          className="w-3.5 h-3.5"
+          style={{ color: isActive ? "white" : "var(--color-accent)" }}
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -108,6 +122,7 @@ export function AudioFilesList({
   mainAudioPath,
   isTranscribing,
   activeAudioPath,
+  isPlaying = false,
   onTranscribe,
   onDeleteUpload,
   onReorder,
@@ -187,6 +202,7 @@ export function AudioFilesList({
             </span>
             <PlayButton
               isActive={activeAudioPath === mainAudioPath}
+              isPlaying={isPlaying}
               onPlay={() => handlePlay(mainAudioPath!)}
             />
             <div className="flex-1 min-w-0">
@@ -240,6 +256,7 @@ export function AudioFilesList({
                 />
                 <PlayButton
                   isActive={isActive}
+                  isPlaying={isPlaying}
                   onPlay={() => handlePlay(segment.mic_path)}
                 />
                 <div className="flex-1 min-w-0">
@@ -290,6 +307,7 @@ export function AudioFilesList({
               />
               <PlayButton
                 isActive={isActive}
+                isPlaying={isPlaying}
                 onPlay={() => handlePlay(upload.file_path)}
               />
               <div className="flex-1 min-w-0">

@@ -6,9 +6,10 @@ interface AudioPlayerProps {
   title: string;
   autoPlay?: boolean;
   onAutoPlayHandled?: () => void;
+  onPlayingChange?: (isPlaying: boolean) => void;
 }
 
-export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled }: AudioPlayerProps) {
+export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled, onPlayingChange }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,6 +49,11 @@ export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled }: AudioPla
       return () => clearTimeout(playTimeout);
     }
   }, [autoPlay, audioPath, onAutoPlayHandled]);
+
+  // Notify parent of playing state changes
+  useEffect(() => {
+    onPlayingChange?.(isPlaying);
+  }, [isPlaying, onPlayingChange]);
 
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate);
