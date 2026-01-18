@@ -1311,20 +1311,30 @@ function NoteView({
                 className="p-1 rounded-md hover:bg-black/5 disabled:opacity-50"
                 title="Upload Audio"
               >
-                <svg
-                  className="w-4 h-4"
-                  style={{ color: "var(--color-text-secondary)" }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                {isUploading ? (
+                  <div
+                    className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                    style={{
+                      borderColor: "var(--color-text-secondary)",
+                      borderTopColor: "transparent",
+                    }}
                   />
-                </svg>
+                ) : (
+                  <svg
+                    className="w-4 h-4"
+                    style={{ color: "var(--color-text-secondary)" }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                    />
+                  </svg>
+                )}
               </button>
               <button
                 onClick={onExport}

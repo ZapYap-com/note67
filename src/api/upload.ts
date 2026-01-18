@@ -73,11 +73,4 @@ export const uploadApi = {
   updateSpeaker: (uploadId: number, speakerLabel: string): Promise<void> => {
     return invoke("update_uploaded_audio_speaker", { uploadId, speakerLabel });
   },
-
-  /**
-   * Check if FFmpeg is available for audio conversion.
-   */
-  isFFmpegAvailable: (): Promise<boolean> => {
-    return invoke<boolean>("is_ffmpeg_available");
-  },
 };

@@ -104,6 +104,23 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Note67.", name)
 }
 
+/// Clean up orphaned .tmp files from interrupted upload conversions
+fn cleanup_temp_files(app: &tauri::AppHandle) {
+    if let Ok(app_data) = app.path().app_data_dir() {
+        let recordings_dir = app_data.join("recordings");
+        if recordings_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&recordings_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "tmp").unwrap_or(false) {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Show the main window when frontend is ready.
 /// Only shows if the app was NOT started with --minimized flag.
 #[tauri::command]
@@ -144,6 +161,10 @@ pub fn run() {
 
             let db = Database::new(app.handle())?;
             app.manage(db);
+
+            // Clean up orphaned temp files from interrupted uploads
+            cleanup_temp_files(app.handle());
+
             app.manage(AudioState::default());
             app.manage(AiState::default());
             let transcription_state = init_transcription_state(app.handle());
@@ -398,7 +419,6 @@ pub fn run() {
             commands::delete_uploaded_audio,
             commands::transcribe_uploaded_audio,
             commands::update_uploaded_audio_speaker,
-            commands::is_ffmpeg_available,
             // Settings commands
             commands::get_theme_preference,
             commands::set_theme_preference,

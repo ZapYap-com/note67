@@ -47,6 +47,7 @@ pub async fn upload_audio(
     // Generate unique filename for storage
     let upload_id = &Uuid::new_v4().to_string()[..8];
     let output_filename = format!("{}_upload_{}.wav", note_id, upload_id);
+    let temp_filename = format!("{}_upload_{}.wav.tmp", note_id, upload_id);
 
     // Get recordings directory
     let app_data = app
@@ -56,10 +57,23 @@ pub async fn upload_audio(
     let recordings_dir = app_data.join("recordings");
     std::fs::create_dir_all(&recordings_dir)
         .map_err(|e| format!("Failed to create recordings directory: {}", e))?;
+
+    let temp_path = recordings_dir.join(&temp_filename);
     let output_path = recordings_dir.join(&output_filename);
 
-    // Convert to WAV (this runs FFmpeg)
-    convert_to_wav(&source, &output_path).map_err(|e| e.to_string())?;
+    // Convert to WAV using temp file first
+    // If app closes mid-conversion, only .tmp file remains (cleaned up on next startup)
+    let convert_result = convert_to_wav(&source, &temp_path);
+
+    if let Err(e) = convert_result {
+        // Clean up temp file on failure
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(e.to_string());
+    }
+
+    // Rename temp to final (atomic on most filesystems)
+    std::fs::rename(&temp_path, &output_path)
+        .map_err(|e| format!("Failed to finalize converted file: {}", e))?;
 
     // Get duration from the converted file
     let duration_ms = get_audio_duration_ms(&output_path).ok();
@@ -202,8 +216,3 @@ pub fn update_uploaded_audio_speaker(
         .map_err(|e| e.to_string())
 }
 
-/// Check if FFmpeg is available on the system
-#[tauri::command]
-pub fn is_ffmpeg_available() -> bool {
-    crate::audio::converter::is_ffmpeg_available()
-}
