@@ -216,13 +216,24 @@ pub fn update_uploaded_audio_speaker(
         .map_err(|e| e.to_string())
 }
 
+/// Item for reordering
+#[derive(Debug, serde::Deserialize)]
+pub struct ReorderItem {
+    pub item_type: String,
+    pub id: i64,
+    pub order: i32,
+}
+
 /// Reorder audio items for a note
-/// Items is a list of {item_type: "segment" | "upload", id: number, order: number}
 #[tauri::command]
 pub fn reorder_audio_items(
-    items: Vec<(String, i64, i32)>,
+    items: Vec<ReorderItem>,
     db: State<Database>,
 ) -> Result<(), String> {
-    db.reorder_audio_items(&items).map_err(|e| e.to_string())
+    let tuples: Vec<(String, i64, i32)> = items
+        .into_iter()
+        .map(|item| (item.item_type, item.id, item.order))
+        .collect();
+    db.reorder_audio_items(&tuples).map_err(|e| e.to_string())
 }
 

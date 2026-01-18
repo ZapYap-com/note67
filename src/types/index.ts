@@ -13,6 +13,7 @@ export type {
   OllamaStatus,
   AudioSegment,
   UploadedAudio,
+  AudioItem,
 } from "./note";
 
 export { RecordingPhase } from "./note";

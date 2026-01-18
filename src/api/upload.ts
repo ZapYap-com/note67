@@ -76,10 +76,9 @@ export const uploadApi = {
 
   /**
    * Reorder audio items for a note.
-   * Items is an array of [itemType, id, newOrder] tuples.
    */
   reorderItems: (
-    items: Array<[string, number, number]>
+    items: Array<{ item_type: string; id: number; order: number }>
   ): Promise<void> => {
     return invoke("reorder_audio_items", { items });
   },

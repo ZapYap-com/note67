@@ -9,7 +9,7 @@ interface AudioFilesListProps {
   isTranscribing: boolean;
   onTranscribe: (uploadId: number) => void;
   onDeleteUpload: (uploadId: number) => void;
-  onReorder?: () => void; // Called after reorder to refresh data
+  onReorder?: () => void;
 }
 
 function formatDuration(ms: number): string {
@@ -45,7 +45,7 @@ function PlayButton({ isPlaying, onPlay, onPause }: {
 }) {
   return (
     <button
-      onClick={isPlaying ? onPause : onPlay}
+      onClick={() => isPlaying ? onPause() : onPlay()}
       className="p-1.5 rounded-full transition-colors"
       style={{ backgroundColor: "var(--color-accent-light)" }}
       title={isPlaying ? "Pause" : "Play"}
@@ -63,20 +63,39 @@ function PlayButton({ isPlaying, onPlay, onPause }: {
   );
 }
 
-function DragHandle() {
+function MoveButtons({
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown
+}: {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
   return (
-    <div
-      className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-black/5 transition-colors"
-      title="Drag to reorder"
-    >
-      <svg
-        className="w-3.5 h-3.5"
-        style={{ color: "var(--color-text-tertiary)" }}
-        fill="currentColor"
-        viewBox="0 0 24 24"
+    <div className="flex flex-col gap-0.5">
+      <button
+        onClick={onMoveUp}
+        disabled={!canMoveUp}
+        className="p-0.5 rounded hover:bg-black/5 transition-colors disabled:opacity-30"
+        title="Move up"
       >
-        <path d="M8 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm8-16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
-      </svg>
+        <svg className="w-3 h-3" style={{ color: "var(--color-text-tertiary)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+      <button
+        onClick={onMoveDown}
+        disabled={!canMoveDown}
+        className="p-0.5 rounded hover:bg-black/5 transition-colors disabled:opacity-30"
+        title="Move down"
+      >
+        <svg className="w-3 h-3" style={{ color: "var(--color-text-tertiary)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -90,16 +109,14 @@ export function AudioFilesList({
   onReorder,
 }: AudioFilesListProps) {
   const [playingPath, setPlayingPath] = useState<string | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Combine segments and uploads into a single sorted list
   const items = useMemo<AudioItem[]>(() => {
+    console.log("[AudioFilesList] segments:", segments.length, "uploads:", uploads.length);
     const segmentItems: AudioItem[] = segments.map((s) => ({ type: "segment" as const, data: s }));
     const uploadItems: AudioItem[] = uploads.map((u) => ({ type: "upload" as const, data: u }));
     const all = [...segmentItems, ...uploadItems];
-    // Sort by display_order
     return all.sort((a, b) => a.data.display_order - b.data.display_order);
   }, [segments, uploads]);
 
@@ -123,41 +140,20 @@ export function AudioFilesList({
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = "move";
-  };
+  const handleMove = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= items.length) return;
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(index);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
-
-    // Reorder items
+    // Swap items
     const newItems = [...items];
-    const [draggedItem] = newItems.splice(draggedIndex, 1);
-    newItems.splice(dropIndex, 0, draggedItem);
+    [newItems[index], newItems[newIndex]] = [newItems[newIndex], newItems[index]];
 
-    // Build reorder data: [itemType, id, newOrder]
-    const reorderData: Array<[string, number, number]> = newItems.map((item, idx) => [
-      item.type,
-      item.data.id,
-      idx,
-    ]);
+    // Build reorder data
+    const reorderData = newItems.map((item, idx) => ({
+      item_type: item.type,
+      id: item.data.id,
+      order: idx,
+    }));
 
     try {
       await uploadApi.reorderItems(reorderData);
@@ -165,9 +161,6 @@ export function AudioFilesList({
     } catch (err) {
       console.error("Failed to reorder items:", err);
     }
-
-    setDraggedIndex(null);
-    setDragOverIndex(null);
   };
 
   const getItemPath = (item: AudioItem): string => {
@@ -188,34 +181,35 @@ export function AudioFilesList({
         className="text-sm font-medium mb-2"
         style={{ color: "var(--color-text-secondary)" }}
       >
-        Audio Files
+        Audio Files ({items.length})
       </h3>
       <ul className="space-y-2">
         {items.map((item, index) => {
           const path = getItemPath(item);
           const isPlaying = playingPath === path;
-          const isDragging = draggedIndex === index;
-          const isDragOver = dragOverIndex === index;
+          const canMoveUp = index > 0;
+          const canMoveDown = index < items.length - 1;
 
           if (item.type === "segment") {
             const segment = item.data;
             return (
               <li
                 key={`seg-${segment.id}`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-                onDrop={(e) => handleDrop(e, index)}
-                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                  isDragging ? "opacity-50" : ""
-                } ${isDragOver ? "ring-2 ring-offset-1" : ""}`}
-                style={{
-                  backgroundColor: "var(--color-sidebar)",
-                  ringColor: isDragOver ? "var(--color-accent)" : undefined,
-                }}
+                className="flex items-center gap-2 p-2 rounded-lg"
+                style={{ backgroundColor: "var(--color-sidebar)" }}
               >
-                <DragHandle />
+                <span
+                  className="w-5 h-5 flex items-center justify-center text-xs font-medium rounded"
+                  style={{ backgroundColor: "var(--color-border)", color: "var(--color-text-secondary)" }}
+                >
+                  {index + 1}
+                </span>
+                <MoveButtons
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                  onMoveUp={() => handleMove(index, "up")}
+                  onMoveDown={() => handleMove(index, "down")}
+                />
                 <PlayButton
                   isPlaying={isPlaying}
                   onPlay={() => handlePlay(segment.mic_path)}
@@ -252,20 +246,21 @@ export function AudioFilesList({
           return (
             <li
               key={`upload-${upload.id}`}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
-              onDrop={(e) => handleDrop(e, index)}
-              className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                isDragging ? "opacity-50" : ""
-              } ${isDragOver ? "ring-2 ring-offset-1" : ""}`}
-              style={{
-                backgroundColor: "var(--color-sidebar)",
-                ringColor: isDragOver ? "var(--color-accent)" : undefined,
-              }}
+              className="flex items-center gap-2 p-2 rounded-lg"
+              style={{ backgroundColor: "var(--color-sidebar)" }}
             >
-              <DragHandle />
+              <span
+                className="w-5 h-5 flex items-center justify-center text-xs font-medium rounded"
+                style={{ backgroundColor: "var(--color-border)", color: "var(--color-text-secondary)" }}
+              >
+                {index + 1}
+              </span>
+              <MoveButtons
+                canMoveUp={canMoveUp}
+                canMoveDown={canMoveDown}
+                onMoveUp={() => handleMove(index, "up")}
+                onMoveDown={() => handleMove(index, "down")}
+              />
               <PlayButton
                 isPlaying={isPlaying}
                 onPlay={() => handlePlay(upload.file_path)}
