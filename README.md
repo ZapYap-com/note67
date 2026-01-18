@@ -19,6 +19,9 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Live transcription during recording
 - [x] Pause/Resume recording
 - [x] Continue recording on existing notes (Listen)
+- [x] Upload external audio files for transcription
+- [x] Download and delete audio files
+- [x] Reorder audio files with up/down controls
 - [x] Voice Activity Detection (VAD) for mic input
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
