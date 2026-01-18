@@ -10,7 +10,6 @@ import {
   AudioPlayer,
   UpdateNotification,
   MeetingDetectedPopup,
-  AudioFilesList,
 } from "./components";
 import { exportApi, aiApi, notesApi } from "./api";
 import {
@@ -1164,7 +1163,6 @@ function NoteView({
   const [descValue, setDescValue] = useState(note.description || "");
   const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const audioPlayerRef = useRef<{ play: () => void; pause: () => void; toggle: () => void } | null>(null);
 
   // Update playingAudioPath when note changes (don't auto-play)
@@ -1542,21 +1540,6 @@ function NoteView({
               className="flex-1 w-full text-base leading-relaxed resize-none"
               style={{ color: "var(--color-text)" }}
             />
-            <AudioFilesList
-              uploads={uploads}
-              segments={audioSegments}
-              mainAudioPath={note.audio_path}
-              isTranscribing={isTranscribingUpload}
-              activeAudioPath={playingAudioPath}
-              isPlaying={isAudioPlaying}
-              onTranscribe={async (uploadId) => {
-                await transcribeUpload(uploadId);
-                onTranscriptUpdated?.();
-              }}
-              onDeleteUpload={deleteUpload}
-              onReorder={handleAudioReorder}
-              onPlayAudio={handlePlayAudio}
-            />
           </div>
         )}
 
@@ -1599,7 +1582,18 @@ function NoteView({
           title={note.title}
           autoPlay={shouldAutoPlay}
           onAutoPlayHandled={() => setShouldAutoPlay(false)}
-          onPlayingChange={setIsAudioPlaying}
+          // Audio files list props
+          uploads={uploads}
+          segments={audioSegments}
+          mainAudioPath={note.audio_path}
+          isTranscribing={isTranscribingUpload}
+          onTranscribe={async (uploadId) => {
+            await transcribeUpload(uploadId);
+            onTranscriptUpdated?.();
+          }}
+          onDeleteUpload={deleteUpload}
+          onReorder={handleAudioReorder}
+          onPlayAudio={handlePlayAudio}
         />
       )}
     </div>

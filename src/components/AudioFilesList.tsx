@@ -13,6 +13,7 @@ interface AudioFilesListProps {
   onDeleteUpload: (uploadId: number) => void;
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
+  compact?: boolean; // Hide header and top border when embedded in player
 }
 
 function formatDuration(ms: number): string {
@@ -127,6 +128,7 @@ export function AudioFilesList({
   onDeleteUpload,
   onReorder,
   onPlayAudio,
+  compact = false,
 }: AudioFilesListProps) {
   // Check if we have a main recording (legacy format - no segments)
   const hasMainRecording = mainAudioPath && segments.length === 0;
@@ -178,15 +180,17 @@ export function AudioFilesList({
 
   return (
     <div
-      className="mt-4 pt-4 border-t"
-      style={{ borderColor: "var(--color-border)" }}
+      className={compact ? "" : "mt-4 pt-4 border-t"}
+      style={compact ? undefined : { borderColor: "var(--color-border)" }}
     >
-      <h3
-        className="text-sm font-medium mb-2"
-        style={{ color: "var(--color-text-secondary)" }}
-      >
-        Audio Files ({totalItems})
-      </h3>
+      {!compact && (
+        <h3
+          className="text-sm font-medium mb-2"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Audio Files ({totalItems})
+        </h3>
+      )}
       <ul className="space-y-2">
         {/* Main recording (legacy format) */}
         {hasMainRecording && (
