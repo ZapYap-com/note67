@@ -1163,11 +1163,19 @@ function NoteView({
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
   const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
+  const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
-  // Update playingAudioPath when note changes
+  // Update playingAudioPath when note changes (don't auto-play)
   useEffect(() => {
     setPlayingAudioPath(note.audio_path || null);
+    setShouldAutoPlay(false);
   }, [note.id, note.audio_path]);
+
+  // Handle play request from audio files list
+  const handlePlayAudio = useCallback((path: string) => {
+    setPlayingAudioPath(path);
+    setShouldAutoPlay(true);
+  }, []);
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
@@ -1538,7 +1546,7 @@ function NoteView({
               }}
               onDeleteUpload={deleteUpload}
               onReorder={handleAudioReorder}
-              onPlayAudio={setPlayingAudioPath}
+              onPlayAudio={handlePlayAudio}
             />
           </div>
         )}
@@ -1576,7 +1584,12 @@ function NoteView({
 
       {/* Audio Player - show when there's audio to play and not recording */}
       {!isRecording && playingAudioPath && (
-        <AudioPlayer audioPath={playingAudioPath} title={note.title} />
+        <AudioPlayer
+          audioPath={playingAudioPath}
+          title={note.title}
+          autoPlay={shouldAutoPlay}
+          onAutoPlayHandled={() => setShouldAutoPlay(false)}
+        />
       )}
     </div>
   );

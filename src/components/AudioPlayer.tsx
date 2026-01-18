@@ -4,9 +4,11 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 interface AudioPlayerProps {
   audioPath: string;
   title: string;
+  autoPlay?: boolean;
+  onAutoPlayHandled?: () => void;
 }
 
-export function AudioPlayer({ audioPath }: AudioPlayerProps) {
+export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -33,6 +35,19 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
     setLoadError(null);
     setIsPlaying(false);
   }, [audioPath]);
+
+  // Handle auto-play when requested
+  useEffect(() => {
+    if (autoPlay && audioRef.current) {
+      const playTimeout = setTimeout(() => {
+        audioRef.current?.play().catch(() => {
+          // Autoplay may be blocked
+        });
+        onAutoPlayHandled?.();
+      }, 100);
+      return () => clearTimeout(playTimeout);
+    }
+  }, [autoPlay, audioPath, onAutoPlayHandled]);
 
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate);
