@@ -103,7 +103,7 @@ pub fn get_uploaded_audio(
     db.get_uploaded_audio(&note_id).map_err(|e| e.to_string())
 }
 
-/// Delete uploaded audio and its file
+/// Delete uploaded audio, its file, and associated transcripts
 #[tauri::command]
 pub fn delete_uploaded_audio(upload_id: i64, db: State<Database>) -> Result<(), String> {
     // Get file path first
@@ -114,6 +114,10 @@ pub fn delete_uploaded_audio(upload_id: i64, db: State<Database>) -> Result<(), 
     // Delete the file (ignore errors - file might not exist)
     let path = PathBuf::from(&info.file_path);
     let _ = std::fs::remove_file(&path);
+
+    // Delete associated transcript segments
+    db.delete_transcript_segments_by_source("upload", upload_id)
+        .map_err(|e| e.to_string())?;
 
     // Delete database record
     db.delete_uploaded_audio(upload_id)
@@ -191,6 +195,8 @@ pub async fn transcribe_uploaded_audio(
             segment.end_time,
             &segment.text,
             Some(&info.speaker_label),
+            Some("upload"),
+            Some(upload_id),
         )
         .map_err(|e| e.to_string())?;
         saved_count += 1;

@@ -1478,12 +1478,13 @@ function NoteView({
               <button
                 onClick={() => uploadAudio()}
                 disabled={isUploading}
-                className="p-1 rounded-md hover:bg-black/5 disabled:opacity-50"
+                className="px-2 py-1 rounded-md hover:bg-black/5 disabled:opacity-50 flex items-center gap-1 text-xs"
+                style={{ color: "var(--color-text-secondary)" }}
                 title="Upload Audio"
               >
                 {isUploading ? (
                   <div
-                    className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                    className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
                     style={{
                       borderColor: "var(--color-text-secondary)",
                       borderTopColor: "transparent",
@@ -1491,8 +1492,7 @@ function NoteView({
                   />
                 ) : (
                   <svg
-                    className="w-4 h-4"
-                    style={{ color: "var(--color-text-secondary)" }}
+                    className="w-3 h-3"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1505,15 +1505,16 @@ function NoteView({
                     />
                   </svg>
                 )}
+                Upload
               </button>
               <button
                 onClick={onExport}
-                className="p-1 rounded-md hover:bg-black/5"
+                className="px-2 py-1 rounded-md hover:bg-black/5 flex items-center gap-1 text-xs"
+                style={{ color: "var(--color-text-secondary)" }}
                 title="Export"
               >
                 <svg
-                  className="w-4 h-4"
-                  style={{ color: "var(--color-text-secondary)" }}
+                  className="w-3 h-3"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1525,18 +1526,39 @@ function NoteView({
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                   />
                 </svg>
+                Export
               </button>
             </>
           )}
+          {/* Generate/Regenerate button */}
+          {!isRecording &&
+            !isTranscribing &&
+            !isGenerating &&
+            !isRegenerating &&
+            (transcript.length > 0 || descValue.trim().length > 0) &&
+            hasOllamaModel &&
+            ollamaRunning && (
+              <button
+                onClick={onRegenerate}
+                className="px-2.5 py-1 text-xs font-medium rounded-md transition-all"
+                style={{
+                  backgroundColor: "#374151",
+                  color: "white",
+                }}
+                title={summaries.length === 0 ? "Generate summary" : "Regenerate summary"}
+              >
+                {summaries.length === 0 ? "Generate" : "Regenerate"}
+              </button>
+            )}
           {!isRecording && !isPaused && (
             <button
               onClick={onDelete}
-              className="p-1 rounded-md hover:bg-black/5"
+              className="px-2 py-1 rounded-md hover:bg-black/5 flex items-center gap-1 text-xs"
+              style={{ color: "var(--color-text-secondary)" }}
               title="Delete"
             >
               <svg
-                className="w-4 h-4"
-                style={{ color: "var(--color-text-secondary)" }}
+                className="w-3 h-3"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1548,6 +1570,7 @@ function NoteView({
                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                 />
               </svg>
+              Delete
             </button>
           )}
         </div>
@@ -1647,26 +1670,6 @@ function NoteView({
             )}
           </button>
         ))}
-        {/* Generate/Regenerate button - only show on summary tab when ready */}
-        {activeTab === "summary" &&
-          !isRecording &&
-          !isTranscribing &&
-          !isGenerating &&
-          !isRegenerating &&
-          (transcript.length > 0 || descValue.trim().length > 0) &&
-          hasOllamaModel &&
-          ollamaRunning && (
-            <button
-              onClick={onRegenerate}
-              className="ml-auto my-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
-              style={{
-                backgroundColor: "#374151",
-                color: "white",
-              }}
-            >
-              {summaries.length === 0 ? "Generate" : "Regenerate"}
-            </button>
-          )}
       </div>
 
       {/* Content */}

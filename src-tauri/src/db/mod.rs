@@ -38,6 +38,8 @@ impl Database {
     }
 
     /// Add a transcript segment to the database
+    /// source_type: 'upload' (from uploaded_audio), 'segment' (from audio_segments), 'live' (from live transcription)
+    /// source_id: the id of the source record (uploaded_audio.id or audio_segments.id)
     pub fn add_transcript_segment(
         &self,
         note_id: &str,
@@ -45,23 +47,26 @@ impl Database {
         end_time: f64,
         text: &str,
         speaker: Option<&str>,
+        source_type: Option<&str>,
+        source_id: Option<i64>,
     ) -> anyhow::Result<i64> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now();
 
         conn.execute(
-            "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![note_id, start_time, end_time, text, speaker, now.to_rfc3339()],
+            "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, source_type, source_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![note_id, start_time, end_time, text, speaker, source_type, source_id, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
     }
 
     /// Add multiple transcript segments in a single transaction (batch insert)
+    /// Tuple: (note_id, start, end, text, speaker, source_type, source_id)
     pub fn add_transcript_segments_batch(
         &self,
-        segments: &[(String, f64, f64, String, Option<String>)], // (note_id, start, end, text, speaker)
+        segments: &[(String, f64, f64, String, Option<String>, Option<String>, Option<i64>)],
     ) -> anyhow::Result<usize> {
         let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now().to_rfc3339();
@@ -71,12 +76,12 @@ impl Database {
 
         {
             let mut stmt = tx.prepare_cached(
-                "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, source_type, source_id, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
 
-            for (note_id, start_time, end_time, text, speaker) in segments {
-                stmt.execute(params![note_id, start_time, end_time, text, speaker.as_deref(), &now])?;
+            for (note_id, start_time, end_time, text, speaker, source_type, source_id) in segments {
+                stmt.execute(params![note_id, start_time, end_time, text, speaker.as_deref(), source_type.as_deref(), source_id, &now])?;
                 count += 1;
             }
         }
@@ -123,6 +128,20 @@ impl Database {
             [note_id],
         )?;
         Ok(())
+    }
+
+    /// Delete transcript segments by source (e.g., when deleting an uploaded audio)
+    pub fn delete_transcript_segments_by_source(
+        &self,
+        source_type: &str,
+        source_id: i64,
+    ) -> anyhow::Result<usize> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let deleted = conn.execute(
+            "DELETE FROM transcript_segments WHERE source_type = ?1 AND source_id = ?2",
+            params![source_type, source_id],
+        )?;
+        Ok(deleted)
     }
 
     /// Add a summary to the database

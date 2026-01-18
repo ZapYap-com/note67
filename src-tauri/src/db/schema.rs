@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 6;
+pub const SCHEMA_VERSION: i32 = 7;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -23,6 +23,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 6 {
         migrate_v6(conn)?;
+    }
+    if version < 7 {
+        migrate_v7(conn)?;
     }
 
     Ok(())
@@ -273,6 +276,32 @@ fn migrate_v6(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 6)?;
+
+    Ok(())
+}
+
+fn migrate_v7(conn: &Connection) -> rusqlite::Result<()> {
+    // Add source tracking columns to transcript_segments
+    // source_type: 'upload' (from uploaded_audio), 'segment' (from audio_segments), 'live' (from live transcription)
+    // source_id: the id of the source record (uploaded_audio.id or audio_segments.id)
+    conn.execute(
+        "ALTER TABLE transcript_segments ADD COLUMN source_type TEXT",
+        [],
+    )?;
+
+    conn.execute(
+        "ALTER TABLE transcript_segments ADD COLUMN source_id INTEGER",
+        [],
+    )?;
+
+    // Create index for faster deletion by source
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transcript_source
+         ON transcript_segments(source_type, source_id)",
+        [],
+    )?;
+
+    set_schema_version(conn, 7)?;
 
     Ok(())
 }

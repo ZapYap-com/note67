@@ -275,7 +275,7 @@ pub async fn start_live_transcription(
             let (mic_result, system_result) = tokio::join!(mic_future, system_future);
 
             // Collect all segments for batch DB insert
-            let mut db_segments: Vec<(String, f64, f64, String, Option<String>)> = Vec::new();
+            let mut db_segments: Vec<(String, f64, f64, String, Option<String>, Option<String>, Option<i64>)> = Vec::new();
             let mut all_events: Vec<TranscriptionUpdateEvent> = Vec::new();
 
             // Process system results FIRST and update rolling history for echo detection
@@ -332,6 +332,8 @@ pub async fn start_live_transcription(
                                 segment.end_time,
                                 segment.text.clone(),
                                 Some("You".to_string()),
+                                Some("live".to_string()),
+                                None,
                             ));
                         }
 
@@ -364,6 +366,8 @@ pub async fn start_live_transcription(
                         segment.end_time,
                         segment.text.clone(),
                         Some("Others".to_string()),
+                        Some("live".to_string()),
+                        None,
                     ));
                 }
 

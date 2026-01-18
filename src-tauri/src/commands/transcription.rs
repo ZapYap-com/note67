@@ -265,7 +265,7 @@ pub async fn transcribe_audio(
     // Save segments to database (skip blank/noise segments)
     for segment in &result.segments {
         if !should_skip_segment(&segment.text) {
-            db.add_transcript_segment(&note_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref())
+            db.add_transcript_segment(&note_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref(), None, None)
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -347,6 +347,8 @@ pub async fn transcribe_dual_audio(
                 segment.end_time,
                 &segment.text,
                 Some("You"),
+                None,
+                None,
             )
             .map_err(|e| e.to_string())?;
             total_segments += 1;
@@ -369,6 +371,8 @@ pub async fn transcribe_dual_audio(
                             segment.end_time,
                             &segment.text,
                             Some("Others"),
+                            None,
+                            None,
                         )
                         .map_err(|e| e.to_string())?;
                         total_segments += 1;
@@ -415,9 +419,11 @@ pub fn add_transcript_segment(
     end_time: f64,
     text: String,
     speaker: Option<String>,
+    source_type: Option<String>,
+    source_id: Option<i64>,
     db: State<Database>,
 ) -> Result<i64, String> {
-    db.add_transcript_segment(&note_id, start_time, end_time, &text, speaker.as_deref())
+    db.add_transcript_segment(&note_id, start_time, end_time, &text, speaker.as_deref(), source_type.as_deref(), source_id)
         .map_err(|e| e.to_string())
 }
 
