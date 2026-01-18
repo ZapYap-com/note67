@@ -102,3 +102,15 @@ export enum RecordingPhase {
   Recording = 1,
   Paused = 2,
 }
+
+// Uploaded audio file
+export interface UploadedAudio {
+  id: number;
+  note_id: string;
+  file_path: string;
+  original_filename: string;
+  duration_ms: number | null;
+  speaker_label: string;
+  transcription_status: "pending" | "processing" | "completed" | "failed";
+  created_at: string;
+}

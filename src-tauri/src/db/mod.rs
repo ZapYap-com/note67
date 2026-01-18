@@ -8,7 +8,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
-use crate::db::models::{AudioSegment, Summary, SummaryType, TranscriptSegment};
+use crate::db::models::{AudioSegment, Summary, SummaryType, TranscriptSegment, UploadedAudio};
 use crate::db::schema::run_migrations;
 
 pub struct Database {
@@ -377,6 +377,118 @@ impl Database {
             .ok();
 
         Ok(segment)
+    }
+
+    // ========== Uploaded Audio ==========
+
+    /// Add an uploaded audio file record
+    pub fn add_uploaded_audio(
+        &self,
+        note_id: &str,
+        file_path: &str,
+        original_filename: &str,
+        duration_ms: Option<i64>,
+        speaker_label: &str,
+    ) -> anyhow::Result<i64> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now();
+
+        conn.execute(
+            "INSERT INTO uploaded_audio (note_id, file_path, original_filename, duration_ms, speaker_label, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![note_id, file_path, original_filename, duration_ms, speaker_label, now.to_rfc3339()],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all uploaded audio for a note
+    pub fn get_uploaded_audio(&self, note_id: &str) -> anyhow::Result<Vec<UploadedAudio>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, created_at
+             FROM uploaded_audio
+             WHERE note_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+
+        let uploads = stmt
+            .query_map([note_id], |row| {
+                Ok(UploadedAudio {
+                    id: row.get(0)?,
+                    note_id: row.get(1)?,
+                    file_path: row.get(2)?,
+                    original_filename: row.get(3)?,
+                    duration_ms: row.get(4)?,
+                    speaker_label: row.get(5)?,
+                    transcription_status: row.get(6)?,
+                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(uploads)
+    }
+
+    /// Get uploaded audio by ID
+    pub fn get_uploaded_audio_by_id(&self, id: i64) -> anyhow::Result<UploadedAudio> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        conn.query_row(
+            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, created_at
+             FROM uploaded_audio WHERE id = ?1",
+            [id],
+            |row| {
+                Ok(UploadedAudio {
+                    id: row.get(0)?,
+                    note_id: row.get(1)?,
+                    file_path: row.get(2)?,
+                    original_filename: row.get(3)?,
+                    duration_ms: row.get(4)?,
+                    speaker_label: row.get(5)?,
+                    transcription_status: row.get(6)?,
+                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("Uploaded audio not found: {}", e))
+    }
+
+    /// Update transcription status for uploaded audio
+    pub fn update_uploaded_audio_status(&self, id: i64, status: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "UPDATE uploaded_audio SET transcription_status = ?1 WHERE id = ?2",
+            params![status, id],
+        )?;
+        Ok(())
+    }
+
+    /// Update speaker label for uploaded audio
+    pub fn update_uploaded_audio_speaker(&self, id: i64, speaker_label: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "UPDATE uploaded_audio SET speaker_label = ?1 WHERE id = ?2",
+            params![speaker_label, id],
+        )?;
+        Ok(())
+    }
+
+    /// Delete uploaded audio by ID
+    pub fn delete_uploaded_audio(&self, id: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute("DELETE FROM uploaded_audio WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Delete all uploaded audio for a note
+    #[allow(dead_code)]
+    pub fn delete_note_uploaded_audio(&self, note_id: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute("DELETE FROM uploaded_audio WHERE note_id = ?1", [note_id])?;
+        Ok(())
     }
 }
 

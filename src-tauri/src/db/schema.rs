@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 4;
+pub const SCHEMA_VERSION: i32 = 5;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -17,6 +17,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 4 {
         migrate_v4(conn)?;
+    }
+    if version < 5 {
+        migrate_v5(conn)?;
     }
 
     Ok(())
@@ -209,6 +212,35 @@ fn migrate_v4(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 4)?;
+
+    Ok(())
+}
+
+fn migrate_v5(conn: &Connection) -> rusqlite::Result<()> {
+    // Uploaded audio table for imported audio files
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS uploaded_audio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            duration_ms INTEGER,
+            speaker_label TEXT NOT NULL DEFAULT 'Uploaded',
+            transcription_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Index for faster lookups by note
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_uploaded_audio_note
+         ON uploaded_audio(note_id)",
+        [],
+    )?;
+
+    set_schema_version(conn, 5)?;
 
     Ok(())
 }

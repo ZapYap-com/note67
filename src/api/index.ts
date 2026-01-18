@@ -4,3 +4,4 @@ export { exportApi } from "./export";
 export { notesApi } from "./notes";
 export { settingsApi } from "./settings";
 export { transcriptionApi } from "./transcription";
+export { uploadApi } from "./upload";

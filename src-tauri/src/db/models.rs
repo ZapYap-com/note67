@@ -110,3 +110,16 @@ pub struct NewAudioSegment {
     pub system_path: Option<String>,
     pub start_offset_ms: i64,
 }
+
+/// Uploaded audio file for a note
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadedAudio {
+    pub id: i64,
+    pub note_id: String,
+    pub file_path: String,
+    pub original_filename: String,
+    pub duration_ms: Option<i64>,
+    pub speaker_label: String,
+    pub transcription_status: String, // "pending", "processing", "completed", "failed"
+    pub created_at: DateTime<Utc>,
+}

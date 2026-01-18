@@ -10,6 +10,7 @@ import {
   AudioPlayer,
   UpdateNotification,
   MeetingDetectedPopup,
+  UploadedAudioList,
 } from "./components";
 import { exportApi, aiApi } from "./api";
 import {
@@ -22,6 +23,7 @@ import {
   useLiveTranscription,
   useUpdater,
   useSystemStatus,
+  useUploadedAudio,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment } from "./types";
@@ -797,6 +799,17 @@ function App() {
             }}
             onRegenerate={handleRegenerateSummaryTitle}
             onClose={() => setSelectedNoteId(null)}
+            onTranscriptUpdated={async () => {
+              if (selectedNote) {
+                const segments = await loadTranscript(selectedNote.id);
+                if (segments.length > 0) {
+                  setNoteTranscripts((prev) => ({
+                    ...prev,
+                    [selectedNote.id]: segments,
+                  }));
+                }
+              }
+            }}
           />
         ) : (
           <EmptyState
@@ -1117,6 +1130,7 @@ interface NoteViewProps {
   onExport: () => void;
   onRegenerate: () => void;
   onClose: () => void;
+  onTranscriptUpdated?: () => void;
 }
 
 function NoteView({
@@ -1144,12 +1158,23 @@ function NoteView({
   onExport,
   onRegenerate,
   onClose,
+  onTranscriptUpdated,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
+
+  const {
+    uploads,
+    isUploading,
+    isTranscribing: isTranscribingUpload,
+    uploadAudio,
+    deleteUpload,
+    transcribeUpload,
+    updateSpeaker,
+  } = useUploadedAudio(note.id);
 
   // Set titleValue to current note.title when entering edit mode
   const handleEditTitle = () => {
@@ -1279,6 +1304,27 @@ function NoteView({
                   <circle cx="12" cy="12" r="4" />
                 </svg>
                 Listen
+              </button>
+              <button
+                onClick={() => uploadAudio()}
+                disabled={isUploading}
+                className="p-1 rounded-md hover:bg-black/5 disabled:opacity-50"
+                title="Upload Audio"
+              >
+                <svg
+                  className="w-4 h-4"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  />
+                </svg>
               </button>
               <button
                 onClick={onExport}
@@ -1442,14 +1488,24 @@ function NoteView({
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {activeTab === "notes" && (
-          <div className="h-full">
+          <div className="h-full flex flex-col">
             <textarea
               value={descValue}
               onChange={(e) => setDescValue(e.target.value)}
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
-              className="w-full h-full text-base leading-relaxed resize-none"
+              className="flex-1 w-full text-base leading-relaxed resize-none"
               style={{ color: "var(--color-text)" }}
+            />
+            <UploadedAudioList
+              uploads={uploads}
+              isTranscribing={isTranscribingUpload}
+              onTranscribe={async (uploadId) => {
+                await transcribeUpload(uploadId);
+                onTranscriptUpdated?.();
+              }}
+              onDelete={deleteUpload}
+              onUpdateSpeaker={updateSpeaker}
             />
           </div>
         )}

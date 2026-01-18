@@ -392,6 +392,13 @@ pub fn run() {
             commands::export_note_markdown,
             commands::save_export_to_file,
             commands::get_export_directory,
+            // Upload commands
+            commands::upload_audio,
+            commands::get_uploaded_audio,
+            commands::delete_uploaded_audio,
+            commands::transcribe_uploaded_audio,
+            commands::update_uploaded_audio_speaker,
+            commands::is_ffmpeg_available,
             // Settings commands
             commands::get_theme_preference,
             commands::set_theme_preference,
