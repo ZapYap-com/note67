@@ -216,3 +216,13 @@ pub fn update_uploaded_audio_speaker(
         .map_err(|e| e.to_string())
 }
 
+/// Reorder audio items for a note
+/// Items is a list of {item_type: "segment" | "upload", id: number, order: number}
+#[tauri::command]
+pub fn reorder_audio_items(
+    items: Vec<(String, i64, i32)>,
+    db: State<Database>,
+) -> Result<(), String> {
+    db.reorder_audio_items(&items).map_err(|e| e.to_string())
+}
+

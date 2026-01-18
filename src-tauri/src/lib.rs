@@ -419,6 +419,7 @@ pub fn run() {
             commands::delete_uploaded_audio,
             commands::transcribe_uploaded_audio,
             commands::update_uploaded_audio_speaker,
+            commands::reorder_audio_items,
             // Settings commands
             commands::get_theme_preference,
             commands::set_theme_preference,

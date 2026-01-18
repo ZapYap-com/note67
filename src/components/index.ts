@@ -12,3 +12,4 @@ export { AudioPlayer } from "./AudioPlayer";
 export { UpdateNotification } from "./UpdateNotification";
 export { MeetingDetectedPopup } from "./MeetingDetectedPopup";
 export { UploadedAudioList } from "./UploadedAudioList";
+export { AudioFilesList } from "./AudioFilesList";

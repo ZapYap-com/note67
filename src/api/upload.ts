@@ -73,4 +73,14 @@ export const uploadApi = {
   updateSpeaker: (uploadId: number, speakerLabel: string): Promise<void> => {
     return invoke("update_uploaded_audio_speaker", { uploadId, speakerLabel });
   },
+
+  /**
+   * Reorder audio items for a note.
+   * Items is an array of [itemType, id, newOrder] tuples.
+   */
+  reorderItems: (
+    items: Array<[string, number, number]>
+  ): Promise<void> => {
+    return invoke("reorder_audio_items", { items });
+  },
 };

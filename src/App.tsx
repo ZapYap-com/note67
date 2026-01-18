@@ -10,9 +10,9 @@ import {
   AudioPlayer,
   UpdateNotification,
   MeetingDetectedPopup,
-  UploadedAudioList,
+  AudioFilesList,
 } from "./components";
-import { exportApi, aiApi } from "./api";
+import { exportApi, aiApi, notesApi } from "./api";
 import {
   useNotes,
   useModels,
@@ -26,7 +26,7 @@ import {
   useUploadedAudio,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
-import type { Note, TranscriptSegment } from "./types";
+import type { Note, TranscriptSegment, AudioSegment } from "./types";
 
 
 function App() {
@@ -1173,8 +1173,21 @@ function NoteView({
     uploadAudio,
     deleteUpload,
     transcribeUpload,
-    updateSpeaker,
+    loadUploads,
   } = useUploadedAudio(note.id);
+
+  const [audioSegments, setAudioSegments] = useState<AudioSegment[]>([]);
+
+  // Load audio segments when note changes
+  useEffect(() => {
+    notesApi.getAudioSegments(note.id).then(setAudioSegments).catch(console.error);
+  }, [note.id]);
+
+  // Refresh both audio segments and uploads after reordering
+  const handleAudioReorder = useCallback(() => {
+    notesApi.getAudioSegments(note.id).then(setAudioSegments).catch(console.error);
+    loadUploads();
+  }, [note.id, loadUploads]);
 
   // Set titleValue to current note.title when entering edit mode
   const handleEditTitle = () => {
@@ -1507,15 +1520,16 @@ function NoteView({
               className="flex-1 w-full text-base leading-relaxed resize-none"
               style={{ color: "var(--color-text)" }}
             />
-            <UploadedAudioList
+            <AudioFilesList
               uploads={uploads}
+              segments={audioSegments}
               isTranscribing={isTranscribingUpload}
               onTranscribe={async (uploadId) => {
                 await transcribeUpload(uploadId);
                 onTranscriptUpdated?.();
               }}
-              onDelete={deleteUpload}
-              onUpdateSpeaker={updateSpeaker}
+              onDeleteUpload={deleteUpload}
+              onReorder={handleAudioReorder}
             />
           </div>
         )}

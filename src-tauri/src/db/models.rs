@@ -98,6 +98,7 @@ pub struct AudioSegment {
     pub system_path: Option<String>,
     pub start_offset_ms: i64,
     pub duration_ms: Option<i64>,
+    pub display_order: i32,
     pub created_at: DateTime<Utc>,
 }
 
@@ -121,5 +122,6 @@ pub struct UploadedAudio {
     pub duration_ms: Option<i64>,
     pub speaker_label: String,
     pub transcription_status: String, // "pending", "processing", "completed", "failed"
+    pub display_order: i32,
     pub created_at: DateTime<Utc>,
 }

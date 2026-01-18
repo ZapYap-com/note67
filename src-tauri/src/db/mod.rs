@@ -261,10 +261,21 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now();
 
+        // Get the next display_order for this note
+        let max_order: Option<i32> = conn
+            .query_row(
+                "SELECT MAX(display_order) FROM audio_segments WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        let display_order = max_order.map(|o| o + 1).unwrap_or(0);
+
         conn.execute(
-            "INSERT INTO audio_segments (note_id, segment_index, mic_path, system_path, start_offset_ms, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![note_id, segment_index, mic_path, system_path, start_offset_ms, now.to_rfc3339()],
+            "INSERT INTO audio_segments (note_id, segment_index, mic_path, system_path, start_offset_ms, display_order, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![note_id, segment_index, mic_path, system_path, start_offset_ms, display_order, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
@@ -280,15 +291,15 @@ impl Database {
         Ok(())
     }
 
-    /// Get all audio segments for a note, ordered by segment index
+    /// Get all audio segments for a note, ordered by display_order
     pub fn get_audio_segments(&self, note_id: &str) -> anyhow::Result<Vec<AudioSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, created_at
+            "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
              FROM audio_segments
              WHERE note_id = ?1
-             ORDER BY segment_index ASC",
+             ORDER BY display_order ASC",
         )?;
 
         let segments = stmt
@@ -301,7 +312,8 @@ impl Database {
                     system_path: row.get(4)?,
                     start_offset_ms: row.get(5)?,
                     duration_ms: row.get(6)?,
-                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                    display_order: row.get(7)?,
+                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
                 })
             })?
             .filter_map(|r| r.ok())
@@ -355,7 +367,7 @@ impl Database {
 
         let segment = conn
             .query_row(
-                "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, created_at
+                "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
                  FROM audio_segments
                  WHERE note_id = ?1
                  ORDER BY segment_index DESC
@@ -370,7 +382,8 @@ impl Database {
                         system_path: row.get(4)?,
                         start_offset_ms: row.get(5)?,
                         duration_ms: row.get(6)?,
-                        created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                        display_order: row.get(7)?,
+                        created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
                     })
                 },
             )
@@ -393,24 +406,46 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now();
 
+        // Get the next display_order for this note (across both segments and uploads)
+        let max_segment_order: Option<i32> = conn
+            .query_row(
+                "SELECT MAX(display_order) FROM audio_segments WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        let max_upload_order: Option<i32> = conn
+            .query_row(
+                "SELECT MAX(display_order) FROM uploaded_audio WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+        let display_order = std::cmp::max(
+            max_segment_order.unwrap_or(-1),
+            max_upload_order.unwrap_or(-1),
+        ) + 1;
+
         conn.execute(
-            "INSERT INTO uploaded_audio (note_id, file_path, original_filename, duration_ms, speaker_label, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![note_id, file_path, original_filename, duration_ms, speaker_label, now.to_rfc3339()],
+            "INSERT INTO uploaded_audio (note_id, file_path, original_filename, duration_ms, speaker_label, display_order, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![note_id, file_path, original_filename, duration_ms, speaker_label, display_order, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
     }
 
-    /// Get all uploaded audio for a note
+    /// Get all uploaded audio for a note, ordered by display_order
     pub fn get_uploaded_audio(&self, note_id: &str) -> anyhow::Result<Vec<UploadedAudio>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, created_at
+            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, display_order, created_at
              FROM uploaded_audio
              WHERE note_id = ?1
-             ORDER BY created_at ASC",
+             ORDER BY display_order ASC",
         )?;
 
         let uploads = stmt
@@ -423,7 +458,8 @@ impl Database {
                     duration_ms: row.get(4)?,
                     speaker_label: row.get(5)?,
                     transcription_status: row.get(6)?,
-                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                    display_order: row.get(7)?,
+                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
                 })
             })?
             .filter_map(|r| r.ok())
@@ -437,7 +473,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         conn.query_row(
-            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, created_at
+            "SELECT id, note_id, file_path, original_filename, duration_ms, speaker_label, transcription_status, display_order, created_at
              FROM uploaded_audio WHERE id = ?1",
             [id],
             |row| {
@@ -449,7 +485,8 @@ impl Database {
                     duration_ms: row.get(4)?,
                     speaker_label: row.get(5)?,
                     transcription_status: row.get(6)?,
-                    created_at: row.get::<_, String>(7)?.parse().unwrap_or_else(|_| Utc::now()),
+                    display_order: row.get(7)?,
+                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
                 })
             },
         )
@@ -488,6 +525,39 @@ impl Database {
     pub fn delete_note_uploaded_audio(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute("DELETE FROM uploaded_audio WHERE note_id = ?1", [note_id])?;
+        Ok(())
+    }
+
+    // ========== Audio Ordering ==========
+
+    /// Reorder audio items for a note. Takes a list of (type, id, new_order) tuples
+    /// where type is "segment" or "upload"
+    pub fn reorder_audio_items(
+        &self,
+        items: &[(String, i64, i32)], // (item_type, id, new_order)
+    ) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let tx = conn.transaction()?;
+
+        for (item_type, id, new_order) in items {
+            match item_type.as_str() {
+                "segment" => {
+                    tx.execute(
+                        "UPDATE audio_segments SET display_order = ?1 WHERE id = ?2",
+                        params![new_order, id],
+                    )?;
+                }
+                "upload" => {
+                    tx.execute(
+                        "UPDATE uploaded_audio SET display_order = ?1 WHERE id = ?2",
+                        params![new_order, id],
+                    )?;
+                }
+                _ => {}
+            }
+        }
+
+        tx.commit()?;
         Ok(())
     }
 }

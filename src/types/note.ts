@@ -93,6 +93,7 @@ export interface AudioSegment {
   system_path: string | null;
   start_offset_ms: number;
   duration_ms: number | null;
+  display_order: number;
   created_at: string;
 }
 
@@ -112,5 +113,11 @@ export interface UploadedAudio {
   duration_ms: number | null;
   speaker_label: string;
   transcription_status: "pending" | "processing" | "completed" | "failed";
+  display_order: number;
   created_at: string;
 }
+
+// Unified audio item for ordering (combines segments and uploads)
+export type AudioItem =
+  | { type: "segment"; data: AudioSegment }
+  | { type: "upload"; data: UploadedAudio };

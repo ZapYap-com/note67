@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 5;
+pub const SCHEMA_VERSION: i32 = 6;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -20,6 +20,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 5 {
         migrate_v5(conn)?;
+    }
+    if version < 6 {
+        migrate_v6(conn)?;
     }
 
     Ok(())
@@ -241,6 +244,35 @@ fn migrate_v5(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 5)?;
+
+    Ok(())
+}
+
+fn migrate_v6(conn: &Connection) -> rusqlite::Result<()> {
+    // Add display_order to audio_segments for reordering
+    conn.execute(
+        "ALTER TABLE audio_segments ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
+        [],
+    )?;
+
+    // Add display_order to uploaded_audio for reordering
+    conn.execute(
+        "ALTER TABLE uploaded_audio ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0",
+        [],
+    )?;
+
+    // Set initial display_order based on creation order
+    conn.execute(
+        "UPDATE audio_segments SET display_order = segment_index",
+        [],
+    )?;
+
+    conn.execute(
+        "UPDATE uploaded_audio SET display_order = id",
+        [],
+    )?;
+
+    set_schema_version(conn, 6)?;
 
     Ok(())
 }
