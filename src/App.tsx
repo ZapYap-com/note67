@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -1165,6 +1165,7 @@ function NoteView({
   const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const audioPlayerRef = useRef<{ play: () => void; pause: () => void; toggle: () => void } | null>(null);
 
   // Update playingAudioPath when note changes (don't auto-play)
   useEffect(() => {
@@ -1174,9 +1175,15 @@ function NoteView({
 
   // Handle play request from audio files list
   const handlePlayAudio = useCallback((path: string) => {
-    setPlayingAudioPath(path);
-    setShouldAutoPlay(true);
-  }, []);
+    if (path === playingAudioPath) {
+      // Toggle play/pause for current file
+      audioPlayerRef.current?.toggle();
+    } else {
+      // Switch to new file and play
+      setPlayingAudioPath(path);
+      setShouldAutoPlay(true);
+    }
+  }, [playingAudioPath]);
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
@@ -1587,6 +1594,7 @@ function NoteView({
       {/* Audio Player - show when there's audio to play and not recording */}
       {!isRecording && playingAudioPath && (
         <AudioPlayer
+          ref={audioPlayerRef}
           audioPath={playingAudioPath}
           title={note.title}
           autoPlay={shouldAutoPlay}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface AudioPlayerProps {
@@ -9,7 +9,16 @@ interface AudioPlayerProps {
   onPlayingChange?: (isPlaying: boolean) => void;
 }
 
-export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled, onPlayingChange }: AudioPlayerProps) {
+export interface AudioPlayerHandle {
+  play: () => void;
+  pause: () => void;
+  toggle: () => void;
+}
+
+export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer(
+  { audioPath, autoPlay, onAutoPlayHandled, onPlayingChange },
+  ref
+) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -54,6 +63,25 @@ export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled, onPlayingC
   useEffect(() => {
     onPlayingChange?.(isPlaying);
   }, [isPlaying, onPlayingChange]);
+
+  // Expose control methods to parent
+  useImperativeHandle(ref, () => ({
+    play: () => {
+      audioRef.current?.play();
+    },
+    pause: () => {
+      audioRef.current?.pause();
+    },
+    toggle: () => {
+      if (audioRef.current) {
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play();
+        }
+      }
+    },
+  }), [isPlaying]);
 
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate);
@@ -314,4 +342,4 @@ export function AudioPlayer({ audioPath, autoPlay, onAutoPlayHandled, onPlayingC
       </div>
     </div>
   );
-}
+});
