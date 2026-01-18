@@ -27,7 +27,6 @@ import {
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment, AudioSegment } from "./types";
 
-
 function App() {
   const {
     notes,
@@ -54,12 +53,23 @@ function App() {
     isLiveTranscribing,
     liveSegments,
     startLiveTranscription,
-    stopLiveTranscription
+    stopLiveTranscription,
   } = useLiveTranscription();
   const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
   const { available: updateAvailable } = useUpdater();
-  const { micAvailable, micPermission, systemAudioSupported, systemAudioPermission, loading: systemLoading, refresh: refreshSystemStatus } = useSystemStatus();
-  const systemNeedsSetup = !systemLoading && (!micAvailable || !micPermission || (systemAudioSupported && !systemAudioPermission));
+  const {
+    micAvailable,
+    micPermission,
+    systemAudioSupported,
+    systemAudioPermission,
+    loading: systemLoading,
+    refresh: refreshSystemStatus,
+  } = useSystemStatus();
+  const systemNeedsSetup =
+    !systemLoading &&
+    (!micAvailable ||
+      !micPermission ||
+      (systemAudioSupported && !systemAudioPermission));
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
@@ -91,11 +101,20 @@ function App() {
     }
   }, [theme]);
 
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(
-    null
-  );
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "system" | "whisper" | "ollama" | "privacy" | "shortcuts" | "about" | "updates" | "disclaimer">("about");
+  const [settingsTab, setSettingsTab] = useState<
+    | "profile"
+    | "appearance"
+    | "system"
+    | "whisper"
+    | "ollama"
+    | "privacy"
+    | "shortcuts"
+    | "about"
+    | "updates"
+    | "disclaimer"
+  >("about");
   const [noteTranscripts, setNoteTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
@@ -107,7 +126,8 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [recordingNoteId, setRecordingNoteId] = useState<string | null>(null);
-  const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] = useState(false);
+  const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] =
+    useState(false);
   const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
 
   // Context menu state
@@ -118,15 +138,13 @@ function App() {
     noteId?: string;
   } | null>(null);
 
-  const selectedNote =
-    notes.find((n) => n.id === selectedNoteId) || null;
-  const recordingNote =
-    notes.find((n) => n.id === recordingNoteId) || null;
+  const selectedNote = notes.find((n) => n.id === selectedNoteId) || null;
+  const recordingNote = notes.find((n) => n.id === recordingNoteId) || null;
   // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId
-    ? ((isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
-        ? liveSegments
-        : noteTranscripts[selectedNoteId] || [])
+    ? (isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
+      ? liveSegments
+      : noteTranscripts[selectedNoteId] || []
     : [];
 
   // Group notes by date
@@ -188,7 +206,13 @@ function App() {
     await startRecording(note.id);
     // Start live transcription
     await startLiveTranscription(note.id, profile?.name || "Me");
-  }, [createNote, startRecording, startLiveTranscription, profile?.name, refreshSystemStatus]);
+  }, [
+    createNote,
+    startRecording,
+    startLiveTranscription,
+    profile?.name,
+    refreshSystemStatus,
+  ]);
 
   // Keyboard shortcut: Cmd/Ctrl + N for new note
   useEffect(() => {
@@ -217,7 +241,13 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartRecording]);
+  }, [
+    isRecording,
+    loadedModel,
+    ollamaRunning,
+    ollamaModel,
+    handleStartRecording,
+  ]);
 
   // Listen for tray "New Note" event
   useEffect(() => {
@@ -234,7 +264,14 @@ function App() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [isRecording, loadedModel, ollamaRunning, ollamaModel, handleStartRecording, handleNewNote]);
+  }, [
+    isRecording,
+    loadedModel,
+    ollamaRunning,
+    ollamaModel,
+    handleStartRecording,
+    handleNewNote,
+  ]);
 
   // Listen for tray "Settings" event
   useEffect(() => {
@@ -268,7 +305,13 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [contextMenu, showDeleteConfirm, showSettings, selectedNoteId, refreshSystemStatus]);
+  }, [
+    contextMenu,
+    showDeleteConfirm,
+    showSettings,
+    selectedNoteId,
+    refreshSystemStatus,
+  ]);
 
   // Keyboard shortcut: Cmd/Ctrl + , to toggle settings
   useEffect(() => {
@@ -375,7 +418,8 @@ function App() {
       await endNote(noteId, audioPath ?? undefined);
       // Reload transcript from database to ensure we have all segments
       const savedSegments = await loadTranscript(noteId);
-      const transcriptToUse = savedSegments.length > 0 ? savedSegments : segmentsToSave;
+      const transcriptToUse =
+        savedSegments.length > 0 ? savedSegments : segmentsToSave;
       if (transcriptToUse.length > 0) {
         setNoteTranscripts((prev) => ({
           ...prev,
@@ -654,11 +698,16 @@ function App() {
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0"
               style={{
-                backgroundColor: profile.avatar ? "var(--color-accent-light)" : "var(--color-sidebar-hover)",
-                color: profile.avatar ? "var(--color-text)" : "var(--color-text-secondary)",
+                backgroundColor: profile.avatar
+                  ? "var(--color-accent-light)"
+                  : "var(--color-sidebar-hover)",
+                color: profile.avatar
+                  ? "var(--color-text)"
+                  : "var(--color-text-secondary)",
               }}
             >
-              {profile.avatar || (profile.name ? profile.name[0].toUpperCase() : "?")}
+              {profile.avatar ||
+                (profile.name ? profile.name[0].toUpperCase() : "?")}
             </div>
             <div className="flex-1 min-w-0 text-left">
               <div
@@ -677,7 +726,12 @@ function App() {
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {(!profile.name || !loadedModel || !ollamaRunning || !ollamaModel || updateAvailable || systemNeedsSetup) && (
+              {(!profile.name ||
+                !loadedModel ||
+                !ollamaRunning ||
+                !ollamaModel ||
+                updateAvailable ||
+                systemNeedsSetup) && (
                 <svg
                   className="w-4 h-4 mt-0.5"
                   style={{ color: "#f59e0b" }}
@@ -734,7 +788,9 @@ function App() {
             ollamaRunning={ollamaRunning}
             hasOllamaModel={!!ollamaModel}
             isRegenerating={isGeneratingSummaryTitle}
-            isTranscribing={isLiveTranscribing && recordingNoteId === selectedNote.id}
+            isTranscribing={
+              isLiveTranscribing && recordingNoteId === selectedNote.id
+            }
             summariesRefreshKey={summariesRefreshKey}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
@@ -761,7 +817,11 @@ function App() {
                 if (recordingNoteId) {
                   await resumeRecording(recordingNoteId);
                   // Pass current liveSegments to preserve them when resuming
-                  await startLiveTranscription(recordingNoteId, profile?.name || "Me", liveSegments);
+                  await startLiveTranscription(
+                    recordingNoteId,
+                    profile?.name || "Me",
+                    liveSegments
+                  );
                 }
               } catch (error) {
                 console.error("Resume recording failed:", error);
@@ -781,7 +841,11 @@ function App() {
                 // Load existing transcripts before starting
                 const existingSegments = await loadTranscript(selectedNote.id);
                 await continueRecording(selectedNote.id);
-                await startLiveTranscription(selectedNote.id, profile?.name || "Me", existingSegments);
+                await startLiveTranscription(
+                  selectedNote.id,
+                  profile?.name || "Me",
+                  existingSegments
+                );
                 setActiveTab("transcript");
               } catch (error) {
                 console.error("Continue recording failed:", error);
@@ -823,109 +887,129 @@ function App() {
         {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
         {/* Hide when viewing a note (unless recording or generating) */}
         {!(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          {isGeneratingSummaryTitle ? (
-            <div
-              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-              }}
-            >
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+            {isGeneratingSummaryTitle ? (
               <div
-                className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg"
                 style={{
-                  borderColor: "var(--color-accent)",
-                  borderTopColor: "transparent",
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
                 }}
-              />
-              <span
-                className="text-sm font-medium"
-                style={{ color: "var(--color-text)" }}
               >
-                Generating Summary
-              </span>
-            </div>
-          ) : isPaused && recordingNote ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={async () => {
-                  try {
-                    if (recordingNoteId) {
-                      await resumeRecording(recordingNoteId);
-                      await startLiveTranscription(recordingNoteId);
+                <div
+                  className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                  style={{
+                    borderColor: "var(--color-accent)",
+                    borderTopColor: "transparent",
+                  }}
+                />
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  Generating Summary
+                </span>
+              </div>
+            ) : isPaused && recordingNote ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      if (recordingNoteId) {
+                        await resumeRecording(recordingNoteId);
+                        await startLiveTranscription(recordingNoteId);
+                      }
+                    } catch (error) {
+                      console.error("Resume recording failed:", error);
                     }
-                  } catch (error) {
-                    console.error("Resume recording failed:", error);
-                  }
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Resume
+                </button>
+                <button
+                  onClick={handleStopRecording}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  Stop
+                </button>
+              </div>
+            ) : isRecording && recordingNote ? (
+              <button
+                onClick={handleStopRecording}
+                className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg transition-transform hover:scale-105"
+                style={{
+                  backgroundColor: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
                 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
+              >
+                <span
+                  className="w-2 h-2 rounded-full animate-pulse"
+                  style={{ backgroundColor: "var(--color-accent)" }}
+                />
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  <kbd
+                    className="font-medium"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"} + S
+                  </kbd>{" "}
+                  to stop
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={handleStartRecording}
+                disabled={!loadedModel || !ollamaRunning || !ollamaModel}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-105"
                 style={{
                   backgroundColor: "var(--color-accent)",
                   color: "white",
                 }}
+                title={
+                  !loadedModel || !ollamaRunning || !ollamaModel
+                    ? "Complete setup in Settings first"
+                    : undefined
+                }
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                Resume
+                <span className="w-2 h-2 rounded-full bg-white" />
+                Start listening
               </button>
-              <button
-                onClick={handleStopRecording}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
-                style={{
-                  backgroundColor: "var(--color-bg-elevated)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text)",
-                }}
-              >
-                Stop
-              </button>
-            </div>
-          ) : isRecording && recordingNote ? (
-            <button
-              onClick={handleStopRecording}
-              className="flex items-center gap-3 px-4 py-2 rounded-full shadow-lg transition-transform hover:scale-105"
-              style={{
-                backgroundColor: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border)",
-              }}
-            >
-              <span
-                className="w-2 h-2 rounded-full animate-pulse"
-                style={{ backgroundColor: "var(--color-accent)" }}
-              />
-              <span
-                className="text-sm"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                <kbd className="font-medium" style={{ color: "var(--color-text)" }}>
-                  {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"} + S
-                </kbd>
-                {" "}to stop
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={handleStartRecording}
-              disabled={!loadedModel || !ollamaRunning || !ollamaModel}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-105"
-              style={{
-                backgroundColor: "var(--color-accent)",
-                color: "white",
-              }}
-              title={!loadedModel || !ollamaRunning || !ollamaModel ? "Complete setup in Settings first" : undefined}
-            >
-              <span className="w-2 h-2 rounded-full bg-white" />
-              Start listening
-            </button>
-          )}
-        </div>
+            )}
+          </div>
         )}
       </main>
 
       {/* Modals */}
-      {showSettings && <Settings onClose={() => { setShowSettings(false); refreshSystemStatus(); }} initialTab={settingsTab} onTabChange={setSettingsTab} />}
+      {showSettings && (
+        <Settings
+          onClose={() => {
+            setShowSettings(false);
+            refreshSystemStatus();
+          }}
+          initialTab={settingsTab}
+          onTabChange={setSettingsTab}
+        />
+      )}
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Note"
@@ -1161,9 +1245,15 @@ function NoteView({
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
-  const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
+  const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(
+    note.audio_path || null
+  );
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
-  const audioPlayerRef = useRef<{ play: () => void; pause: () => void; toggle: () => void } | null>(null);
+  const audioPlayerRef = useRef<{
+    play: () => void;
+    pause: () => void;
+    toggle: () => void;
+  } | null>(null);
 
   // Update playingAudioPath when note changes (don't auto-play)
   useEffect(() => {
@@ -1172,16 +1262,19 @@ function NoteView({
   }, [note.id, note.audio_path]);
 
   // Handle play request from audio files list
-  const handlePlayAudio = useCallback((path: string) => {
-    if (path === playingAudioPath) {
-      // Toggle play/pause for current file
-      audioPlayerRef.current?.toggle();
-    } else {
-      // Switch to new file and play
-      setPlayingAudioPath(path);
-      setShouldAutoPlay(true);
-    }
-  }, [playingAudioPath]);
+  const handlePlayAudio = useCallback(
+    (path: string) => {
+      if (path === playingAudioPath) {
+        // Toggle play/pause for current file
+        audioPlayerRef.current?.toggle();
+      } else {
+        // Switch to new file and play
+        setPlayingAudioPath(path);
+        setShouldAutoPlay(true);
+      }
+    },
+    [playingAudioPath]
+  );
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
@@ -1198,14 +1291,33 @@ function NoteView({
 
   const [audioSegments, setAudioSegments] = useState<AudioSegment[]>([]);
 
-  // Load audio segments when note changes
+  // Load audio segments when note changes (migrate legacy audio first)
   useEffect(() => {
-    notesApi.getAudioSegments(note.id).then(setAudioSegments).catch(console.error);
+    const loadSegments = async () => {
+      // Migrate legacy audio_path to audio_segments if needed
+      const migrated = await notesApi
+        .migrateLegacyAudio(note.id)
+        .catch(() => null);
+      // Then load segments
+      const segments = await notesApi.getAudioSegments(note.id);
+      setAudioSegments(segments);
+      // If migration happened, set the playing path to the migrated segment
+      if (migrated) {
+        setPlayingAudioPath(migrated.mic_path);
+      } else if (segments.length > 0 && !playingAudioPath) {
+        // If no current selection, select first segment
+        setPlayingAudioPath(segments[0].mic_path);
+      }
+    };
+    loadSegments().catch(console.error);
   }, [note.id]);
 
   // Refresh both audio segments and uploads after reordering
   const handleAudioReorder = useCallback(() => {
-    notesApi.getAudioSegments(note.id).then(setAudioSegments).catch(console.error);
+    notesApi
+      .getAudioSegments(note.id)
+      .then(setAudioSegments)
+      .catch(console.error);
     loadUploads();
   }, [note.id, loadUploads]);
 
@@ -1278,7 +1390,11 @@ function NoteView({
                 }}
                 title="Pause recording"
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                 </svg>
                 Pause
@@ -1286,7 +1402,10 @@ function NoteView({
               <button
                 onClick={onStopRecording}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
-                style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 Stop
@@ -1299,10 +1418,17 @@ function NoteView({
               <button
                 onClick={onResumeRecording}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full font-medium"
-                style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "white",
+                }}
                 title="Resume recording"
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
                 Resume
@@ -1332,11 +1458,22 @@ function NoteView({
                 }}
                 title="Listen"
               >
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
+                <svg
+                  className="w-3 h-3"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
                   <circle cx="12" cy="12" r="4" />
                 </svg>
-                Listen
+                Record
               </button>
               <button
                 onClick={() => uploadAudio()}
@@ -1453,7 +1590,11 @@ function NoteView({
           className="px-6 py-2 flex items-center gap-2"
           style={{ backgroundColor: "var(--color-bg-elevated)" }}
         >
-          <svg className="w-3 h-3" fill="var(--color-text-secondary)" viewBox="0 0 24 24">
+          <svg
+            className="w-3 h-3"
+            fill="var(--color-text-secondary)"
+            viewBox="0 0 24 24"
+          >
             <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
           </svg>
           <span
@@ -1786,8 +1927,7 @@ function ContextMenu({ x, y, type, onAction }: ContextMenuProps) {
         left: x,
         top: y,
         backgroundColor: "var(--color-bg-elevated)",
-        boxShadow:
-          "0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
       }}
     >
       {menuItems.map((item) => {
@@ -1801,7 +1941,11 @@ function ContextMenu({ x, y, type, onAction }: ContextMenuProps) {
               color: isDanger ? "#ef4444" : "var(--color-text)",
             }}
           >
-            <span style={{ color: isDanger ? "#ef4444" : "var(--color-text-secondary)" }}>
+            <span
+              style={{
+                color: isDanger ? "#ef4444" : "var(--color-text-secondary)",
+              }}
+            >
               {item.icon}
             </span>
             {item.label}

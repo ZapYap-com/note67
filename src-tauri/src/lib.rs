@@ -382,6 +382,7 @@ pub fn run() {
             commands::get_note_audio_segments,
             commands::get_note_total_duration,
             commands::delete_note_audio_segments,
+            commands::migrate_legacy_audio,
             commands::list_models,
             commands::download_model,
             commands::get_download_progress,

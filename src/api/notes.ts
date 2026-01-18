@@ -51,4 +51,9 @@ export const notesApi = {
   deleteAudioSegments: (noteId: string): Promise<void> => {
     return invoke("delete_note_audio_segments", { noteId });
   },
+
+  /** Migrate legacy audio_path to audio_segments table */
+  migrateLegacyAudio: (noteId: string): Promise<AudioSegment | null> => {
+    return invoke("migrate_legacy_audio", { noteId });
+  },
 };

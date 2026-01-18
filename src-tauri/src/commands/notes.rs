@@ -1,7 +1,10 @@
+use std::path::PathBuf;
+
 use chrono::Utc;
 use tauri::State;
 use uuid::Uuid;
 
+use crate::audio::converter::get_audio_duration_ms;
 use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
 
@@ -338,5 +341,42 @@ pub fn delete_note_audio_segments(db: State<Database>, note_id: String) -> Resul
 
     // Delete segment records from database
     db.delete_audio_segments(&note_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Migrate legacy audio_path to audio_segments table.
+/// This is called when opening a note that has audio_path but no segments.
+/// Returns the created segment if migration occurred, None if no migration needed.
+#[tauri::command]
+pub fn migrate_legacy_audio(
+    db: State<Database>,
+    note_id: String,
+) -> Result<Option<AudioSegment>, String> {
+    // First check if migration is needed by getting note info
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let audio_path: Option<String> = conn
+        .query_row(
+            "SELECT audio_path FROM notes WHERE id = ?1",
+            [&note_id],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+
+    drop(conn); // Release lock before calling migrate
+
+    // Get duration from the audio file if it exists
+    let duration_ms = audio_path
+        .as_ref()
+        .and_then(|path| {
+            if path.is_empty() {
+                None
+            } else {
+                get_audio_duration_ms(&PathBuf::from(path)).ok()
+            }
+        });
+
+    db.migrate_legacy_audio(&note_id, duration_ms)
         .map_err(|e| e.to_string())
 }

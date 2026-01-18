@@ -560,6 +560,86 @@ impl Database {
         tx.commit()?;
         Ok(())
     }
+
+    // ========== Legacy Audio Migration ==========
+
+    /// Migrate legacy audio_path to audio_segments table.
+    /// Returns the created segment if migration occurred, None if no migration needed.
+    pub fn migrate_legacy_audio(
+        &self,
+        note_id: &str,
+        duration_ms: Option<i64>,
+    ) -> anyhow::Result<Option<AudioSegment>> {
+        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        // Check if note has audio_path
+        let audio_path: Option<String> = conn
+            .query_row(
+                "SELECT audio_path FROM notes WHERE id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+
+        let audio_path = match audio_path {
+            Some(path) if !path.is_empty() => path,
+            _ => return Ok(None), // No legacy audio to migrate
+        };
+
+        // Check if note already has segments
+        let segment_count: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audio_segments WHERE note_id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        if segment_count > 0 {
+            return Ok(None); // Already has segments, don't migrate
+        }
+
+        // Perform migration in a transaction
+        let tx = conn.transaction()?;
+        let now = Utc::now();
+
+        // Shift all existing uploads' display_order by 1 to make room at position 0
+        tx.execute(
+            "UPDATE uploaded_audio SET display_order = display_order + 1 WHERE note_id = ?1",
+            [note_id],
+        )?;
+
+        // Insert new audio segment at position 0
+        tx.execute(
+            "INSERT INTO audio_segments (note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at)
+             VALUES (?1, 0, ?2, NULL, 0, ?3, 0, ?4)",
+            params![note_id, &audio_path, duration_ms, now.to_rfc3339()],
+        )?;
+
+        let segment_id = tx.last_insert_rowid();
+
+        // Clear the legacy audio_path
+        tx.execute(
+            "UPDATE notes SET audio_path = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now.to_rfc3339(), note_id],
+        )?;
+
+        tx.commit()?;
+
+        // Return the created segment
+        Ok(Some(AudioSegment {
+            id: segment_id,
+            note_id: note_id.to_string(),
+            segment_index: 0,
+            mic_path: audio_path,
+            system_path: None,
+            start_offset_ms: 0,
+            duration_ms,
+            display_order: 0,
+            created_at: now,
+        }))
+    }
 }
 
 fn get_db_path(app_handle: &AppHandle) -> anyhow::Result<PathBuf> {
