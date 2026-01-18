@@ -23,6 +23,18 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.15",
+      date: "January 2026",
+      changes: [
+        "Reorganized note header with dropdown menu for actions",
+        "Summarize button in header for quick AI summary generation",
+        "Audio files list moved to expandable panel in audio player",
+        "Download button for audio files",
+        "Delete confirmation dialog for audio files",
+        "Deleting uploaded audio now removes associated transcripts",
+      ],
+    },
+    {
       version: "0.1.14",
       date: "January 2026",
       changes: [
