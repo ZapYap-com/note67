@@ -1162,6 +1162,12 @@ function NoteView({
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
+  const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(note.audio_path || null);
+
+  // Update playingAudioPath when note changes
+  useEffect(() => {
+    setPlayingAudioPath(note.audio_path || null);
+  }, [note.id, note.audio_path]);
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
@@ -1523,13 +1529,16 @@ function NoteView({
             <AudioFilesList
               uploads={uploads}
               segments={audioSegments}
+              mainAudioPath={note.audio_path}
               isTranscribing={isTranscribingUpload}
+              activeAudioPath={playingAudioPath}
               onTranscribe={async (uploadId) => {
                 await transcribeUpload(uploadId);
                 onTranscriptUpdated?.();
               }}
               onDeleteUpload={deleteUpload}
               onReorder={handleAudioReorder}
+              onPlayAudio={setPlayingAudioPath}
             />
           </div>
         )}
@@ -1565,9 +1574,9 @@ function NoteView({
         )}
       </div>
 
-      {/* Audio Player - show when note has audio and not recording */}
-      {!isRecording && note.audio_path && (
-        <AudioPlayer audioPath={note.audio_path} title={note.title} />
+      {/* Audio Player - show when there's audio to play and not recording */}
+      {!isRecording && playingAudioPath && (
+        <AudioPlayer audioPath={playingAudioPath} title={note.title} />
       )}
     </div>
   );

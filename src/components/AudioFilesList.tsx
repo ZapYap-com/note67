@@ -1,15 +1,17 @@
-import { useState, useRef, useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useMemo } from "react";
 import type { UploadedAudio, AudioSegment, AudioItem } from "../types";
 import { uploadApi } from "../api/upload";
 
 interface AudioFilesListProps {
   uploads: UploadedAudio[];
   segments: AudioSegment[];
+  mainAudioPath?: string | null; // Legacy main recording
   isTranscribing: boolean;
+  activeAudioPath?: string | null; // Currently playing in main player
   onTranscribe: (uploadId: number) => void;
   onDeleteUpload: (uploadId: number) => void;
   onReorder?: () => void;
+  onPlayAudio?: (path: string) => void;
 }
 
 function formatDuration(ms: number): string {
@@ -38,27 +40,27 @@ function StatusBadge({ status }: { status: UploadedAudio["transcription_status"]
   );
 }
 
-function PlayButton({ isPlaying, onPlay, onPause }: {
-  isPlaying: boolean;
+function PlayButton({ isActive, onPlay }: {
+  isActive: boolean;
   onPlay: () => void;
-  onPause: () => void;
 }) {
   return (
     <button
-      onClick={() => isPlaying ? onPause() : onPlay()}
+      onClick={onPlay}
       className="p-1.5 rounded-full transition-colors"
-      style={{ backgroundColor: "var(--color-accent-light)" }}
-      title={isPlaying ? "Pause" : "Play"}
+      style={{
+        backgroundColor: isActive ? "var(--color-accent)" : "var(--color-accent-light)"
+      }}
+      title="Play"
     >
-      {isPlaying ? (
-        <svg className="w-3.5 h-3.5" style={{ color: "var(--color-accent)" }} fill="currentColor" viewBox="0 0 24 24">
-          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-        </svg>
-      ) : (
-        <svg className="w-3.5 h-3.5" style={{ color: "var(--color-accent)" }} fill="currentColor" viewBox="0 0 24 24">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-      )}
+      <svg
+        className="w-3.5 h-3.5"
+        style={{ color: isActive ? "white" : "var(--color-accent)" }}
+        fill="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path d="M8 5v14l11-7z" />
+      </svg>
     </button>
   );
 }
@@ -103,17 +105,19 @@ function MoveButtons({
 export function AudioFilesList({
   uploads,
   segments,
+  mainAudioPath,
   isTranscribing,
+  activeAudioPath,
   onTranscribe,
   onDeleteUpload,
   onReorder,
+  onPlayAudio,
 }: AudioFilesListProps) {
-  const [playingPath, setPlayingPath] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Check if we have a main recording (legacy format - no segments)
+  const hasMainRecording = mainAudioPath && segments.length === 0;
 
   // Combine segments and uploads into a single sorted list
   const items = useMemo<AudioItem[]>(() => {
-    console.log("[AudioFilesList] segments:", segments.length, "uploads:", uploads.length);
     const segmentItems: AudioItem[] = segments.map((s) => ({ type: "segment" as const, data: s }));
     const uploadItems: AudioItem[] = uploads.map((u) => ({ type: "upload" as const, data: u }));
     const all = [...segmentItems, ...uploadItems];
@@ -121,23 +125,7 @@ export function AudioFilesList({
   }, [segments, uploads]);
 
   const handlePlay = (filePath: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-
-    const audio = new Audio(convertFileSrc(filePath));
-    audio.onended = () => setPlayingPath(null);
-    audio.onerror = () => setPlayingPath(null);
-    audio.play();
-    audioRef.current = audio;
-    setPlayingPath(filePath);
-  };
-
-  const handlePause = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setPlayingPath(null);
-    }
+    onPlayAudio?.(filePath);
   };
 
   const handleMove = async (index: number, direction: "up" | "down") => {
@@ -170,7 +158,8 @@ export function AudioFilesList({
     return item.data.file_path;
   };
 
-  if (items.length === 0) return null;
+  const totalItems = items.length + (hasMainRecording ? 1 : 0);
+  if (totalItems === 0) return null;
 
   return (
     <div
@@ -181,12 +170,51 @@ export function AudioFilesList({
         className="text-sm font-medium mb-2"
         style={{ color: "var(--color-text-secondary)" }}
       >
-        Audio Files ({items.length})
+        Audio Files ({totalItems})
       </h3>
       <ul className="space-y-2">
+        {/* Main recording (legacy format) */}
+        {hasMainRecording && (
+          <li
+            className="flex items-center gap-2 p-2 rounded-lg"
+            style={{ backgroundColor: "var(--color-sidebar)" }}
+          >
+            <span
+              className="w-5 h-5 flex items-center justify-center text-xs font-medium rounded"
+              style={{ backgroundColor: "var(--color-border)", color: "var(--color-text-secondary)" }}
+            >
+              1
+            </span>
+            <PlayButton
+              isActive={activeAudioPath === mainAudioPath}
+              onPlay={() => handlePlay(mainAudioPath!)}
+            />
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-sm font-medium truncate"
+                style={{ color: "var(--color-text)" }}
+              >
+                Main Recording
+              </p>
+              <div
+                className="flex items-center gap-2 mt-0.5 text-xs"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                <span
+                  className="px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-accent-light)", color: "var(--color-accent)" }}
+                >
+                  Recorded
+                </span>
+              </div>
+            </div>
+          </li>
+        )}
         {items.map((item, index) => {
           const path = getItemPath(item);
-          const isPlaying = playingPath === path;
+          const isActive = activeAudioPath === path;
+          // Adjust position if main recording exists (it takes position 1)
+          const displayPosition = hasMainRecording ? index + 2 : index + 1;
           const canMoveUp = index > 0;
           const canMoveDown = index < items.length - 1;
 
@@ -202,7 +230,7 @@ export function AudioFilesList({
                   className="w-5 h-5 flex items-center justify-center text-xs font-medium rounded"
                   style={{ backgroundColor: "var(--color-border)", color: "var(--color-text-secondary)" }}
                 >
-                  {index + 1}
+                  {displayPosition}
                 </span>
                 <MoveButtons
                   canMoveUp={canMoveUp}
@@ -211,9 +239,8 @@ export function AudioFilesList({
                   onMoveDown={() => handleMove(index, "down")}
                 />
                 <PlayButton
-                  isPlaying={isPlaying}
+                  isActive={isActive}
                   onPlay={() => handlePlay(segment.mic_path)}
-                  onPause={handlePause}
                 />
                 <div className="flex-1 min-w-0">
                   <p
@@ -262,9 +289,8 @@ export function AudioFilesList({
                 onMoveDown={() => handleMove(index, "down")}
               />
               <PlayButton
-                isPlaying={isPlaying}
+                isActive={isActive}
                 onPlay={() => handlePlay(upload.file_path)}
-                onPause={handlePause}
               />
               <div className="flex-1 min-w-0">
                 <p

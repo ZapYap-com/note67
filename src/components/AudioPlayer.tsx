@@ -27,6 +27,13 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
     }
   }, [audioPath]);
 
+  // Reset state when audio path changes
+  useEffect(() => {
+    setCurrentTime(0);
+    setLoadError(null);
+    setIsPlaying(false);
+  }, [audioPath]);
+
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate);
     const nextIndex = (currentIndex + 1) % playbackRates.length;
