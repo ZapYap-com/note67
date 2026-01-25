@@ -122,14 +122,13 @@ impl Database {
     }
 
     /// Delete all transcript segments for a note
-    #[allow(dead_code)]
-    pub fn delete_transcript_segments(&self, note_id: &str) -> anyhow::Result<()> {
+    pub fn delete_transcript_segments(&self, note_id: &str) -> anyhow::Result<usize> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute(
+        let deleted = conn.execute(
             "DELETE FROM transcript_segments WHERE note_id = ?1",
             [note_id],
         )?;
-        Ok(())
+        Ok(deleted)
     }
 
     /// Delete transcript segments by source (e.g., when deleting an uploaded audio)

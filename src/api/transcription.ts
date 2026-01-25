@@ -100,4 +100,13 @@ export const transcriptionApi = {
   isLiveTranscribing: (): Promise<boolean> => {
     return invoke("is_live_transcribing");
   },
+
+  /** Result of re-transcription */
+  retranscribeNote: (noteId: string): Promise<{
+    deletedSegments: number;
+    newSegments: number;
+    transcribedFiles: string[];
+  }> => {
+    return invoke("retranscribe_note", { noteId });
+  },
 };

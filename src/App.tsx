@@ -11,7 +11,7 @@ import {
   UpdateNotification,
   MeetingDetectedPopup,
 } from "./components";
-import { exportApi, aiApi, notesApi } from "./api";
+import { exportApi, aiApi, notesApi, transcriptionApi } from "./api";
 import {
   useNotes,
   useModels,
@@ -129,6 +129,7 @@ function App() {
   const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] =
     useState(false);
   const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
+  const [isRetranscribing, setIsRetranscribing] = useState(false);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -519,6 +520,31 @@ function App() {
     setEditingDescription(false);
   };
 
+  const handleRetranscribe = async () => {
+    if (!selectedNote) return;
+    
+    try {
+      setIsRetranscribing(true);
+      const result = await transcriptionApi.retranscribeNote(selectedNote.id);
+      console.log("Re-transcription complete:", result);
+      
+      // Reload transcripts after re-transcription
+      const segments = await loadTranscript(selectedNote.id);
+      setNoteTranscripts((prev) => ({
+        ...prev,
+        [selectedNote.id]: segments,
+      }));
+      
+      // Switch to transcript tab to show results
+      setActiveTab("transcript");
+    } catch (error) {
+      console.error("Re-transcription failed:", error);
+      alert(`Re-transcription failed: ${error}`);
+    } finally {
+      setIsRetranscribing(false);
+    }
+  };
+
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString([], {
       hour: "numeric",
@@ -791,6 +817,7 @@ function App() {
             isTranscribing={
               isLiveTranscribing && recordingNoteId === selectedNote.id
             }
+            isRetranscribing={isRetranscribing}
             summariesRefreshKey={summariesRefreshKey}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
@@ -861,6 +888,7 @@ function App() {
               }
             }}
             onRegenerate={handleRegenerateSummaryTitle}
+            onRetranscribe={handleRetranscribe}
             onClose={() => setSelectedNoteId(null)}
             onTranscriptUpdated={async () => {
               if (selectedNote) {
@@ -1200,6 +1228,7 @@ interface NoteViewProps {
   hasOllamaModel: boolean;
   isRegenerating: boolean;
   isTranscribing: boolean;
+  isRetranscribing: boolean;
   summariesRefreshKey: number;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
@@ -1212,6 +1241,7 @@ interface NoteViewProps {
   onDelete: () => void;
   onExport: () => void;
   onRegenerate: () => void;
+  onRetranscribe: () => void;
   onClose: () => void;
   onTranscriptUpdated?: () => void;
 }
@@ -1228,6 +1258,7 @@ function NoteView({
   hasOllamaModel,
   isRegenerating,
   isTranscribing,
+  isRetranscribing,
   summariesRefreshKey,
   onTabChange,
   onEditTitle,
@@ -1240,6 +1271,7 @@ function NoteView({
   onDelete,
   onExport,
   onRegenerate,
+  onRetranscribe,
   onClose,
   onTranscriptUpdated,
 }: NoteViewProps) {
@@ -1490,6 +1522,44 @@ function NoteView({
                 </svg>
                 Record
               </button>
+              {/* Re-transcribe button - shown when audio or transcripts exist */}
+              {(note.audio_path || transcript.length > 0) && !isTranscribing && !isRetranscribing && (
+                <button
+                  onClick={onRetranscribe}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium"
+                  style={{
+                    backgroundColor: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                  }}
+                  title="Re-transcribe audio"
+                >
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Re-transcribe
+                </button>
+              )}
+              {/* Show spinner when re-transcribing */}
+              {isRetranscribing && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
+                  <span
+                    className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
+                    style={{ borderColor: "var(--color-accent)", borderTopColor: "transparent" }}
+                  />
+                  Re-transcribing...
+                </div>
+              )}
             </>
           )}
           {/* Generate/Regenerate button */}
@@ -1731,12 +1801,43 @@ function NoteView({
             />
           ) : (
             <div
-              className="text-center py-12 text-sm"
+              className="text-center py-12 text-sm space-y-3"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              {note.audio_path
-                ? "Transcribe this note to see the transcript"
-                : "No audio recorded"}
+              <p>
+                {note.audio_path
+                  ? "No transcript available"
+                  : "No audio recorded"}
+              </p>
+              {note.audio_path && !isRetranscribing && (
+                <button
+                  onClick={onRetranscribe}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-full transition-colors"
+                  style={{
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                  }}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Transcribe Audio
+                </button>
+              )}
+              {isRetranscribing && (
+                <div className="flex items-center justify-center gap-2">
+                  <span
+                    className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                    style={{ borderColor: "var(--color-accent)", borderTopColor: "transparent" }}
+                  />
+                  <span>Transcribing...</span>
+                </div>
+              )}
             </div>
           ))}
 
