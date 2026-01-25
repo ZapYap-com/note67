@@ -93,6 +93,7 @@ When using speakers instead of headphones, your microphone picks up audio from y
 
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://rust-lang.org/)
+- [CMake](https://cmake.org/) (required for whisper-rs native dependencies)
 - [Ollama](https://ollama.ai/) (for AI summaries)
 
 ```bash
@@ -101,6 +102,13 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install Tauri CLI
 cargo install tauri-cli
+
+# Install CMake (macOS)
+brew install cmake
+
+# Install CMake (Windows)
+# Download from https://cmake.org/download/ or use chocolatey:
+# choco install cmake
 
 # Install Ollama and pull a model
 brew install ollama
