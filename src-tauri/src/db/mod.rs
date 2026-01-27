@@ -91,14 +91,18 @@ impl Database {
     }
 
     /// Get all transcript segments for a note
+    /// Orders by source display_order first (so transcripts from each audio appear together),
+    /// then by start_time within each source
     pub fn get_transcript_segments(&self, note_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, note_id, start_time, end_time, text, speaker, source_type, source_id, created_at
-             FROM transcript_segments
-             WHERE note_id = ?1
-             ORDER BY start_time ASC",
+            "SELECT t.id, t.note_id, t.start_time, t.end_time, t.text, t.speaker, t.source_type, t.source_id, t.created_at
+             FROM transcript_segments t
+             LEFT JOIN audio_segments a ON t.source_type = 'segment' AND t.source_id = a.id
+             LEFT JOIN uploaded_audio u ON t.source_type = 'upload' AND t.source_id = u.id
+             WHERE t.note_id = ?1
+             ORDER BY COALESCE(a.display_order, u.display_order, 999999) ASC, t.start_time ASC",
         )?;
 
         let segments = stmt
@@ -122,7 +126,6 @@ impl Database {
     }
 
     /// Delete all transcript segments for a note
-    #[allow(dead_code)]
     pub fn delete_transcript_segments(&self, note_id: &str) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute(

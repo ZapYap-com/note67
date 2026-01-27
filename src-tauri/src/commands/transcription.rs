@@ -637,6 +637,13 @@ pub async fn retranscribe_note(
     let mut failed_items: Vec<String> = Vec::new();
     let mut total_segments_created = 0;
 
+    // Delete ALL existing transcripts for this note first
+    // This handles both new format (with source_type) and legacy format (source_type=null)
+    if let Err(e) = db.delete_transcript_segments(&note_id) {
+        state.is_transcribing.store(false, Ordering::SeqCst);
+        return Err(format!("Failed to delete existing transcripts: {}", e));
+    }
+
     // Emit initial progress
     let _ = app.emit("retranscribe-progress", serde_json::json!({
         "noteId": note_id,
@@ -656,12 +663,6 @@ pub async fn retranscribe_note(
             "completedItems": completed_items,
             "currentItem": item_name,
         }));
-
-        // Delete existing transcripts for this segment
-        if let Err(e) = db.delete_transcript_segments_by_source("segment", segment.id) {
-            failed_items.push(format!("{}: {}", item_name, e));
-            continue;
-        }
 
         // Transcribe mic audio
         let mic_path_buf = PathBuf::from(&segment.mic_path);
