@@ -23,6 +23,15 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.16",
+      date: "January 2026",
+      changes: [
+        "Retranscribe All button to re-transcribe audio with different Whisper model",
+        "Auto-switch to transcript tab when retranscribing",
+        "Improved transcript ordering by audio source sequence",
+      ],
+    },
+    {
       version: "0.1.15",
       date: "January 2026",
       changes: [
