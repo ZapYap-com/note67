@@ -1333,7 +1333,7 @@ function NoteView({
 
   const [audioSegments, setAudioSegments] = useState<AudioSegment[]>([]);
 
-  // Load audio segments when note changes (migrate legacy audio first)
+  // Load audio segments when note changes or recording stops (migrate legacy audio first)
   useEffect(() => {
     const loadSegments = async () => {
       // Migrate legacy audio_path to audio_segments if needed
@@ -1352,7 +1352,7 @@ function NoteView({
       }
     };
     loadSegments().catch(console.error);
-  }, [note.id]);
+  }, [note.id, isRecording]); // Also refresh when recording state changes
 
   // Refresh both audio segments and uploads after reordering
   const handleAudioReorder = useCallback(() => {
