@@ -55,6 +55,11 @@ export const audioApi = {
     return invoke("stop_dual_recording", { noteId });
   },
 
+  /** Stop dual recording with segment tracking - updates segment duration in database */
+  stopDualRecordingWithSegments: (noteId: string): Promise<DualRecordingResult> => {
+    return invoke("stop_dual_recording_with_segments", { noteId });
+  },
+
   /** Check if dual recording is currently active */
   isDualRecording: (): Promise<boolean> => {
     return invoke("is_dual_recording");

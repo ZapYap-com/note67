@@ -367,6 +367,7 @@ pub fn run() {
             commands::request_microphone_permission,
             commands::start_dual_recording,
             commands::stop_dual_recording,
+            commands::stop_dual_recording_with_segments,
             commands::is_dual_recording,
             commands::is_aec_enabled,
             commands::set_aec_enabled,

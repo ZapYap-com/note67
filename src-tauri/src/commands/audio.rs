@@ -340,6 +340,75 @@ pub fn stop_dual_recording(
     })
 }
 
+/// Stop dual recording with segment tracking - updates segment duration in database
+#[tauri::command]
+pub fn stop_dual_recording_with_segments(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    // Get the recording duration before stopping
+    let duration_ms = state.recording.get_segment_elapsed_ms();
+
+    // Stop mic recording
+    let mic_path = audio::stop_recording(&state.recording)
+        .map_err(|e| e.to_string())?
+        .ok_or("No mic recording path found")?;
+
+    // Stop system audio recording
+    let system_path = {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+
+        if let Some(cap) = capture.as_ref() {
+            cap.stop().map_err(|e| e.to_string())?
+        } else {
+            None
+        }
+    };
+
+    // Clear stored system path
+    {
+        let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+        *sys_path = None;
+    }
+
+    // Update segment duration in database
+    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
+    if segment_id > 0 {
+        let _ = db.update_segment_duration(segment_id, duration_ms);
+    }
+
+    // Merge files if we have both
+    let playback_path = if let Some(ref sys_path) = system_path {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+        let recordings_dir = app_data_dir.join("recordings");
+        let playback_filename = format!("{}.wav", note_id);
+        let playback_file = recordings_dir.join(&playback_filename);
+
+        // Merge the two files
+        match mix_wav_files(&mic_path, sys_path, &playback_file) {
+            Ok(()) => Some(playback_file.to_string_lossy().to_string()),
+            Err(e) => {
+                eprintln!("Failed to merge audio files: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    Ok(DualRecordingResult {
+        mic_path: mic_path.to_string_lossy().to_string(),
+        system_path: system_path.map(|p| p.to_string_lossy().to_string()),
+        playback_path,
+    })
+}
+
 /// Check if dual recording is currently active
 #[tauri::command]
 pub fn is_dual_recording(state: State<AudioState>) -> bool {

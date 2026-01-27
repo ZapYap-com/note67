@@ -671,12 +671,44 @@ pub async fn retranscribe_note(
             "currentItem": item_name,
         }));
 
+        // Detect if this is a legacy merged audio file
+        // Legacy files are like "{noteId}.wav" (merged playback)
+        // New format files have "_mic_seg" in the name
+        let stored_mic_path = PathBuf::from(&segment.mic_path);
+        let is_legacy_merged = segment.system_path.is_none()
+            && !segment.mic_path.contains("_mic_seg")
+            && !segment.mic_path.contains("_mic.");
+
+        // For legacy merged files, try to find the original separate mic/system files
+        let (actual_mic_path, actual_system_path) = if is_legacy_merged {
+            // Try to construct paths to original separate files
+            // From "{noteId}.wav" -> "{noteId}_mic.wav" and "{noteId}_system.wav"
+            if let Some(stem) = stored_mic_path.file_stem() {
+                let parent = stored_mic_path.parent().unwrap_or(std::path::Path::new(""));
+                let stem_str = stem.to_string_lossy();
+                let mic_file = parent.join(format!("{}_mic.wav", stem_str));
+                let system_file = parent.join(format!("{}_system.wav", stem_str));
+
+                println!("[retranscribe_note] Legacy merged file detected: {:?}", stored_mic_path);
+                println!("[retranscribe_note] Looking for separate files: mic={:?}, system={:?}", mic_file, system_file);
+
+                let mic = if mic_file.exists() { mic_file } else { stored_mic_path.clone() };
+                let system = if system_file.exists() { Some(system_file) } else { None };
+                (mic, system)
+            } else {
+                (stored_mic_path.clone(), None)
+            }
+        } else {
+            // Use paths as stored in database
+            (stored_mic_path.clone(), segment.system_path.as_ref().map(PathBuf::from))
+        };
+
         // Transcribe mic audio
-        let mic_path_buf = PathBuf::from(&segment.mic_path);
-        println!("[retranscribe_note] Transcribing mic: {:?}", mic_path_buf);
+        println!("[retranscribe_note] Transcribing mic: {:?}", actual_mic_path);
+        let mic_path_for_task = actual_mic_path.clone();
         let transcriber_clone = transcriber.clone();
 
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf)).await {
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task)).await {
             Ok(Ok(result)) => {
                 println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
                 for seg in &result.segments {
@@ -705,13 +737,14 @@ pub async fn retranscribe_note(
             }
         }
 
-        // Transcribe system audio if it exists
-        if let Some(sys_path) = &segment.system_path {
-            let sys_path_buf = PathBuf::from(sys_path);
+        // Transcribe system audio if it exists (either from DB or detected legacy file)
+        if let Some(sys_path) = actual_system_path {
+            println!("[retranscribe_note] Transcribing system: {:?}", sys_path);
             let transcriber_clone = transcriber.clone();
 
-            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path)).await {
                 Ok(Ok(result)) => {
+                    println!("[retranscribe_note] System transcription succeeded, {} segments", result.segments.len());
                     for seg in &result.segments {
                         if !should_skip_segment(&seg.text) {
                             if let Ok(_) = db.add_transcript_segment(

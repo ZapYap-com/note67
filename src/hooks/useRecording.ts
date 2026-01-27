@@ -27,6 +27,7 @@ export function useRecording(): UseRecordingReturn {
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDualRecording, setIsDualRecording] = useState(false);
+  const [useSegmentTracking, setUseSegmentTracking] = useState(false);
   const levelIntervalRef = useRef<number | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
 
@@ -42,12 +43,13 @@ export function useRecording(): UseRecordingReturn {
         : false;
 
       if (isSupported && hasPermission) {
-        // Use dual recording (mic + system audio)
-        console.log("Starting dual recording (mic + system audio)");
-        const result = await audioApi.startDualRecording(noteId);
+        // Use dual recording with segment tracking (mic + system audio)
+        console.log("Starting dual recording with segments (mic + system audio)");
+        const result = await audioApi.startDualRecordingWithSegments(noteId);
         // Use the playback path if available, otherwise mic path
         setAudioPath(result.playbackPath || result.systemPath || result.micPath);
         setIsDualRecording(true);
+        setUseSegmentTracking(true);
       } else {
         // Fall back to mic-only recording
         console.log("Starting mic-only recording");
@@ -71,10 +73,15 @@ export function useRecording(): UseRecordingReturn {
 
         if (isDualRecording && id) {
           // Stop dual recording
-          console.log("Stopping dual recording");
-          const result = await audioApi.stopDualRecording(id);
-          // Use the merged playback path, or fall back to system path, then mic path
-          path = result.playbackPath || result.systemPath || result.micPath;
+          if (useSegmentTracking) {
+            console.log("Stopping dual recording with segments");
+            const result = await audioApi.stopDualRecordingWithSegments(id);
+            path = result.playbackPath || result.systemPath || result.micPath;
+          } else {
+            console.log("Stopping dual recording");
+            const result = await audioApi.stopDualRecording(id);
+            path = result.playbackPath || result.systemPath || result.micPath;
+          }
         } else {
           // Stop mic-only recording
           console.log("Stopping mic-only recording");
@@ -86,6 +93,7 @@ export function useRecording(): UseRecordingReturn {
         setIsPaused(false);
         setRecordingPhase(RecordingPhase.Idle);
         setIsDualRecording(false);
+        setUseSegmentTracking(false);
         setAudioLevel(0);
         currentNoteIdRef.current = null;
         return path;
@@ -94,7 +102,7 @@ export function useRecording(): UseRecordingReturn {
         return null;
       }
     },
-    [isDualRecording]
+    [isDualRecording, useSegmentTracking]
   );
 
   const pauseRecording = useCallback(async () => {
