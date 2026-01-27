@@ -1348,7 +1348,11 @@ function NoteView({
     // Switch to transcript tab to show progress
     onTabChange("transcript");
     try {
-      await transcriptionApi.retranscribeNote(note.id);
+      console.log("Starting retranscribe for note:", note.id);
+      console.log("Audio segments:", audioSegments);
+      console.log("Uploads:", uploads);
+      const result = await transcriptionApi.retranscribeNote(note.id);
+      console.log("Retranscribe result:", result);
       // Refresh transcripts
       onTranscriptUpdated?.();
     } catch (error) {
@@ -1356,7 +1360,7 @@ function NoteView({
     } finally {
       setIsRetranscribing(false);
     }
-  }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange]);
+  }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange, audioSegments, uploads]);
 
   const handleRetranscribeUpload = useCallback(async (uploadId: number) => {
     if (isTranscribingUpload) return;

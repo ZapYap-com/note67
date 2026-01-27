@@ -632,6 +632,13 @@ pub async fn retranscribe_note(
         e.to_string()
     })?;
 
+    println!("[retranscribe_note] note_id: {}", note_id);
+    println!("[retranscribe_note] Found {} audio segments", segments.len());
+    for seg in &segments {
+        println!("[retranscribe_note]   Segment {}: mic_path={}", seg.id, seg.mic_path);
+    }
+    println!("[retranscribe_note] Found {} uploads", uploads.len());
+
     let total_items = segments.len() + uploads.len();
     let mut completed_items = 0;
     let mut failed_items: Vec<String> = Vec::new();
@@ -666,10 +673,12 @@ pub async fn retranscribe_note(
 
         // Transcribe mic audio
         let mic_path_buf = PathBuf::from(&segment.mic_path);
+        println!("[retranscribe_note] Transcribing mic: {:?}", mic_path_buf);
         let transcriber_clone = transcriber.clone();
 
         match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf)).await {
             Ok(Ok(result)) => {
+                println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
                 for seg in &result.segments {
                     if !should_skip_segment(&seg.text) {
                         if let Ok(_) = db.add_transcript_segment(
@@ -687,9 +696,11 @@ pub async fn retranscribe_note(
                 }
             }
             Ok(Err(e)) => {
+                println!("[retranscribe_note] Mic transcription error: {}", e);
                 failed_items.push(format!("{} (mic): {}", item_name, e));
             }
             Err(e) => {
+                println!("[retranscribe_note] Mic task error: {}", e);
                 failed_items.push(format!("{} (mic): {}", item_name, e));
             }
         }
