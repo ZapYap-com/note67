@@ -124,7 +124,7 @@ pub fn delete_uploaded_audio(upload_id: i64, db: State<Database>) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-/// Transcribe an uploaded audio file
+/// Transcribe an uploaded audio file (also used for retranscription)
 #[tauri::command]
 pub async fn transcribe_uploaded_audio(
     upload_id: i64,
@@ -140,6 +140,13 @@ pub async fn transcribe_uploaded_audio(
     if state.is_transcribing.swap(true, Ordering::SeqCst) {
         return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
     }
+
+    // Delete existing transcript segments for this upload (for retranscription)
+    db.delete_transcript_segments_by_source("upload", upload_id)
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
 
     // Update status to processing
     db.update_uploaded_audio_status(upload_id, "processing")

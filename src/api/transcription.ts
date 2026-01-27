@@ -4,6 +4,7 @@ import type {
   ModelSize,
   TranscriptSegment,
   TranscriptionResult,
+  RetranscribeResult,
 } from "../types";
 
 /** Result of dual transcription (mic + system audio) */
@@ -99,5 +100,16 @@ export const transcriptionApi = {
 
   isLiveTranscribing: (): Promise<boolean> => {
     return invoke("is_live_transcribing");
+  },
+
+  // Retranscription
+  /** Retranscribe a recorded audio segment */
+  retranscribeSegment: (segmentId: number): Promise<number> => {
+    return invoke("retranscribe_audio_segment", { segmentId });
+  },
+
+  /** Retranscribe all audio sources in a note */
+  retranscribeNote: (noteId: string): Promise<RetranscribeResult> => {
+    return invoke("retranscribe_note", { noteId });
   },
 };

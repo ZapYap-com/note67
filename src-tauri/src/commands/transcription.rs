@@ -480,6 +480,331 @@ pub fn is_live_transcribing(state: State<TranscriptionState>) -> bool {
     state.live_state.is_running.load(Ordering::SeqCst)
 }
 
+/// Result of retranscribing an entire note
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetranscribeResult {
+    pub total_items: usize,
+    pub completed_items: usize,
+    pub failed_items: Vec<String>,
+    pub total_segments: usize,
+}
+
+/// Retranscribe an audio segment (recorded segment)
+#[tauri::command]
+pub async fn retranscribe_audio_segment(
+    segment_id: i64,
+    state: State<'_, TranscriptionState>,
+    db: State<'_, Database>,
+) -> Result<usize, String> {
+    // Get the segment info
+    let segment = db
+        .get_audio_segment_by_id(segment_id)
+        .map_err(|e| e.to_string())?;
+
+    // Check if already transcribing
+    if state.is_transcribing.swap(true, Ordering::SeqCst) {
+        return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
+    }
+
+    // Delete existing transcript segments for this segment
+    db.delete_transcript_segments_by_source("segment", segment_id)
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+
+    // Get the transcriber
+    let transcriber = {
+        let guard = state.transcriber.lock().map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+        guard.clone().ok_or_else(|| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            "No model loaded. Please load a Whisper model first.".to_string()
+        })?
+    };
+
+    let mut total_segments = 0;
+
+    // Transcribe mic audio (labeled as "You")
+    let mic_path_buf = PathBuf::from(&segment.mic_path);
+    let transcriber_clone = transcriber.clone();
+    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
+        .await
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?
+        .map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+
+    // Save mic segments to database with "You" speaker label
+    for seg in &mic_result.segments {
+        if !should_skip_segment(&seg.text) {
+            db.add_transcript_segment(
+                &segment.note_id,
+                seg.start_time,
+                seg.end_time,
+                &seg.text,
+                Some("You"),
+                Some("segment"),
+                Some(segment_id),
+            )
+            .map_err(|e| e.to_string())?;
+            total_segments += 1;
+        }
+    }
+
+    // Transcribe system audio if it exists (labeled as "Others")
+    if let Some(sys_path) = &segment.system_path {
+        let sys_path_buf = PathBuf::from(sys_path);
+        let transcriber_clone = transcriber.clone();
+
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+            Ok(Ok(result)) => {
+                for seg in &result.segments {
+                    if !should_skip_segment(&seg.text) {
+                        db.add_transcript_segment(
+                            &segment.note_id,
+                            seg.start_time,
+                            seg.end_time,
+                            &seg.text,
+                            Some("Others"),
+                            Some("segment"),
+                            Some(segment_id),
+                        )
+                        .map_err(|e| e.to_string())?;
+                        total_segments += 1;
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                eprintln!("Failed to transcribe system audio: {}", e);
+            }
+            Err(e) => {
+                eprintln!("Failed to spawn system audio transcription task: {}", e);
+            }
+        }
+    }
+
+    state.is_transcribing.store(false, Ordering::SeqCst);
+
+    Ok(total_segments)
+}
+
+/// Retranscribe all audio sources in a note
+#[tauri::command]
+pub async fn retranscribe_note(
+    note_id: String,
+    app: AppHandle,
+    state: State<'_, TranscriptionState>,
+    db: State<'_, Database>,
+) -> Result<RetranscribeResult, String> {
+    // Check if already transcribing
+    if state.is_transcribing.swap(true, Ordering::SeqCst) {
+        return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
+    }
+
+    // Get the transcriber
+    let transcriber = {
+        let guard = state.transcriber.lock().map_err(|e| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            e.to_string()
+        })?;
+        guard.clone().ok_or_else(|| {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            "No model loaded. Please load a Whisper model first.".to_string()
+        })?
+    };
+
+    // Get all audio segments and uploads for this note
+    let segments = db.get_audio_segments(&note_id).map_err(|e| {
+        state.is_transcribing.store(false, Ordering::SeqCst);
+        e.to_string()
+    })?;
+
+    let uploads = db.get_uploaded_audio(&note_id).map_err(|e| {
+        state.is_transcribing.store(false, Ordering::SeqCst);
+        e.to_string()
+    })?;
+
+    let total_items = segments.len() + uploads.len();
+    let mut completed_items = 0;
+    let mut failed_items: Vec<String> = Vec::new();
+    let mut total_segments_created = 0;
+
+    // Emit initial progress
+    let _ = app.emit("retranscribe-progress", serde_json::json!({
+        "noteId": note_id,
+        "totalItems": total_items,
+        "completedItems": completed_items,
+        "currentItem": "",
+    }));
+
+    // Process audio segments
+    for segment in &segments {
+        let item_name = format!("Recording {}", segment.segment_index + 1);
+
+        // Emit progress
+        let _ = app.emit("retranscribe-progress", serde_json::json!({
+            "noteId": note_id,
+            "totalItems": total_items,
+            "completedItems": completed_items,
+            "currentItem": item_name,
+        }));
+
+        // Delete existing transcripts for this segment
+        if let Err(e) = db.delete_transcript_segments_by_source("segment", segment.id) {
+            failed_items.push(format!("{}: {}", item_name, e));
+            continue;
+        }
+
+        // Transcribe mic audio
+        let mic_path_buf = PathBuf::from(&segment.mic_path);
+        let transcriber_clone = transcriber.clone();
+
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf)).await {
+            Ok(Ok(result)) => {
+                for seg in &result.segments {
+                    if !should_skip_segment(&seg.text) {
+                        if let Ok(_) = db.add_transcript_segment(
+                            &note_id,
+                            seg.start_time,
+                            seg.end_time,
+                            &seg.text,
+                            Some("You"),
+                            Some("segment"),
+                            Some(segment.id),
+                        ) {
+                            total_segments_created += 1;
+                        }
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                failed_items.push(format!("{} (mic): {}", item_name, e));
+            }
+            Err(e) => {
+                failed_items.push(format!("{} (mic): {}", item_name, e));
+            }
+        }
+
+        // Transcribe system audio if it exists
+        if let Some(sys_path) = &segment.system_path {
+            let sys_path_buf = PathBuf::from(sys_path);
+            let transcriber_clone = transcriber.clone();
+
+            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+                Ok(Ok(result)) => {
+                    for seg in &result.segments {
+                        if !should_skip_segment(&seg.text) {
+                            if let Ok(_) = db.add_transcript_segment(
+                                &note_id,
+                                seg.start_time,
+                                seg.end_time,
+                                &seg.text,
+                                Some("Others"),
+                                Some("segment"),
+                                Some(segment.id),
+                            ) {
+                                total_segments_created += 1;
+                            }
+                        }
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("Failed to transcribe system audio for segment {}: {}", segment.id, e);
+                }
+                Err(e) => {
+                    eprintln!("Failed to spawn system audio transcription for segment {}: {}", segment.id, e);
+                }
+            }
+        }
+
+        completed_items += 1;
+    }
+
+    // Process uploaded audio files
+    for upload in &uploads {
+        let item_name = upload.original_filename.clone();
+
+        // Emit progress
+        let _ = app.emit("retranscribe-progress", serde_json::json!({
+            "noteId": note_id,
+            "totalItems": total_items,
+            "completedItems": completed_items,
+            "currentItem": item_name,
+        }));
+
+        // Update status to processing
+        let _ = db.update_uploaded_audio_status(upload.id, "processing");
+
+        // Delete existing transcripts for this upload
+        if let Err(e) = db.delete_transcript_segments_by_source("upload", upload.id) {
+            let _ = db.update_uploaded_audio_status(upload.id, "failed");
+            failed_items.push(format!("{}: {}", item_name, e));
+            continue;
+        }
+
+        // Transcribe
+        let file_path = PathBuf::from(&upload.file_path);
+        let transcriber_clone = transcriber.clone();
+
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&file_path)).await {
+            Ok(Ok(result)) => {
+                for seg in &result.segments {
+                    if !should_skip_segment(&seg.text) {
+                        if let Ok(_) = db.add_transcript_segment(
+                            &note_id,
+                            seg.start_time,
+                            seg.end_time,
+                            &seg.text,
+                            Some(&upload.speaker_label),
+                            Some("upload"),
+                            Some(upload.id),
+                        ) {
+                            total_segments_created += 1;
+                        }
+                    }
+                }
+                let _ = db.update_uploaded_audio_status(upload.id, "completed");
+            }
+            Ok(Err(e)) => {
+                let _ = db.update_uploaded_audio_status(upload.id, "failed");
+                failed_items.push(format!("{}: {}", item_name, e));
+            }
+            Err(e) => {
+                let _ = db.update_uploaded_audio_status(upload.id, "failed");
+                failed_items.push(format!("{}: {}", item_name, e));
+            }
+        }
+
+        completed_items += 1;
+    }
+
+    state.is_transcribing.store(false, Ordering::SeqCst);
+
+    // Emit final progress
+    let _ = app.emit("retranscribe-progress", serde_json::json!({
+        "noteId": note_id,
+        "totalItems": total_items,
+        "completedItems": completed_items,
+        "currentItem": "",
+        "isComplete": true,
+    }));
+
+    Ok(RetranscribeResult {
+        total_items,
+        completed_items,
+        failed_items,
+        total_segments: total_segments_created,
+    })
+}
+
 fn parse_model_size(size: &str) -> Result<ModelSize, String> {
     match size.to_lowercase().as_str() {
         "tiny" => Ok(ModelSize::Tiny),

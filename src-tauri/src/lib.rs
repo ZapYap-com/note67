@@ -398,6 +398,8 @@ pub fn run() {
             commands::start_live_transcription,
             commands::stop_live_transcription,
             commands::is_live_transcribing,
+            commands::retranscribe_audio_segment,
+            commands::retranscribe_note,
             // AI commands
             commands::get_ollama_status,
             commands::list_ollama_models,

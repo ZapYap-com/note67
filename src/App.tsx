@@ -11,7 +11,7 @@ import {
   UpdateNotification,
   MeetingDetectedPopup,
 } from "./components";
-import { exportApi, aiApi, notesApi } from "./api";
+import { exportApi, aiApi, notesApi, transcriptionApi } from "./api";
 import {
   useNotes,
   useModels,
@@ -792,6 +792,7 @@ function App() {
               isLiveTranscribing && recordingNoteId === selectedNote.id
             }
             summariesRefreshKey={summariesRefreshKey}
+            loadedModel={loadedModel}
             onTabChange={setActiveTab}
             onEditTitle={() => setEditingTitle(true)}
             onUpdateTitle={handleUpdateTitle}
@@ -1201,6 +1202,7 @@ interface NoteViewProps {
   isRegenerating: boolean;
   isTranscribing: boolean;
   summariesRefreshKey: number;
+  loadedModel: string | null;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
@@ -1229,6 +1231,7 @@ function NoteView({
   isRegenerating,
   isTranscribing,
   summariesRefreshKey,
+  loadedModel,
   onTabChange,
   onEditTitle,
   onUpdateTitle,
@@ -1335,6 +1338,40 @@ function NoteView({
       .catch(console.error);
     loadUploads();
   }, [note.id, loadUploads]);
+
+  // Retranscribe state and handlers
+  const [isRetranscribing, setIsRetranscribing] = useState(false);
+
+  const handleRetranscribeAll = useCallback(async () => {
+    if (isRetranscribing) return;
+    setIsRetranscribing(true);
+    try {
+      await transcriptionApi.retranscribeNote(note.id);
+      // Refresh transcripts
+      onTranscriptUpdated?.();
+    } catch (error) {
+      console.error("Retranscribe failed:", error);
+    } finally {
+      setIsRetranscribing(false);
+    }
+  }, [note.id, isRetranscribing, onTranscriptUpdated]);
+
+  const handleRetranscribeUpload = useCallback(async (uploadId: number) => {
+    if (isTranscribingUpload) return;
+    // Use the upload API which calls transcribe_uploaded_audio (now handles deletion)
+    await transcribeUpload(uploadId);
+    onTranscriptUpdated?.();
+  }, [isTranscribingUpload, transcribeUpload, onTranscriptUpdated]);
+
+  const handleRetranscribeSegment = useCallback(async (segmentId: number) => {
+    if (isTranscribing) return;
+    try {
+      await transcriptionApi.retranscribeSegment(segmentId);
+      onTranscriptUpdated?.();
+    } catch (error) {
+      console.error("Retranscribe segment failed:", error);
+    }
+  }, [isTranscribing, onTranscriptUpdated]);
 
   // Set titleValue to current note.title when entering edit mode
   const handleEditTitle = () => {
@@ -1589,6 +1626,31 @@ function NoteView({
                     </svg>
                     Export Note
                   </button>
+                  <button
+                    onClick={() => {
+                      handleRetranscribeAll();
+                      setShowMoreMenu(false);
+                    }}
+                    disabled={isRetranscribing || !loadedModel || (audioSegments.length === 0 && uploads.length === 0)}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2 disabled:opacity-50"
+                    style={{ color: "var(--color-text)" }}
+                    title={!loadedModel ? "Load a Whisper model first" : undefined}
+                  >
+                    {isRetranscribing ? (
+                      <div
+                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                        style={{
+                          borderColor: "var(--color-text-secondary)",
+                          borderTopColor: "transparent",
+                        }}
+                      />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
+                    Retranscribe All
+                  </button>
                   <div className="my-1 border-t" style={{ borderColor: "var(--color-border)" }} />
                   <button
                     onClick={() => {
@@ -1777,6 +1839,9 @@ function NoteView({
           onDeleteUpload={deleteUpload}
           onReorder={handleAudioReorder}
           onPlayAudio={handlePlayAudio}
+          onRetranscribeUpload={handleRetranscribeUpload}
+          onRetranscribeSegment={handleRetranscribeSegment}
+          hasModelLoaded={!!loadedModel}
         />
       )}
     </div>

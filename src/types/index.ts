@@ -14,6 +14,7 @@ export type {
   AudioSegment,
   UploadedAudio,
   AudioItem,
+  RetranscribeResult,
 } from "./note";
 
 export { RecordingPhase } from "./note";

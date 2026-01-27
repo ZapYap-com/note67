@@ -413,6 +413,31 @@ impl Database {
         Ok(segment)
     }
 
+    /// Get an audio segment by ID
+    pub fn get_audio_segment_by_id(&self, id: i64) -> anyhow::Result<AudioSegment> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        conn.query_row(
+            "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
+             FROM audio_segments WHERE id = ?1",
+            [id],
+            |row| {
+                Ok(AudioSegment {
+                    id: row.get(0)?,
+                    note_id: row.get(1)?,
+                    segment_index: row.get(2)?,
+                    mic_path: row.get(3)?,
+                    system_path: row.get(4)?,
+                    start_offset_ms: row.get(5)?,
+                    duration_ms: row.get(6)?,
+                    display_order: row.get(7)?,
+                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("Audio segment not found: {}", e))
+    }
+
     // ========== Uploaded Audio ==========
 
     /// Add an uploaded audio file record

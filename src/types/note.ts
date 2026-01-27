@@ -123,3 +123,11 @@ export interface UploadedAudio {
 export type AudioItem =
   | { type: "segment"; data: AudioSegment }
   | { type: "upload"; data: UploadedAudio };
+
+// Result of retranscribing an entire note
+export interface RetranscribeResult {
+  totalItems: number;
+  completedItems: number;
+  failedItems: string[];
+  totalSegments: number;
+}

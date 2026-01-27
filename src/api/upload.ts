@@ -68,6 +68,15 @@ export const uploadApi = {
   },
 
   /**
+   * Retranscribe an uploaded audio file (deletes existing transcripts first).
+   * Returns the number of transcript segments created.
+   */
+  retranscribe: (uploadId: number): Promise<number> => {
+    // The backend command now handles deletion automatically
+    return invoke<number>("transcribe_uploaded_audio", { uploadId });
+  },
+
+  /**
    * Update the speaker label for an uploaded audio file.
    */
   updateSpeaker: (uploadId: number, speakerLabel: string): Promise<void> => {
