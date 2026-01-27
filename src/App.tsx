@@ -1345,6 +1345,8 @@ function NoteView({
   const handleRetranscribeAll = useCallback(async () => {
     if (isRetranscribing) return;
     setIsRetranscribing(true);
+    // Switch to transcript tab to show progress
+    onTabChange("transcript");
     try {
       await transcriptionApi.retranscribeNote(note.id);
       // Refresh transcripts
@@ -1354,7 +1356,7 @@ function NoteView({
     } finally {
       setIsRetranscribing(false);
     }
-  }, [note.id, isRetranscribing, onTranscriptUpdated]);
+  }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange]);
 
   const handleRetranscribeUpload = useCallback(async (uploadId: number) => {
     if (isTranscribingUpload) return;
