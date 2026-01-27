@@ -26,8 +26,9 @@ export function UpdatesTab() {
       version: "0.1.16",
       date: "January 2026",
       changes: [
+        "Auto-retranscribe after recording stops for better transcript quality",
         "Retranscribe All button to re-transcribe audio with different Whisper model",
-        "Auto-switch to transcript tab when retranscribing",
+        "Echo filtering to remove duplicate mic audio from speaker output",
         "Improved transcript ordering by audio source sequence",
       ],
     },

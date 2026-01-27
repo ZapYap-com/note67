@@ -416,10 +416,13 @@ function App() {
       // Stop live transcription and save segments to database
       await stopLiveTranscription(noteId);
       await endNote(noteId, audioPath ?? undefined);
-      // Reload transcript from database to ensure we have all segments
+
+      // Show live transcript immediately while retranscription runs
+      let transcriptToUse = segmentsToSave;
       const savedSegments = await loadTranscript(noteId);
-      const transcriptToUse =
-        savedSegments.length > 0 ? savedSegments : segmentsToSave;
+      if (savedSegments.length > 0) {
+        transcriptToUse = savedSegments;
+      }
       if (transcriptToUse.length > 0) {
         setNoteTranscripts((prev) => ({
           ...prev,
@@ -430,6 +433,27 @@ function App() {
 
       // Always refresh notes to update ended_at
       await refreshNotes();
+
+      // Auto-retranscribe for better quality (runs in background)
+      if (loadedModel) {
+        console.log("[handleStopRecording] Starting auto-retranscribe for better quality");
+        try {
+          await transcriptionApi.retranscribeNote(noteId);
+          // Reload transcript with improved results
+          const improvedSegments = await loadTranscript(noteId);
+          if (improvedSegments.length > 0) {
+            transcriptToUse = improvedSegments;
+            setNoteTranscripts((prev) => ({
+              ...prev,
+              [noteId]: improvedSegments,
+            }));
+          }
+          console.log("[handleStopRecording] Auto-retranscribe complete, segments:", improvedSegments.length);
+        } catch (error) {
+          console.error("Auto-retranscribe failed:", error);
+          // Continue with live transcript if retranscribe fails
+        }
+      }
 
       // Auto-generate summary and title if we have transcript
       if (transcriptToUse.length > 0) {
