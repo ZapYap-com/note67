@@ -251,7 +251,7 @@ export function TranscriptSearch({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full">
       {/* Search Input */}
       <div
         className="flex items-center gap-3 px-4 py-3 rounded-xl"
@@ -294,7 +294,7 @@ export function TranscriptSearch({
 
       {/* Speaker Filter (only show if we have speaker data) */}
       {hasSpeakerData && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mt-4">
           <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
             Speaker:
           </span>
@@ -340,14 +340,14 @@ export function TranscriptSearch({
 
       {/* Results count */}
       {(searchQuery || speakerFilter !== "all") && (
-        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+        <p className="text-sm mt-4" style={{ color: "var(--color-text-secondary)" }}>
           {filteredSegments.length} of {segments.length} segments
           {speakerFilter !== "all" && ` (${speakerFilter === "you" ? "You" : "Others"})`}
         </p>
       )}
 
       {/* Segments grouped by audio source */}
-      <div ref={scrollContainerRef} className="space-y-4 max-h-[60vh] overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 space-y-4 overflow-y-auto mt-4">
         {sourceSections.map((section) => {
           const groupedSegments = groupConsecutiveSegments(section.transcripts);
           return (
