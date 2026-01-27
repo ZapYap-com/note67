@@ -21,6 +21,7 @@ fn should_skip_segment(text: &str) -> bool {
         || text_lower.contains("[music]")
         || text_lower.contains("[applause]")
         || text_lower.contains("[laughter]")
+        || text_lower.contains("[audio out]")
         || text.trim().is_empty()
 }
 
