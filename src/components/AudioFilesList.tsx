@@ -22,9 +22,6 @@ interface AudioFilesListProps {
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
   compact?: boolean; // Hide header and top border when embedded in player
-  onRetranscribeUpload?: (uploadId: number) => void;
-  onRetranscribeSegment?: (segmentId: number) => void;
-  hasModelLoaded?: boolean; // Whether a Whisper model is loaded (for retranscribe buttons)
 }
 
 function formatDuration(ms: number): string {
@@ -230,9 +227,6 @@ export function AudioFilesList({
   onReorder,
   onPlayAudio,
   compact = false,
-  onRetranscribeUpload,
-  onRetranscribeSegment,
-  hasModelLoaded = false,
 }: AudioFilesListProps) {
   // Check if we have a main recording (legacy format - no segments)
   const hasMainRecording = mainAudioPath && segments.length === 0;
@@ -441,21 +435,6 @@ export function AudioFilesList({
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  {hasModelLoaded && onRetranscribeSegment && (
-                    <button
-                      onClick={() => onRetranscribeSegment(segment.id)}
-                      disabled={isTranscribing}
-                      className="px-2 py-1 text-xs font-medium rounded transition-colors disabled:opacity-50"
-                      style={{
-                        backgroundColor: "var(--color-sidebar)",
-                        color: "var(--color-text-secondary)",
-                        border: "1px solid var(--color-border)",
-                      }}
-                      title="Retranscribe with current model"
-                    >
-                      Retranscribe
-                    </button>
-                  )}
                   <DownloadButton onDownload={() => handleDownload(segment.mic_path, `recording-${segment.segment_index + 1}`)} />
                 </div>
               </li>
@@ -540,21 +519,6 @@ export function AudioFilesList({
                       borderTopColor: "transparent",
                     }}
                   />
-                )}
-                {upload.transcription_status === "completed" && hasModelLoaded && onRetranscribeUpload && (
-                  <button
-                    onClick={() => onRetranscribeUpload(upload.id)}
-                    disabled={isTranscribing}
-                    className="px-2 py-1 text-xs font-medium rounded transition-colors disabled:opacity-50"
-                    style={{
-                      backgroundColor: "var(--color-sidebar)",
-                      color: "var(--color-text-secondary)",
-                      border: "1px solid var(--color-border)",
-                    }}
-                    title="Retranscribe with current model"
-                  >
-                    Retranscribe
-                  </button>
                 )}
                 <DownloadButton
                   onDownload={() => {

@@ -18,10 +18,6 @@ interface AudioPlayerProps {
   onDeleteUpload?: (uploadId: number) => void;
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
-  // Retranscribe props
-  onRetranscribeUpload?: (uploadId: number) => void;
-  onRetranscribeSegment?: (segmentId: number) => void;
-  hasModelLoaded?: boolean;
 }
 
 export interface AudioPlayerHandle {
@@ -45,10 +41,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
     onDeleteUpload,
     onReorder,
     onPlayAudio,
-    // Retranscribe props
-    onRetranscribeUpload,
-    onRetranscribeSegment,
-    hasModelLoaded = false,
   },
   ref
 ) {
@@ -289,9 +281,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             onDeleteUpload={onDeleteUpload || (() => {})}
             onReorder={onReorder}
             onPlayAudio={onPlayAudio}
-            onRetranscribeUpload={onRetranscribeUpload}
-            onRetranscribeSegment={onRetranscribeSegment}
-            hasModelLoaded={hasModelLoaded}
             compact
           />
         </div>

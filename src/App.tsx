@@ -1362,23 +1362,6 @@ function NoteView({
     }
   }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange, audioSegments, uploads]);
 
-  const handleRetranscribeUpload = useCallback(async (uploadId: number) => {
-    if (isTranscribingUpload) return;
-    // Use the upload API which calls transcribe_uploaded_audio (now handles deletion)
-    await transcribeUpload(uploadId);
-    onTranscriptUpdated?.();
-  }, [isTranscribingUpload, transcribeUpload, onTranscriptUpdated]);
-
-  const handleRetranscribeSegment = useCallback(async (segmentId: number) => {
-    if (isTranscribing) return;
-    try {
-      await transcriptionApi.retranscribeSegment(segmentId);
-      onTranscriptUpdated?.();
-    } catch (error) {
-      console.error("Retranscribe segment failed:", error);
-    }
-  }, [isTranscribing, onTranscriptUpdated]);
-
   // Set titleValue to current note.title when entering edit mode
   const handleEditTitle = () => {
     setTitleValue(note.title);
@@ -1849,9 +1832,6 @@ function NoteView({
           onDeleteUpload={deleteUpload}
           onReorder={handleAudioReorder}
           onPlayAudio={handlePlayAudio}
-          onRetranscribeUpload={handleRetranscribeUpload}
-          onRetranscribeSegment={handleRetranscribeSegment}
-          hasModelLoaded={!!loadedModel}
         />
       )}
     </div>
