@@ -29,7 +29,10 @@ export function UpdatesTab() {
         "Auto-retranscribe after recording stops for better transcript quality",
         "Retranscribe All button to re-transcribe audio with different Whisper model",
         "Echo filtering to remove duplicate mic audio from speaker output",
-        "Improved transcript ordering by audio source sequence",
+        "Fixed speaker labels for legacy recordings during retranscription",
+        "Filtered out Whisper artifacts ([AUDIO OUT]) from transcripts",
+        "Fixed transcript layout not filling available space",
+        "Fixed retranscribe button not appearing after first recording",
       ],
     },
     {

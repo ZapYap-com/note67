@@ -17,11 +17,13 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Speaker distinction (You vs Others) on macOS
 - [x] Echo deduplication for speaker usage
 - [x] Live transcription during recording
+- [x] Auto-retranscribe after recording for improved accuracy
 - [x] Pause/Resume recording
 - [x] Continue recording on existing notes (Listen)
 - [x] Upload external audio files for transcription
 - [x] Download and delete audio files
 - [x] Reorder audio files with up/down controls
+- [x] Retranscribe audio with different Whisper model
 - [x] Voice Activity Detection (VAD) for mic input
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
