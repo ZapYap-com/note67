@@ -438,6 +438,10 @@ pub fn run() {
             meeting_detection::set_meeting_detection_enabled,
             meeting_detection::is_meeting_detection_enabled,
             meeting_detection::clear_detected_meetings,
+            // Image commands
+            commands::save_image,
+            commands::get_attachments_dir,
+            commands::delete_note_attachments,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -3,12 +3,14 @@ import { Crepe } from "@milkdown/crepe";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
 import "../styles/milkdown-theme.css";
+import { uploadImage } from "../utils/imageUploader";
 
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
   placeholder?: string;
+  noteId: string;
 }
 
 export function MarkdownEditor({
@@ -16,6 +18,7 @@ export function MarkdownEditor({
   onChange,
   onBlur,
   placeholder = "",
+  noteId,
 }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
@@ -25,6 +28,7 @@ export function MarkdownEditor({
   // Use refs for callbacks to avoid recreating editor
   const onChangeRef = useRef(onChange);
   const onBlurRef = useRef(onBlur);
+  const noteIdRef = useRef(noteId);
 
   // Keep callback refs updated
   useEffect(() => {
@@ -34,6 +38,10 @@ export function MarkdownEditor({
   useEffect(() => {
     onBlurRef.current = onBlur;
   }, [onBlur]);
+
+  useEffect(() => {
+    noteIdRef.current = noteId;
+  }, [noteId]);
 
   // Save on unmount (when switching tabs/notes)
   useEffect(() => {
@@ -63,6 +71,12 @@ export function MarkdownEditor({
     () => ({
       [Crepe.Feature.Placeholder]: {
         text: placeholder,
+      },
+      [Crepe.Feature.ImageBlock]: {
+        onUpload: async (file: File) => {
+          const url = await uploadImage(noteIdRef.current, file);
+          return url;
+        },
       },
     }),
     [placeholder]

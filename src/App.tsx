@@ -1810,6 +1810,7 @@ function NoteView({
               onChange={setDescValue}
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
+              noteId={note.id}
             />
           </div>
         )}
