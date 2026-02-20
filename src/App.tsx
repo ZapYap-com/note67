@@ -10,6 +10,7 @@ import {
   AudioPlayer,
   UpdateNotification,
   MeetingDetectedPopup,
+  MarkdownEditor,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi } from "./api";
 import {
@@ -1789,13 +1790,11 @@ function NoteView({
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {activeTab === "notes" && (
           <div className="h-full flex flex-col">
-            <textarea
+            <MarkdownEditor
               value={descValue}
-              onChange={(e) => setDescValue(e.target.value)}
+              onChange={setDescValue}
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
-              className="flex-1 w-full text-base leading-relaxed resize-none"
-              style={{ color: "var(--color-text)" }}
             />
           </div>
         )}
