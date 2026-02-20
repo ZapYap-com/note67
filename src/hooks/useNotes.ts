@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { notesApi } from "../api";
 import type { Note, UpdateNote } from "../types";
+import { deleteNoteAttachments } from "../utils/imageUploader";
 
 interface UseNotesReturn {
   notes: Note[];
@@ -90,6 +91,10 @@ export function useNotes(): UseNotesReturn {
 
   const deleteNote = useCallback(async (id: string): Promise<void> => {
     await notesApi.delete(id);
+    // Also delete any attachments for this note
+    await deleteNoteAttachments(id).catch(() => {
+      // Ignore errors - attachments folder may not exist
+    });
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
