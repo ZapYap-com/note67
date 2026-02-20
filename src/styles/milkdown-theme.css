@@ -40,8 +40,10 @@
 .crepe .milkdown {
   background: transparent;
   padding: 0;
+  padding-left: 40px;
   min-height: 100%;
   color: var(--color-text);
+  position: relative;
 }
 
 .crepe .milkdown .editor {
@@ -259,7 +261,36 @@
 }
 
 /* Block handle styling */
+.crepe .milkdown .milkdown-block-handle {
+  left: -15px !important;
+}
+
+.crepe .milkdown .milkdown-block-handle[data-show="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.crepe .milkdown .milkdown-block-handle[data-show="true"] {
+  opacity: 1;
+}
+
+.crepe .milkdown .milkdown-block-handle {
+  align-items: center !important;
+  gap: 0 !important;
+}
+
+.crepe .milkdown .milkdown-block-handle .operation-item {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 3px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
 .crepe .milkdown .milkdown-block-handle .operation-item svg {
+  width: 18px !important;
+  height: 18px !important;
   fill: var(--color-text-secondary) !important;
 }
 

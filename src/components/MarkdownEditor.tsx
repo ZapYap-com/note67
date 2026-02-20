@@ -167,8 +167,8 @@ export function MarkdownEditor({
   return (
     <div
       ref={containerRef}
-      className="crepe flex-1 w-full text-base leading-relaxed"
-      style={{ color: "var(--color-text)" }}
+      className="crepe flex-1 w-full text-base leading-relaxed overflow-visible"
+      style={{ color: "var(--color-text)", marginLeft: "-40px", paddingLeft: "40px" }}
     />
   );
 }
