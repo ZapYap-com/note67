@@ -110,6 +110,37 @@ export function MarkdownEditor({
       const editorElement = containerRef.current?.querySelector(".ProseMirror");
       if (editorElement) {
         editorElement.addEventListener("blur", () => onBlurRef.current?.());
+
+        // Add paste handler for images (capture phase to run before other handlers)
+        editorElement.addEventListener("paste", async (e: Event) => {
+          const event = e as ClipboardEvent;
+          const items = event.clipboardData?.items;
+          if (!items) return;
+
+          for (const item of items) {
+            if (item.type.startsWith("image/")) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              const file = item.getAsFile();
+              if (file) {
+                try {
+                  const url = await uploadImage(noteIdRef.current, file);
+                  // Get current markdown and append image at the end
+                  const currentMarkdown = crepeRef.current?.getMarkdown() || "";
+                  const newMarkdown = currentMarkdown + `\n\n![image](${url})\n`;
+                  // Update lastExternalValue so the effect will recreate the editor
+                  lastExternalValue.current = currentMarkdown;
+                  // Trigger onChange which will cause re-render and editor recreation
+                  onChangeRef.current(newMarkdown);
+                } catch (err) {
+                  console.error("Failed to upload pasted image:", err);
+                }
+              }
+              break;
+            }
+          }
+        }, true); // Use capture phase
       }
     });
 
@@ -167,6 +198,34 @@ export function MarkdownEditor({
             containerRef.current?.querySelector(".ProseMirror");
           if (editorElement) {
             editorElement.addEventListener("blur", () => onBlurRef.current?.());
+
+            // Add paste handler for images (capture phase to run before other handlers)
+            editorElement.addEventListener("paste", async (e: Event) => {
+              const event = e as ClipboardEvent;
+              const items = event.clipboardData?.items;
+              if (!items) return;
+
+              for (const item of items) {
+                if (item.type.startsWith("image/")) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                  const file = item.getAsFile();
+                  if (file) {
+                    try {
+                      const url = await uploadImage(noteIdRef.current, file);
+                      const currentMarkdown = crepeRef.current?.getMarkdown() || "";
+                      const newMarkdown = currentMarkdown + `\n\n![image](${url})\n`;
+                      lastExternalValue.current = currentMarkdown;
+                      onChangeRef.current(newMarkdown);
+                    } catch (err) {
+                      console.error("Failed to upload pasted image:", err);
+                    }
+                  }
+                  break;
+                }
+              }
+            }, true); // Use capture phase
           }
         });
       });
