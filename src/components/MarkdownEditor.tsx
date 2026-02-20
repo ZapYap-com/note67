@@ -64,11 +64,6 @@ export function MarkdownEditor({
       [Crepe.Feature.Placeholder]: {
         text: placeholder,
       },
-      [Crepe.Feature.BlockEdit]: {
-        blockHandle: {
-          shouldShow: () => true,
-        },
-      },
     }),
     [placeholder]
   );
@@ -167,8 +162,8 @@ export function MarkdownEditor({
   return (
     <div
       ref={containerRef}
-      className="crepe flex-1 w-full text-base leading-relaxed overflow-visible"
-      style={{ color: "var(--color-text)", marginLeft: "-40px", paddingLeft: "40px" }}
+      className="crepe flex-1 w-full text-base leading-relaxed"
+      style={{ color: "var(--color-text)" }}
     />
   );
 }
