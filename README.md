@@ -8,6 +8,14 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
+## What's New (v0.1.17)
+
+- Rich markdown editor with live preview (Notion-style)
+- Local image storage — paste images directly into notes
+- Images auto-cleanup when note is deleted
+- Slash commands (`/`) for quick formatting
+- LaTeX/math support in notes
+
 ## Features
 
 - [x] Meeting management (create, end, delete)
@@ -34,6 +42,10 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Custom context menus
 - [x] System tray support
 - [x] Cross-platform system audio (Windows via WASAPI)
+- [x] Rich markdown editor with live preview (Notion-style)
+- [x] Local image storage with paste support
+- [x] Slash commands for quick formatting
+- [x] LaTeX/math support in notes
 - [ ] Linux system audio support
 
 ## Screenshots
