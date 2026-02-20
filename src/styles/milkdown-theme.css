@@ -185,8 +185,10 @@
 
 .crepe .milkdown .ProseMirror hr {
   border: none;
-  height: 1px;
-  background: var(--color-text-tertiary);
+  height: 1px !important;
+  padding: 0 !important;
+  background: var(--color-text-tertiary) !important;
+  background-clip: border-box !important;
   margin: 1.5em 0;
 }
 
