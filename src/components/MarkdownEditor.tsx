@@ -64,6 +64,11 @@ export function MarkdownEditor({
       [Crepe.Feature.Placeholder]: {
         text: placeholder,
       },
+      [Crepe.Feature.BlockEdit]: {
+        blockHandle: {
+          shouldShow: () => true,
+        },
+      },
     }),
     [placeholder]
   );

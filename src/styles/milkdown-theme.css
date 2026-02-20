@@ -259,16 +259,6 @@
 }
 
 /* Block handle styling */
-.crepe .milkdown .milkdown-block-handle {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.crepe .milkdown .ProseMirror:hover .milkdown-block-handle,
-.crepe .milkdown .milkdown-block-handle:hover {
-  opacity: 1;
-}
-
 .crepe .milkdown .milkdown-block-handle .operation-item svg {
   fill: var(--color-text-secondary) !important;
 }
