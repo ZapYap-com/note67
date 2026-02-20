@@ -23,6 +23,17 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.17",
+      date: "February 2026",
+      changes: [
+        "Rich markdown editor with live preview (Notion-style)",
+        "Local image storage - paste images directly into notes",
+        "Images auto-cleanup when note is deleted",
+        "Slash commands (/) for quick formatting",
+        "LaTeX/math support in notes",
+      ],
+    },
+    {
       version: "0.1.16",
       date: "January 2026",
       changes: [
