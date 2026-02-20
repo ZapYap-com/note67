@@ -118,6 +118,20 @@
   margin: 0.25em 0;
 }
 
+/* List item markers - Milkdown uses .label-wrapper */
+.crepe .milkdown .milkdown-list-item-block li .label-wrapper {
+  color: var(--color-accent) !important;
+}
+
+.crepe .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--color-accent) !important;
+}
+
+.crepe .milkdown .milkdown-list-item-block li .label-wrapper .label {
+  color: var(--color-accent) !important;
+  font-weight: 600;
+}
+
 .crepe .milkdown .ProseMirror li[data-checked] {
   list-style: none;
   margin-left: -1.5em;
@@ -171,8 +185,14 @@
 
 .crepe .milkdown .ProseMirror hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  height: 2px;
+  background: var(--color-border);
   margin: 1.5em 0;
+  border-radius: 1px;
+}
+
+:root.dark .crepe .milkdown .ProseMirror hr {
+  background: var(--color-text-tertiary);
 }
 
 .crepe .milkdown .ProseMirror table {
