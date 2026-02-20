@@ -51,8 +51,10 @@ export function MarkdownEditor({
       [Crepe.Feature.BlockEdit]: true,
       [Crepe.Feature.Table]: true,
       [Crepe.Feature.Toolbar]: false,
-      [Crepe.Feature.ImageBlock]: false,
+      [Crepe.Feature.ImageBlock]: true,
       [Crepe.Feature.Placeholder]: true,
+      [Crepe.Feature.Cursor]: true,
+      [Crepe.Feature.Latex]: true,
     }),
     []
   );
