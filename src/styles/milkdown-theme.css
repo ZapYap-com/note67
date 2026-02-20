@@ -57,6 +57,23 @@
   caret-color: var(--color-text);
 }
 
+/* Selection highlighting */
+.crepe .milkdown .ProseMirror ::selection {
+  background: var(--color-accent-light);
+}
+
+.crepe .milkdown .ProseMirror .ProseMirror-selectednode {
+  background: var(--color-accent-light);
+}
+
+:root.dark .crepe .milkdown .ProseMirror ::selection {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+:root.dark .crepe .milkdown .ProseMirror .ProseMirror-selectednode {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .crepe .milkdown .ProseMirror > * + * {
   margin-top: 0.75em;
 }
