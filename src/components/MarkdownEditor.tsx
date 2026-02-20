@@ -35,6 +35,13 @@ export function MarkdownEditor({
     onBlurRef.current = onBlur;
   }, [onBlur]);
 
+  // Save on unmount (when switching tabs/notes)
+  useEffect(() => {
+    return () => {
+      onBlurRef.current?.();
+    };
+  }, []);
+
   // Stable feature configuration
   const features = useMemo(
     () => ({

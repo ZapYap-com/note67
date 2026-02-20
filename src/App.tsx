@@ -1304,6 +1304,21 @@ function NoteView({
     setShouldAutoPlay(false);
   }, [note.id, note.audio_path]);
 
+  // Debounced auto-save for description
+  const descValueRef = useRef(descValue);
+  descValueRef.current = descValue;
+
+  useEffect(() => {
+    // Skip initial render and when description matches note
+    if (descValue === (note.description || "")) return;
+
+    const timeoutId = setTimeout(() => {
+      onUpdateDescription(descValueRef.current);
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [descValue, note.description, onUpdateDescription]);
+
   // Handle play request from audio files list
   const handlePlayAudio = useCallback(
     (path: string) => {
