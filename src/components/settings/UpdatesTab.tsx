@@ -23,6 +23,17 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.18",
+      date: "February 2026",
+      changes: [
+        "AI writing assistant sidebar - improve, summarize, expand, or rewrite notes with AI",
+        "Quick actions: Summarize, Action Items, Improve, Expand, Fix Grammar, Bullets",
+        "Chat interface for custom AI requests",
+        "Insert or replace note content with AI-generated text",
+        "Keyboard shortcut Cmd+J to toggle AI sidebar",
+      ],
+    },
+    {
       version: "0.1.17",
       date: "February 2026",
       changes: [
