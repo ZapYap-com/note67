@@ -224,12 +224,14 @@ impl OllamaClient {
                 Ok(bytes) => {
                     // Parse each line (newline-delimited JSON)
                     let text = String::from_utf8_lossy(&bytes);
+                    eprintln!("[ollama] Raw chunk bytes: {} bytes", bytes.len());
                     for line in text.lines() {
                         if line.is_empty() {
                             continue;
                         }
                         if let Ok(gen_response) = serde_json::from_str::<GenerateResponse>(line) {
                             if !gen_response.response.is_empty() {
+                                eprintln!("[ollama] Parsed token: {:?}", &gen_response.response);
                                 full_response.push_str(&gen_response.response);
                                 // Send chunk to channel
                                 let _ = tx.send(gen_response.response).await;

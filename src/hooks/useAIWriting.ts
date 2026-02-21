@@ -15,26 +15,42 @@ export function useAIWriting() {
 
   // Set up event listener for streaming
   useEffect(() => {
+    let isMounted = true;
+    console.log("[useAIWriting] Setting up listener");
+
     const setupListener = async () => {
+      // Clean up any existing listener first
+      if (unlistenRef.current) {
+        console.log("[useAIWriting] Cleaning up existing listener");
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+
       unlistenRef.current = await listen<AIWriteStreamEvent>(
         "ai-write-stream",
         (event) => {
+          if (!isMounted) return;
+
           const { chunk, is_done } = event.payload;
+          console.log("[useAIWriting] Received chunk:", chunk.substring(0, 20), "done:", is_done);
 
           if (is_done) {
-            // Generation complete - streamingContent already has the full text
             setIsGenerating(false);
           } else {
             setStreamingContent((prev) => prev + chunk);
           }
         }
       );
+      console.log("[useAIWriting] Listener registered");
     };
 
     setupListener().catch(console.error);
 
     return () => {
+      console.log("[useAIWriting] Cleanup");
+      isMounted = false;
       unlistenRef.current?.();
+      unlistenRef.current = null;
     };
   }, []);
 
