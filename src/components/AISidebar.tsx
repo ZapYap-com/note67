@@ -1,12 +1,29 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+}
+
+// Clean up malformed markdown from AI output
+function cleanMarkdown(text: string): string {
+  let cleaned = text;
+  // Remove orphan asterisks at start of lines (****text -> text)
+  cleaned = cleaned.replace(/^\*{3,}/gm, '');
+  // Fix "** text" (space after **) to "**text" or just remove
+  cleaned = cleaned.replace(/\*\*\s+(\S)/g, '**$1');
+  // Remove trailing orphan asterisks
+  cleaned = cleaned.replace(/\*{2,}$/gm, '');
+  // Fix double colons
+  cleaned = cleaned.replace(/::/g, ':');
+  // Remove duplicate words (simple heuristic)
+  cleaned = cleaned.replace(/\b(\w+)\s+\1\b/gi, '$1');
+  return cleaned;
 }
 
 interface AISidebarProps {
@@ -166,9 +183,11 @@ export function AISidebar({
 
   return (
     <div
-      className="flex flex-col h-full border-l"
+      className="flex flex-col h-full border-l overflow-hidden shrink-0"
       style={{
         width: "320px",
+        minWidth: "320px",
+        maxWidth: "320px",
         backgroundColor: "var(--color-bg)",
         borderColor: "var(--color-border)",
       }}
@@ -266,7 +285,7 @@ export function AISidebar({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3 min-w-0">
         {messages.length === 0 && !isGenerating && (
           <div
             className="text-center py-8 text-sm"
@@ -282,39 +301,41 @@ export function AISidebar({
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} min-w-0`}
           >
             <div
-              className="max-w-[90%] px-3 py-2 rounded-lg text-sm"
+              className="max-w-[85%] px-3 py-2 rounded-lg text-sm overflow-hidden"
               style={{
                 backgroundColor:
                   msg.role === "user"
                     ? "var(--color-accent)"
                     : "var(--color-bg-elevated)",
                 color: msg.role === "user" ? "white" : "var(--color-text)",
+                wordBreak: "break-word",
               }}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none" style={{ color: "var(--color-text)" }}>
+                <div className="max-w-none overflow-hidden" style={{ color: "var(--color-text)" }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
                     components={{
-                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2" style={{ color: "var(--color-text)" }}>{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5" style={{ color: "var(--color-text)" }}>{children}</h3>,
-                      p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
-                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
-                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5 break-words" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                      p: ({ children }) => <p className="mb-2 leading-relaxed break-words">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5 break-words">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5 break-words">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed break-words">{children}</li>,
                       strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
-                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs break-all" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
                     }}
                   >
-                    {msg.content}
+                    {cleanMarkdown(msg.content)}
                   </ReactMarkdown>
                 </div>
               ) : (
-                msg.content
+                <span className="break-words">{msg.content}</span>
               )}
             </div>
           </div>
@@ -322,31 +343,33 @@ export function AISidebar({
 
         {/* Streaming response */}
         {isGenerating && (
-          <div className="flex justify-start">
+          <div className="flex justify-start min-w-0">
             <div
-              className="max-w-[90%] px-3 py-2 rounded-lg text-sm"
+              className="max-w-[85%] px-3 py-2 rounded-lg text-sm overflow-hidden"
               style={{
                 backgroundColor: "var(--color-bg-elevated)",
                 color: "var(--color-text)",
+                wordBreak: "break-word",
               }}
             >
               {streamingContent ? (
-                <div className="prose prose-sm max-w-none" style={{ color: "var(--color-text)" }}>
+                <div className="max-w-none overflow-hidden" style={{ color: "var(--color-text)" }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
                     components={{
-                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2" style={{ color: "var(--color-text)" }}>{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5" style={{ color: "var(--color-text)" }}>{children}</h3>,
-                      p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
-                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
-                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5 break-words" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                      p: ({ children }) => <p className="mb-2 leading-relaxed break-words">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5 break-words">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5 break-words">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed break-words">{children}</li>,
                       strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
-                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs break-all" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
                     }}
                   >
-                    {streamingContent}
+                    {cleanMarkdown(streamingContent)}
                   </ReactMarkdown>
                   <span
                     className="inline-block w-2 h-4 ml-0.5 animate-pulse"

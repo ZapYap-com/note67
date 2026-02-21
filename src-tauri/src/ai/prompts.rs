@@ -501,21 +501,33 @@ impl WritingPrompts {
     /// Improve writing quality and clarity
     pub fn improve(content: &str) -> String {
         format!(
-            r#"Improve the following text for clarity, conciseness, and professionalism. Maintain the original meaning and tone. Only output the improved text, no explanations or preamble.
+            r#"Improve the following text for clarity and professionalism.
 
-TEXT TO IMPROVE:
+Rules:
+- Output ONLY the improved text
+- Do NOT repeat words or stutter
+- Use proper markdown (# headings, - bullets, **bold**)
+- No emojis, no preamble
+
+TEXT:
 {content}
 
-IMPROVED TEXT:"#
+IMPROVED:"#
         )
     }
 
     /// Summarize the content
     pub fn summarize(content: &str) -> String {
         format!(
-            r#"Summarize the following text concisely while preserving key information. Use bullet points if helpful. Only output the summary, no explanations or preamble.
+            r#"Summarize the following text concisely.
 
-TEXT TO SUMMARIZE:
+Rules:
+- Output ONLY the summary
+- Use "- " (dash space) for bullets, NO leading spaces
+- Do NOT repeat words
+- No emojis, no preamble, no code blocks
+
+TEXT:
 {content}
 
 SUMMARY:"#
@@ -525,48 +537,72 @@ SUMMARY:"#
     /// Expand on the content with more details
     pub fn expand(content: &str) -> String {
         format!(
-            r#"Expand on the following text by adding more detail, examples, or explanations. Maintain the original style and tone. Only output the expanded text, no explanations or preamble.
+            r#"Expand on the following text with more detail and examples.
 
-TEXT TO EXPAND:
+Rules:
+- Output ONLY the expanded text
+- Do NOT repeat words
+- Use proper markdown formatting
+- No emojis, no preamble
+
+TEXT:
 {content}
 
-EXPANDED TEXT:"#
+EXPANDED:"#
         )
     }
 
     /// Fix grammar, spelling, and punctuation
     pub fn fix_grammar(content: &str) -> String {
         format!(
-            r#"Fix any spelling, grammar, or punctuation errors in the following text. Maintain the original meaning and style. Only output the corrected text, no explanations or preamble.
+            r#"Fix spelling, grammar, and punctuation errors.
 
-TEXT TO FIX:
+Rules:
+- Output ONLY the corrected text
+- Maintain original meaning
+- No emojis, no preamble
+
+TEXT:
 {content}
 
-CORRECTED TEXT:"#
+CORRECTED:"#
         )
     }
 
     /// Convert to bullet points
     pub fn to_bullets(content: &str) -> String {
         format!(
-            r#"Convert the following text into a clear, well-organized bullet point list. Use nested bullets if appropriate for hierarchical information. Only output the bullet points, no explanations or preamble.
+            r#"Convert to a bullet point list.
 
-TEXT TO CONVERT:
+Rules:
+- Start each bullet with "- " (dash space)
+- NO indentation at start of lines
+- Output ONLY the bullets
+- No emojis, no preamble, no code blocks
+
+TEXT:
 {content}
 
-BULLET POINTS:"#
+BULLETS:"#
         )
     }
 
     /// Extract action items
     pub fn extract_action_items(content: &str) -> String {
         format!(
-            r#"Extract all action items and tasks from the following text. Format as a numbered list. Include responsible person and deadline if mentioned. If no action items found, say "No action items found." Only output the action items list, no explanations or preamble.
+            r#"Extract action items and tasks as a numbered list.
+
+Rules:
+- Format: 1. [Task] - [Person] - [Deadline]
+- NO leading spaces or indentation
+- Output ONLY the list
+- If none found, say "No action items found"
+- No emojis, no preamble, no code blocks
 
 TEXT:
 {content}
 
-ACTION ITEMS:"#
+ACTIONS:"#
         )
     }
 
@@ -574,23 +610,23 @@ ACTION ITEMS:"#
     pub fn custom(note_content: &str, selected_text: Option<&str>, user_message: &str) -> String {
         let context = if let Some(selected) = selected_text {
             format!(
-                r#"You are an AI writing assistant helping with meeting notes.
+                r#"You are an AI writing assistant helping with notes.
 
-The user has the following note content:
+Current note content:
 ---
 {note_content}
 ---
 
-The user has selected this specific text to work with:
+Selected text to work with:
 "{selected}"
 
 "#
             )
         } else {
             format!(
-                r#"You are an AI writing assistant helping with meeting notes.
+                r#"You are an AI writing assistant helping with notes.
 
-The user has the following note content:
+Current note content:
 ---
 {note_content}
 ---
@@ -602,7 +638,13 @@ The user has the following note content:
         format!(
             r#"{context}User request: {user_message}
 
-Respond helpfully and concisely. If asked to write or rewrite text, output only the text without explanations or preamble. Do NOT use emojis."#
+IMPORTANT RULES:
+- Output ONLY the requested content, no explanations
+- Do NOT repeat words or phrases
+- Use "- " (dash space) for bullets, NO leading spaces
+- Use # for headings, **text** for bold
+- NO code blocks, NO indentation
+- No emojis, be concise"#
         )
     }
 }

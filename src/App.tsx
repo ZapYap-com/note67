@@ -1317,15 +1317,41 @@ function NoteView({
     generate: generateAI,
   } = useAIWriting();
 
+  // Clean AI output - strip code blocks and fix formatting
+  const cleanAIOutput = useCallback((text: string) => {
+    let cleaned = text;
+    // Remove code block markers
+    cleaned = cleaned.replace(/^```[\w]*\n?/gm, '');
+    cleaned = cleaned.replace(/```$/gm, '');
+    // Remove leading spaces from each line (prevents code block in editor)
+    cleaned = cleaned.split('\n').map(line => line.trimStart()).join('\n');
+    // Fix double dashes to single dash for bullets
+    cleaned = cleaned.replace(/^--\s*/gm, '- ');
+    cleaned = cleaned.replace(/^\s+--\s*/gm, '  - ');
+    // Remove orphan asterisks at start of lines (****text -> text)
+    cleaned = cleaned.replace(/^\*{3,}/gm, '');
+    // Fix "** text" (space after **) - remove the asterisks
+    cleaned = cleaned.replace(/\*\*\s+/g, '');
+    // Remove trailing orphan asterisks
+    cleaned = cleaned.replace(/\*{2,}$/gm, '');
+    // Fix double colons
+    cleaned = cleaned.replace(/::/g, ':');
+    // Remove duplicate consecutive words
+    cleaned = cleaned.replace(/\b(\w+)\s+\1\b/gi, '$1');
+    return cleaned.trim();
+  }, []);
+
   // Handle AI text insertion
   const handleAIInsert = useCallback((text: string) => {
-    setDescValue((prev) => prev + "\n\n" + text);
-  }, []);
+    const cleaned = cleanAIOutput(text);
+    setDescValue((prev) => prev + "\n\n" + cleaned);
+  }, [cleanAIOutput]);
 
   // Handle AI text replacement
   const handleAIReplace = useCallback((text: string) => {
-    setDescValue(text);
-  }, []);
+    const cleaned = cleanAIOutput(text);
+    setDescValue(cleaned);
+  }, [cleanAIOutput]);
 
   // Handle AI generation
   const handleAIGenerate = useCallback((content: string, action: string) => {
