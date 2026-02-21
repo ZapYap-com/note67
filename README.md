@@ -8,7 +8,15 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.17)
+## What's New (v0.1.18)
+
+- AI writing assistant sidebar — improve, summarize, expand, or rewrite notes with AI
+- Quick actions: Summarize, Action Items, Improve, Expand, Fix Grammar, Bullets
+- Chat interface for custom AI requests
+- Insert or replace note content with AI-generated text
+- Keyboard shortcut `Cmd+J` to toggle AI sidebar
+
+### v0.1.17
 
 - Rich markdown editor with live preview (Notion-style)
 - Local image storage — paste images directly into notes
@@ -36,6 +44,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
+- [x] AI writing assistant sidebar (improve, summarize, expand notes)
 - [x] Export to Markdown
 - [x] Settings with Profile, Whisper, Ollama, System tabs
 - [x] Dark mode support
