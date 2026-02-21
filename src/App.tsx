@@ -11,6 +11,7 @@ import {
   UpdateNotification,
   MeetingDetectedPopup,
   MarkdownEditor,
+  AISidebar,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi } from "./api";
 import {
@@ -24,6 +25,7 @@ import {
   useUpdater,
   useSystemStatus,
   useUploadedAudio,
+  useAIWriting,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment, AudioSegment } from "./types";
@@ -130,6 +132,7 @@ function App() {
   const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] =
     useState(false);
   const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
+  const [showAISidebar, setShowAISidebar] = useState(false);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -345,6 +348,21 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleTheme]);
+
+  // Keyboard shortcut: Cmd/Ctrl + J to toggle AI sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+        e.preventDefault();
+        if (selectedNoteId) {
+          setShowAISidebar((prev) => !prev);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedNoteId]);
 
   // Global right-click handler - prevent default and show custom menu
   useEffect(() => {
@@ -899,6 +917,8 @@ function App() {
                 }
               }
             }}
+            showAISidebar={showAISidebar}
+            onToggleAISidebar={() => setShowAISidebar((prev) => !prev)}
           />
         ) : (
           <EmptyState
@@ -1241,6 +1261,9 @@ interface NoteViewProps {
   onRegenerate: () => void;
   onClose: () => void;
   onTranscriptUpdated?: () => void;
+  // AI sidebar props
+  showAISidebar?: boolean;
+  onToggleAISidebar?: () => void;
 }
 
 function NoteView({
@@ -1270,6 +1293,8 @@ function NoteView({
   onRegenerate,
   onClose,
   onTranscriptUpdated,
+  showAISidebar = false,
+  onToggleAISidebar,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
@@ -1284,6 +1309,28 @@ function NoteView({
     pause: () => void;
     toggle: () => void;
   } | null>(null);
+
+  // AI Writing hook
+  const {
+    isGenerating: isAIGenerating,
+    streamingContent: aiStreamingContent,
+    generate: generateAI,
+  } = useAIWriting();
+
+  // Handle AI text insertion
+  const handleAIInsert = useCallback((text: string) => {
+    setDescValue((prev) => prev + "\n\n" + text);
+  }, []);
+
+  // Handle AI text replacement
+  const handleAIReplace = useCallback((text: string) => {
+    setDescValue(text);
+  }, []);
+
+  // Handle AI generation
+  const handleAIGenerate = useCallback((content: string, action: string) => {
+    generateAI(content, action, descValue);
+  }, [generateAI, descValue]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -1409,9 +1456,11 @@ function NoteView({
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header
+    <div className="flex-1 flex overflow-hidden">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header
         className="px-6 py-4 border-b flex items-center justify-between gap-3"
         style={{ borderColor: "var(--color-border)" }}
       >
@@ -1620,6 +1669,34 @@ function NoteView({
                 Summarize
               </button>
             )}
+          {/* AI Assistant toggle */}
+          {!isRecording && !isPaused && ollamaRunning && hasOllamaModel && (
+            <button
+              onClick={onToggleAISidebar}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium transition-colors"
+              style={{
+                backgroundColor: showAISidebar ? "var(--color-accent)" : "var(--color-bg-elevated)",
+                border: showAISidebar ? "none" : "1px solid var(--color-border)",
+                color: showAISidebar ? "white" : "var(--color-text)",
+              }}
+              title="AI Assistant (⌘J)"
+            >
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                />
+              </svg>
+              AI
+            </button>
+          )}
           {/* More menu */}
           {!isRecording && !isPaused && (
             <div className="relative" ref={moreMenuRef}>
@@ -1873,6 +1950,19 @@ function NoteView({
           onPlayAudio={handlePlayAudio}
         />
       )}
+      </div>
+
+      {/* AI Sidebar */}
+      <AISidebar
+        isOpen={showAISidebar}
+        onClose={() => onToggleAISidebar?.()}
+        noteContent={descValue}
+        onInsert={handleAIInsert}
+        onReplace={handleAIReplace}
+        isGenerating={isAIGenerating}
+        streamingContent={aiStreamingContent}
+        onGenerate={handleAIGenerate}
+      />
     </div>
   );
 }

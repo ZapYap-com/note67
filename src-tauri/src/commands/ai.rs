@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::ai::prompts::MAX_CONTENT_LENGTH;
-use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts};
+use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts, WritingPrompts};
 use crate::db::models::{Summary, SummaryType};
 use crate::db::Database;
 
@@ -1014,6 +1014,91 @@ pub async fn generate_title_from_summary(
     }
 
     Ok(title)
+}
+
+/// Event payload for streaming AI writing updates
+#[derive(Clone, Serialize)]
+pub struct AIWriteStreamEvent {
+    pub chunk: String,
+    pub is_done: bool,
+}
+
+/// Generate AI writing assistance with streaming
+#[tauri::command]
+pub async fn ai_write_stream(
+    app: AppHandle,
+    content: String,
+    action: String,
+    note_content: Option<String>,
+    ai_state: State<'_, AiState>,
+) -> Result<String, String> {
+    // Check if already generating
+    if ai_state.is_generating.swap(true, Ordering::SeqCst) {
+        return Err("Already generating".to_string());
+    }
+
+    // Ensure we reset the flag when done
+    let _guard = scopeguard::guard((), |_| {
+        ai_state.is_generating.store(false, Ordering::SeqCst);
+    });
+
+    // Get selected model
+    let model = ai_state
+        .selected_model
+        .lock()
+        .await
+        .clone()
+        .ok_or("No model selected. Please select a model first.")?;
+
+    // Build prompt based on action
+    let prompt = match action.as_str() {
+        "improve" => WritingPrompts::improve(&content),
+        "summarize" => WritingPrompts::summarize(&content),
+        "expand" => WritingPrompts::expand(&content),
+        "fix" => WritingPrompts::fix_grammar(&content),
+        "bullets" => WritingPrompts::to_bullets(&content),
+        "action_items" => WritingPrompts::extract_action_items(&content),
+        "custom" => {
+            // For custom, content is the user message, note_content is the note
+            let note = note_content.as_deref().unwrap_or("");
+            WritingPrompts::custom(note, None, &content)
+        }
+        _ => return Err(format!("Unknown action: {}", action)),
+    };
+
+    // Create channel for streaming
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+    let app_clone = app.clone();
+
+    // Spawn task to receive chunks and emit events
+    tokio::spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            let event = AIWriteStreamEvent {
+                chunk,
+                is_done: false,
+            };
+            let _ = app_clone.emit("ai-write-stream", event);
+        }
+    });
+
+    // Generate with Ollama streaming
+    let response = ai_state
+        .client
+        .generate_stream(&model, &prompt, 0.7, Some(4096), tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Emit done event
+    let done_event = AIWriteStreamEvent {
+        chunk: String::new(),
+        is_done: true,
+    };
+    let _ = app.emit("ai-write-stream", done_event);
+
+    // Strip thinking tags from response
+    let clean_response = strip_thinking_tags(&response);
+
+    Ok(clean_response)
 }
 
 /// Strip thinking tags from LLM responses (used by reasoning models like DeepSeek)

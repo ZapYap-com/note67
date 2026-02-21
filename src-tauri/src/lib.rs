@@ -413,6 +413,7 @@ pub fn run() {
             commands::delete_summary,
             commands::generate_title,
             commands::generate_title_from_summary,
+            commands::ai_write_stream,
             // Export commands
             commands::export_note_markdown,
             commands::save_export_to_file,

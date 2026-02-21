@@ -494,6 +494,119 @@ RESPONSE:"#
     }
 }
 
+/// Prompt templates for AI writing assistant
+pub struct WritingPrompts;
+
+impl WritingPrompts {
+    /// Improve writing quality and clarity
+    pub fn improve(content: &str) -> String {
+        format!(
+            r#"Improve the following text for clarity, conciseness, and professionalism. Maintain the original meaning and tone. Only output the improved text, no explanations or preamble.
+
+TEXT TO IMPROVE:
+{content}
+
+IMPROVED TEXT:"#
+        )
+    }
+
+    /// Summarize the content
+    pub fn summarize(content: &str) -> String {
+        format!(
+            r#"Summarize the following text concisely while preserving key information. Use bullet points if helpful. Only output the summary, no explanations or preamble.
+
+TEXT TO SUMMARIZE:
+{content}
+
+SUMMARY:"#
+        )
+    }
+
+    /// Expand on the content with more details
+    pub fn expand(content: &str) -> String {
+        format!(
+            r#"Expand on the following text by adding more detail, examples, or explanations. Maintain the original style and tone. Only output the expanded text, no explanations or preamble.
+
+TEXT TO EXPAND:
+{content}
+
+EXPANDED TEXT:"#
+        )
+    }
+
+    /// Fix grammar, spelling, and punctuation
+    pub fn fix_grammar(content: &str) -> String {
+        format!(
+            r#"Fix any spelling, grammar, or punctuation errors in the following text. Maintain the original meaning and style. Only output the corrected text, no explanations or preamble.
+
+TEXT TO FIX:
+{content}
+
+CORRECTED TEXT:"#
+        )
+    }
+
+    /// Convert to bullet points
+    pub fn to_bullets(content: &str) -> String {
+        format!(
+            r#"Convert the following text into a clear, well-organized bullet point list. Use nested bullets if appropriate for hierarchical information. Only output the bullet points, no explanations or preamble.
+
+TEXT TO CONVERT:
+{content}
+
+BULLET POINTS:"#
+        )
+    }
+
+    /// Extract action items
+    pub fn extract_action_items(content: &str) -> String {
+        format!(
+            r#"Extract all action items and tasks from the following text. Format as a numbered list. Include responsible person and deadline if mentioned. If no action items found, say "No action items found." Only output the action items list, no explanations or preamble.
+
+TEXT:
+{content}
+
+ACTION ITEMS:"#
+        )
+    }
+
+    /// Custom prompt with context
+    pub fn custom(note_content: &str, selected_text: Option<&str>, user_message: &str) -> String {
+        let context = if let Some(selected) = selected_text {
+            format!(
+                r#"You are an AI writing assistant helping with meeting notes.
+
+The user has the following note content:
+---
+{note_content}
+---
+
+The user has selected this specific text to work with:
+"{selected}"
+
+"#
+            )
+        } else {
+            format!(
+                r#"You are an AI writing assistant helping with meeting notes.
+
+The user has the following note content:
+---
+{note_content}
+---
+
+"#
+            )
+        };
+
+        format!(
+            r#"{context}User request: {user_message}
+
+Respond helpfully and concisely. If asked to write or rewrite text, output only the text without explanations or preamble. Do NOT use emojis."#
+        )
+    }
+}
+
 /// A template for generating prompts
 #[allow(dead_code)]
 pub struct PromptTemplate {

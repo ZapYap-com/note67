@@ -66,4 +66,17 @@ export const aiApi = {
   generateTitleFromSummary: (noteId: string, summaryContent: string): Promise<string> => {
     return invoke("generate_title_from_summary", { noteId, summaryContent });
   },
+
+  // AI writing assistance (streaming)
+  aiWriteStream: (
+    content: string,
+    action: string,
+    noteContent?: string
+  ): Promise<string> => {
+    return invoke("ai_write_stream", {
+      content,
+      action,
+      noteContent: noteContent ?? null,
+    });
+  },
 };

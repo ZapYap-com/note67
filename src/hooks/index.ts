@@ -5,3 +5,4 @@ export { useModels, useTranscription, useLiveTranscription } from "./useTranscri
 export { useUpdater } from "./useUpdater";
 export { useSystemStatus } from "./useSystemStatus";
 export { useUploadedAudio } from "./useUploadedAudio";
+export { useAIWriting } from "./useAIWriting";
