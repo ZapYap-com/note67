@@ -1332,6 +1332,11 @@ function NoteView({
     generateAI(content, action, descValue);
   }, [generateAI, descValue]);
 
+  // Handle after AI insert/replace - switch to notes tab
+  const handleAIInserted = useCallback(() => {
+    onTabChange("notes");
+  }, [onTabChange]);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1962,6 +1967,7 @@ function NoteView({
         isGenerating={isAIGenerating}
         streamingContent={aiStreamingContent}
         onGenerate={handleAIGenerate}
+        onInserted={handleAIInserted}
       />
     </div>
   );

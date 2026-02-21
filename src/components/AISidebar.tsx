@@ -20,6 +20,7 @@ interface AISidebarProps {
   streamingContent: string;
   onGenerate: (prompt: string, action: string) => void;
   onStopGeneration?: () => void;
+  onInserted?: () => void; // Called after insert/replace to switch tabs
 }
 
 const QUICK_ACTIONS = [
@@ -42,6 +43,7 @@ export function AISidebar({
   streamingContent,
   onGenerate,
   onStopGeneration,
+  onInserted,
 }: AISidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -138,23 +140,27 @@ export function AISidebar({
     }
   };
 
-  const handleInsert = () => {
+  const handleInsert = useCallback(() => {
     if (lastAIResponse) {
       onInsert(lastAIResponse);
+      setLastAIResponse(null);
+      onInserted?.();
     }
-  };
+  }, [lastAIResponse, onInsert, onInserted]);
 
-  const handleReplace = () => {
+  const handleReplace = useCallback(() => {
     if (lastAIResponse) {
       onReplace(lastAIResponse);
+      setLastAIResponse(null);
+      onInserted?.();
     }
-  };
+  }, [lastAIResponse, onReplace, onInserted]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     if (lastAIResponse) {
       await navigator.clipboard.writeText(lastAIResponse);
     }
-  };
+  }, [lastAIResponse]);
 
   if (!isOpen) return null;
 
@@ -289,8 +295,21 @@ export function AISidebar({
               }}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="prose prose-sm max-w-none" style={{ color: "var(--color-text)" }}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                      p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
+                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                    }}
+                  >
                     {msg.content}
                   </ReactMarkdown>
                 </div>
@@ -312,8 +331,21 @@ export function AISidebar({
               }}
             >
               {streamingContent ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="prose prose-sm max-w-none" style={{ color: "var(--color-text)" }}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2" style={{ color: "var(--color-text)" }}>{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2" style={{ color: "var(--color-text)" }}>{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5" style={{ color: "var(--color-text)" }}>{children}</h3>,
+                      p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text)" }}>{children}</strong>,
+                      code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "var(--color-bg-subtle)" }}>{children}</code>,
+                    }}
+                  >
                     {streamingContent}
                   </ReactMarkdown>
                   <span
