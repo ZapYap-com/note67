@@ -2629,7 +2629,7 @@ dependencies = [
 
 [[package]]
 name = "note67"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "block2",
