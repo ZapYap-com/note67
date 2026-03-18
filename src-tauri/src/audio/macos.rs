@@ -52,6 +52,24 @@ fn macos_version() -> (u32, u32, u32) {
     )
 }
 
+// CoreGraphics functions for screen capture permission checking
+unsafe extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+/// Check if screen recording permission is granted using CGPreflightScreenCaptureAccess.
+/// This is more reliable than SCShareableContent for checking permission status in notarized apps.
+fn has_screen_capture_permission() -> bool {
+    unsafe { CGPreflightScreenCaptureAccess() }
+}
+
+/// Request screen recording permission using CGRequestScreenCaptureAccess.
+/// Returns true if permission was granted (or was already granted).
+fn request_screen_capture_permission() -> bool {
+    unsafe { CGRequestScreenCaptureAccess() }
+}
+
 /// Shared state for audio writing, accessible from the callback
 struct AudioWriterState {
     writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
@@ -309,9 +327,16 @@ impl MacOSSystemAudioCapture {
             let tx_clone = tx.clone();
             let block = block2::RcBlock::new(move |content: *mut AnyObject, error: *mut NSError| {
                 if !error.is_null() {
-                    let _ = tx_clone.send(Err(AudioError::PermissionDenied(
-                        "Failed to get shareable content".to_string(),
-                    )));
+                    // Extract the actual error description for better debugging
+                    let error_desc: *mut objc2_foundation::NSString = msg_send![error, localizedDescription];
+                    let error_msg = if !error_desc.is_null() {
+                        let desc_ref = &*error_desc;
+                        format!("SCShareableContent error: {}", desc_ref.to_string())
+                    } else {
+                        "Failed to get shareable content (unknown error)".to_string()
+                    };
+                    eprintln!("[Note67] {}", error_msg);
+                    let _ = tx_clone.send(Err(AudioError::PermissionDenied(error_msg)));
                 } else if content.is_null() {
                     let _ = tx_clone.send(Err(AudioError::PermissionDenied(
                         "No shareable content available".to_string(),
@@ -622,22 +647,15 @@ impl SystemAudioCapture for MacOSSystemAudioCapture {
     }
 
     fn has_permission(&self) -> SystemAudioResult<bool> {
-        // Try to get shareable content - this will fail if no permission
-        match Self::get_shareable_content_sync() {
-            Ok(_) => Ok(true),
-            Err(AudioError::PermissionDenied(_)) => Ok(false),
-            Err(e) => Err(e),
-        }
+        // Use CGPreflightScreenCaptureAccess which is more reliable for notarized apps
+        // than checking via SCShareableContent
+        Ok(has_screen_capture_permission())
     }
 
     fn request_permission(&self) -> SystemAudioResult<bool> {
-        // On macOS, requesting shareable content triggers the permission dialog
-        // if permission hasn't been granted yet
-        match Self::get_shareable_content_sync() {
-            Ok(_) => Ok(true),
-            Err(AudioError::PermissionDenied(_)) => Ok(false),
-            Err(e) => Err(e),
-        }
+        // Use CGRequestScreenCaptureAccess to trigger the permission dialog
+        // This is more reliable for notarized apps
+        Ok(request_screen_capture_permission())
     }
 
     fn start(&self, output_path: PathBuf) -> SystemAudioResult<()> {
