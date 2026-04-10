@@ -23,6 +23,22 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.20",
+      date: "April 2026",
+      changes: [
+        "Added Whisper large-v3-turbo model (8x faster, similar accuracy to large-v3)",
+        "Added quantized model variants (Q8) for smaller downloads and lower memory usage",
+        "Changed recommended model from base to large-turbo for better transcription quality",
+      ],
+    },
+    {
+      version: "0.1.19",
+      date: "April 2026",
+      changes: [
+        "Minor bug fixes and performance improvements",
+      ],
+    },
+    {
       version: "0.1.18",
       date: "February 2026",
       changes: [

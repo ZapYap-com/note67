@@ -5,25 +5,37 @@ use tokio::io::AsyncWriteExt;
 
 use super::TranscriptionError;
 
-/// Available Whisper model sizes
+/// Available Whisper model variants
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum ModelSize {
     Tiny,
+    TinyQ8,
     Base,
+    BaseQ8,
     Small,
+    SmallQ8,
     Medium,
+    MediumQ8,
     Large,
+    LargeTurbo,
+    LargeTurboQ8,
 }
 
 impl ModelSize {
     pub fn as_str(&self) -> &'static str {
         match self {
             ModelSize::Tiny => "tiny",
+            ModelSize::TinyQ8 => "tiny-q8",
             ModelSize::Base => "base",
+            ModelSize::BaseQ8 => "base-q8",
             ModelSize::Small => "small",
+            ModelSize::SmallQ8 => "small-q8",
             ModelSize::Medium => "medium",
+            ModelSize::MediumQ8 => "medium-q8",
             ModelSize::Large => "large",
+            ModelSize::LargeTurbo => "large-turbo",
+            ModelSize::LargeTurboQ8 => "large-turbo-q8",
         }
     }
 
@@ -31,10 +43,16 @@ impl ModelSize {
     pub fn download_url(&self) -> &'static str {
         match self {
             ModelSize::Tiny => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+            ModelSize::TinyQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q8_0.bin",
             ModelSize::Base => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+            ModelSize::BaseQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q8_0.bin",
             ModelSize::Small => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+            ModelSize::SmallQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin",
             ModelSize::Medium => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
+            ModelSize::MediumQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q8_0.bin",
             ModelSize::Large => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
+            ModelSize::LargeTurbo => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+            ModelSize::LargeTurboQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin",
         }
     }
 
@@ -42,10 +60,16 @@ impl ModelSize {
     pub fn size_mb(&self) -> u64 {
         match self {
             ModelSize::Tiny => 75,
+            ModelSize::TinyQ8 => 44,
             ModelSize::Base => 142,
+            ModelSize::BaseQ8 => 82,
             ModelSize::Small => 466,
+            ModelSize::SmallQ8 => 264,
             ModelSize::Medium => 1500,
+            ModelSize::MediumQ8 => 823,
             ModelSize::Large => 3100,
+            ModelSize::LargeTurbo => 1620,
+            ModelSize::LargeTurboQ8 => 874,
         }
     }
 
@@ -53,19 +77,31 @@ impl ModelSize {
     pub fn filename(&self) -> &'static str {
         match self {
             ModelSize::Tiny => "ggml-tiny.bin",
+            ModelSize::TinyQ8 => "ggml-tiny-q8_0.bin",
             ModelSize::Base => "ggml-base.bin",
+            ModelSize::BaseQ8 => "ggml-base-q8_0.bin",
             ModelSize::Small => "ggml-small.bin",
+            ModelSize::SmallQ8 => "ggml-small-q8_0.bin",
             ModelSize::Medium => "ggml-medium.bin",
+            ModelSize::MediumQ8 => "ggml-medium-q8_0.bin",
             ModelSize::Large => "ggml-large-v3.bin",
+            ModelSize::LargeTurbo => "ggml-large-v3-turbo.bin",
+            ModelSize::LargeTurboQ8 => "ggml-large-v3-turbo-q8_0.bin",
         }
     }
 
     pub fn all() -> &'static [ModelSize] {
         &[
+            ModelSize::LargeTurbo,
+            ModelSize::LargeTurboQ8,
             ModelSize::Tiny,
+            ModelSize::TinyQ8,
             ModelSize::Base,
+            ModelSize::BaseQ8,
             ModelSize::Small,
+            ModelSize::SmallQ8,
             ModelSize::Medium,
+            ModelSize::MediumQ8,
             ModelSize::Large,
         ]
     }

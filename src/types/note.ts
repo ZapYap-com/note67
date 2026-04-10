@@ -49,7 +49,18 @@ export type SummaryType =
   | "custom";
 
 // Model types for transcription
-export type ModelSize = "tiny" | "base" | "small" | "medium" | "large";
+export type ModelSize =
+  | "tiny"
+  | "tiny-q8"
+  | "base"
+  | "base-q8"
+  | "small"
+  | "small-q8"
+  | "medium"
+  | "medium-q8"
+  | "large"
+  | "large-turbo"
+  | "large-turbo-q8";
 
 export interface ModelInfo {
   size: ModelSize;

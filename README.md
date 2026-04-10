@@ -8,21 +8,23 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.18)
+## What's New (v0.1.20)
+
+- Whisper large-v3-turbo model — 8x faster, similar accuracy to large-v3
+- Quantized model variants (Q8) — smaller downloads, lower memory usage
+- Changed recommended model to large-turbo for better transcription quality
+
+### v0.1.19
+
+- Minor bug fixes and performance improvements
+
+### v0.1.18
 
 - AI writing assistant sidebar — improve, summarize, expand, or rewrite notes with AI
 - Quick actions: Summarize, Action Items, Improve, Expand, Fix Grammar, Bullets
 - Chat interface for custom AI requests
 - Insert or replace note content with AI-generated text
 - Keyboard shortcut `Cmd+J` to toggle AI sidebar
-
-### v0.1.17
-
-- Rich markdown editor with live preview (Notion-style)
-- Local image storage — paste images directly into notes
-- Images auto-cleanup when note is deleted
-- Slash commands (`/`) for quick formatting
-- LaTeX/math support in notes
 
 ## Features
 

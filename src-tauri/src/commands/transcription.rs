@@ -928,10 +928,16 @@ pub async fn retranscribe_note(
 fn parse_model_size(size: &str) -> Result<ModelSize, String> {
     match size.to_lowercase().as_str() {
         "tiny" => Ok(ModelSize::Tiny),
+        "tiny-q8" => Ok(ModelSize::TinyQ8),
         "base" => Ok(ModelSize::Base),
+        "base-q8" => Ok(ModelSize::BaseQ8),
         "small" => Ok(ModelSize::Small),
+        "small-q8" => Ok(ModelSize::SmallQ8),
         "medium" => Ok(ModelSize::Medium),
+        "medium-q8" => Ok(ModelSize::MediumQ8),
         "large" => Ok(ModelSize::Large),
+        "large-turbo" => Ok(ModelSize::LargeTurbo),
+        "large-turbo-q8" => Ok(ModelSize::LargeTurboQ8),
         _ => Err(format!("Invalid model size: {}", size)),
     }
 }

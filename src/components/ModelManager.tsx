@@ -123,10 +123,16 @@ function ModelCard({
 }: ModelCardProps) {
   const sizeLabels: Record<ModelSize, string> = {
     tiny: "Fastest, basic accuracy",
+    "tiny-q8": "Fastest, basic accuracy (quantized)",
     base: "Fast, good accuracy",
+    "base-q8": "Fast, good accuracy (quantized)",
     small: "Balanced performance",
+    "small-q8": "Balanced, smaller download",
     medium: "Slower, high accuracy",
-    large: "Slowest, best accuracy",
+    "medium-q8": "High accuracy, smaller download",
+    large: "Best accuracy, slowest",
+    "large-turbo": "Fast + accurate (recommended)",
+    "large-turbo-q8": "Fast + accurate, smaller download",
   };
 
   return (
