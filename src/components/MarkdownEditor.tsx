@@ -564,24 +564,14 @@ export function MarkdownEditor({
         hoverTimeoutRef.current = null;
       }
 
-      const target = e.target as Node;
-      if (!target || target.nodeType !== Node.TEXT_NODE) {
-        // Check if we're over an element containing text nodes
-        const element = e.target as HTMLElement;
-        if (!element.textContent?.includes("[[")) {
-          setLinkPreview(null);
-          return;
-        }
-      }
-
-      // Use document.caretPositionFromPoint or caretRangeFromPoint to find text under cursor
+      // Use caretRangeFromPoint to find text under cursor
       let range: Range | null = null;
       if (document.caretRangeFromPoint) {
         range = document.caretRangeFromPoint(e.clientX, e.clientY);
       }
 
       if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
-        setLinkPreview(null);
+        // Don't clear preview immediately - might be moving between nodes
         return;
       }
 
@@ -589,7 +579,7 @@ export function MarkdownEditor({
       const text = textNode.textContent || '';
       const offset = range.startOffset;
 
-      // Find wiki link at cursor position
+      // Find wiki link at cursor position - handles [[Title]] and [[Title|alias]]
       const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
       let match;
       let foundTitle: string | null = null;
