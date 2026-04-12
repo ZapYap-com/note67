@@ -28,8 +28,7 @@ export function UpdatesTab() {
       changes: [
         "Wiki-style links - type [[Note Title]] to link between notes",
         "Link aliases - use [[Title|display text]] syntax for custom link text",
-        "Click to navigate - Cmd/Ctrl+click on wiki links to jump to linked note",
-        "Link preview on hover - see note snippet when hovering over links",
+        "Link preview on hover - hover to see snippet, click preview to navigate",
         "Link autocomplete - type [[ to see note suggestions",
         "Backlinks panel - see which notes link to the current note",
         "Unlinked mentions - find notes that mention this note's title without [[]]",
