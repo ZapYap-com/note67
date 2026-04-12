@@ -731,7 +731,7 @@ function App() {
                       {note.title}
                     </div>
                     <div
-                      className="text-xs flex items-center gap-1 flex-wrap"
+                      className="text-xs flex items-center gap-1.5"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
                       <span>{formatTime(note.started_at)}</span>
@@ -746,30 +746,35 @@ function App() {
                           Live
                         </span>
                       )}
-                      {getTagsForNote(note.id).slice(0, 3).map((tag) => {
-                        const tagColor = getTagColor(tag.name);
-                        return (
-                          <span
-                            key={tag.id}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                            style={{
-                              backgroundColor: tagColor,
-                              color: "white",
-                            }}
-                          >
-                            #{tag.name}
-                          </span>
-                        );
-                      })}
-                      {getTagsForNote(note.id).length > 3 && (
-                        <span
-                          className="text-[10px]"
-                          style={{ color: "var(--color-text-tertiary)" }}
-                        >
-                          +{getTagsForNote(note.id).length - 3}
-                        </span>
-                      )}
                     </div>
+                    {getTagsForNote(note.id).length > 0 && (
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {getTagsForNote(note.id).slice(0, 4).map((tag) => {
+                          const tagColor = getTagColor(tag.name);
+                          return (
+                            <span
+                              key={tag.id}
+                              className="flex items-center gap-1 text-[10px]"
+                              style={{ color: "var(--color-text-tertiary)" }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{ backgroundColor: tagColor }}
+                              />
+                              {tag.name}
+                            </span>
+                          );
+                        })}
+                        {getTagsForNote(note.id).length > 4 && (
+                          <span
+                            className="text-[10px]"
+                            style={{ color: "var(--color-text-tertiary)" }}
+                          >
+                            +{getTagsForNote(note.id).length - 4}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
