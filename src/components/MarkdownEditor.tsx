@@ -560,19 +560,17 @@ export function MarkdownEditor({
     const handleClick = (e: MouseEvent) => {
       if (!onWikiLinkClickRef.current) return;
 
-      // On Mac: Cmd+click (metaKey), on Windows/Linux: Ctrl+click (ctrlKey)
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const hasModifier = isMac ? e.metaKey : e.ctrlKey;
-      if (!hasModifier) return;
+      // Use click coordinates to find text at click position
+      let range: Range | null = null;
+      if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      }
 
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
+      if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) return;
 
-      const node = selection.anchorNode;
-      if (!node || node.nodeType !== Node.TEXT_NODE) return;
-
+      const node = range.startContainer;
       const text = node.textContent || '';
-      const cursorPos = selection.anchorOffset;
+      const clickPos = range.startOffset;
 
       // Find all wiki links in this text node
       const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
@@ -581,8 +579,8 @@ export function MarkdownEditor({
         const linkStart = match.index;
         const linkEnd = match.index + match[0].length;
 
-        // Check if cursor is within this link
-        if (cursorPos >= linkStart && cursorPos <= linkEnd) {
+        // Check if click is within this link
+        if (clickPos >= linkStart && clickPos <= linkEnd) {
           e.preventDefault();
           e.stopPropagation();
           // Extract title (before the | if present)
