@@ -609,9 +609,7 @@ function App() {
 
   const handleUpdateTitle = async (title: string) => {
     if (selectedNote && title.trim()) {
-      console.log("[DEBUG] handleUpdateTitle called:", { noteId: selectedNote.id, newTitle: title.trim(), oldTitle: selectedNote.title });
       await updateNote(selectedNote.id, { title: title.trim() });
-      console.log("[DEBUG] updateNote completed");
       // Refresh all notes since linked notes may have been updated
       await refreshNotes();
     }

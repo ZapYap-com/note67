@@ -179,8 +179,6 @@ pub fn update_incoming_links_internal(
     _old_title: &str,
     new_title: &str,
 ) -> Result<(), String> {
-    eprintln!("[DEBUG] update_incoming_links_internal called for note_id={}, new_title={}", note_id, new_title);
-
     // Find all notes that link to this note
     let mut stmt = conn
         .prepare(
@@ -195,8 +193,6 @@ pub fn update_incoming_links_internal(
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
-
-    eprintln!("[DEBUG] Found {} incoming links", links.len());
 
     // Update each source note's content
     for (source_note_id, target_title) in links {
@@ -219,7 +215,6 @@ pub fn update_incoming_links_internal(
 
             // Only update if content actually changed
             if updated_desc != desc {
-                eprintln!("[DEBUG] Updating note {} - replacing '{}' with '{}'", source_note_id, old_link, new_link);
                 // Update the note's description
                 conn.execute(
                     "UPDATE notes SET description = ?1 WHERE id = ?2",
@@ -229,8 +224,6 @@ pub fn update_incoming_links_internal(
 
                 // Re-sync links for the updated note
                 sync_note_links_internal(conn, &source_note_id, &updated_desc)?;
-            } else {
-                eprintln!("[DEBUG] Note {} content unchanged (old_link='{}' not found in content)", source_note_id, old_link);
             }
         }
     }

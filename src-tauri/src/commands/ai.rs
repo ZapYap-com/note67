@@ -658,17 +658,8 @@ pub async fn generate_title(
 
         // Check if title is valid
         if title != "Meeting Notes" && is_valid_title(&title) {
-            eprintln!("[DEBUG] Title accepted: {}", title);
             break;
         } else {
-            eprintln!(
-                "[DEBUG] Title rejected (invalid or fallback), {}",
-                if attempt < max_retries {
-                    "retrying..."
-                } else {
-                    "using fallback"
-                }
-            );
             if attempt == max_retries {
                 title = "Meeting Notes".to_string();
             }
@@ -698,7 +689,6 @@ pub async fn generate_title(
         // Update incoming links if title changed
         if let Some(old) = old_title {
             if old != title {
-                eprintln!("[DEBUG] generate_title: Title changed from '{}' to '{}', updating links", old, title);
                 update_incoming_links_internal(&conn, &note_id, &old, &title)?;
             }
         }
@@ -1004,17 +994,8 @@ pub async fn generate_title_from_summary(
 
         // Check if title is valid
         if title != "Meeting Notes" && is_valid_title(&title) {
-            eprintln!("[DEBUG] Title accepted: {}", title);
             break;
         } else {
-            eprintln!(
-                "[DEBUG] Title rejected, {}",
-                if attempt < max_retries {
-                    "retrying..."
-                } else {
-                    "using fallback"
-                }
-            );
             if attempt == max_retries {
                 title = "Meeting Notes".to_string();
             }
@@ -1044,7 +1025,6 @@ pub async fn generate_title_from_summary(
         // Update incoming links if title changed
         if let Some(old) = old_title {
             if old != title {
-                eprintln!("[DEBUG] generate_title_from_summary: Title changed from '{}' to '{}', updating links", old, title);
                 update_incoming_links_internal(&conn, &note_id, &old, &title)?;
             }
         }

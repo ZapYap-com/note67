@@ -29,6 +29,7 @@ export function UpdatesTab() {
         "Wiki-style links - type [[Note Title]] to link between notes",
         "Link autocomplete - type [[ to see note suggestions",
         "Backlinks panel - see which notes link to the current note",
+        "Auto-update links when note title changes (like Obsidian)",
         "Hashtag support - type #tag in notes for auto-extraction and filtering",
         "Tag autocomplete - type # to see suggestions with keyboard navigation",
         "Auto-generated tag colors based on tag name",
