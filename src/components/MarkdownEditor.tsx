@@ -556,41 +556,6 @@ export function MarkdownEditor({
       }
     };
 
-    // Handle clicks on wiki links [[Note Title]] or [[Note Title|alias]]
-    const handleClick = (e: MouseEvent) => {
-      if (!onWikiLinkClickRef.current) return;
-
-      // Use click coordinates to find text at click position
-      let range: Range | null = null;
-      if (document.caretRangeFromPoint) {
-        range = document.caretRangeFromPoint(e.clientX, e.clientY);
-      }
-
-      if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) return;
-
-      const node = range.startContainer;
-      const text = node.textContent || '';
-      const clickPos = range.startOffset;
-
-      // Find all wiki links in this text node
-      const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-      let match;
-      while ((match = wikiLinkRegex.exec(text)) !== null) {
-        const linkStart = match.index;
-        const linkEnd = match.index + match[0].length;
-
-        // Check if click is within this link
-        if (clickPos >= linkStart && clickPos <= linkEnd) {
-          e.preventDefault();
-          e.stopPropagation();
-          // Extract title (before the | if present)
-          const title = match[1].trim();
-          onWikiLinkClickRef.current(title);
-          return;
-        }
-      }
-    };
-
     // Handle hover over wiki links for preview (debounced)
     const handleMouseMove = (e: MouseEvent) => {
       // Clear any pending hover timeout
@@ -675,7 +640,6 @@ export function MarkdownEditor({
 
     container.addEventListener("keydown", handleKeyDown, true);
     container.addEventListener("input", handleInputEvent, true);
-    container.addEventListener("click", handleClick, true);
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
     document.addEventListener("selectionchange", handleSelectionChange);
@@ -683,7 +647,6 @@ export function MarkdownEditor({
     return () => {
       container.removeEventListener("keydown", handleKeyDown, true);
       container.removeEventListener("input", handleInputEvent, true);
-      container.removeEventListener("click", handleClick, true);
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
       document.removeEventListener("selectionchange", handleSelectionChange);
