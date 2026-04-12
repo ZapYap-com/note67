@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::ai::prompts::MAX_CONTENT_LENGTH;
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts, WritingPrompts};
+use crate::commands::links::update_incoming_links_internal;
 use crate::db::models::{Summary, SummaryType};
 use crate::db::Database;
 
@@ -674,15 +675,33 @@ pub async fn generate_title(
         }
     }
 
-    // Update note title in database
+    // Update note title in database and sync incoming links
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+        // Get old title for link updates
+        let old_title: Option<String> = conn
+            .query_row(
+                "SELECT title FROM notes WHERE id = ?1",
+                [&note_id],
+                |row| row.get(0),
+            )
+            .ok();
+
         let now = chrono::Utc::now();
         conn.execute(
             "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
             rusqlite::params![&title, now.to_rfc3339(), &note_id],
         )
         .map_err(|e| e.to_string())?;
+
+        // Update incoming links if title changed
+        if let Some(old) = old_title {
+            if old != title {
+                eprintln!("[DEBUG] generate_title: Title changed from '{}' to '{}', updating links", old, title);
+                update_incoming_links_internal(&conn, &note_id, &old, &title)?;
+            }
+        }
     }
 
     Ok(title)
@@ -1002,15 +1021,33 @@ pub async fn generate_title_from_summary(
         }
     }
 
-    // Update note title in database
+    // Update note title in database and sync incoming links
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+        // Get old title for link updates
+        let old_title: Option<String> = conn
+            .query_row(
+                "SELECT title FROM notes WHERE id = ?1",
+                [&note_id],
+                |row| row.get(0),
+            )
+            .ok();
+
         let now = chrono::Utc::now();
         conn.execute(
             "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
             rusqlite::params![&title, now.to_rfc3339(), &note_id],
         )
         .map_err(|e| e.to_string())?;
+
+        // Update incoming links if title changed
+        if let Some(old) = old_title {
+            if old != title {
+                eprintln!("[DEBUG] generate_title_from_summary: Title changed from '{}' to '{}', updating links", old, title);
+                update_incoming_links_internal(&conn, &note_id, &old, &title)?;
+            }
+        }
     }
 
     Ok(title)

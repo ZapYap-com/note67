@@ -112,6 +112,8 @@ pub fn update_note(
     id: String,
     update: UpdateNote,
 ) -> Result<Note, String> {
+    eprintln!("[DEBUG] update_note called: id={}, title={:?}, desc={:?}", id, update.title, update.description.as_ref().map(|d| d.len()));
+
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
 
@@ -126,6 +128,7 @@ pub fn update_note(
     } else {
         None
     };
+    eprintln!("[DEBUG] old_title={:?}", old_title);
 
     // Build dynamic update query
     let mut updates = vec!["updated_at = ?1"];
@@ -190,7 +193,9 @@ pub fn update_note(
 
     // Update incoming links if title changed
     if let (Some(old), Some(new)) = (old_title, update.title.as_ref()) {
+        eprintln!("[DEBUG] Title change check: old='{}' new='{}'", old, new);
         if &old != new {
+            eprintln!("[DEBUG] Title changed, updating incoming links");
             update_incoming_links_internal(&conn, &id, &old, new)?;
         }
     }

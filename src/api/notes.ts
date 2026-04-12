@@ -15,6 +15,7 @@ export const notesApi = {
   },
 
   update: (id: string, update: UpdateNote): Promise<Note> => {
+    console.log("[DEBUG] notesApi.update called:", { id, update });
     return invoke("update_note", { id, update });
   },
 
