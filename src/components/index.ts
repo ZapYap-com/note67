@@ -16,3 +16,4 @@ export { AudioFilesList } from "./AudioFilesList";
 export { MarkdownEditor } from "./MarkdownEditor";
 export { AISidebar } from "./AISidebar";
 export { TagsFilter } from "./TagsFilter";
+export { NoteSearchWithTags } from "./NoteSearchWithTags";

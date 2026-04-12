@@ -12,7 +12,7 @@ import {
   MeetingDetectedPopup,
   MarkdownEditor,
   AISidebar,
-  TagsFilter,
+  NoteSearchWithTags,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { useTagsStore } from "./stores/tagsStore";
@@ -80,7 +80,7 @@ function App() {
   const theme = useThemeStore((state) => state.theme);
   const loadTheme = useThemeStore((state) => state.loadTheme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
-  const { fetchTags } = useTagsStore();
+  const { tags, selectedTag, fetchTags, selectTag, getTagsForNote } = useTagsStore();
 
   // Load theme from database on mount
   useEffect(() => {
@@ -150,17 +150,32 @@ function App() {
     noteId?: string;
   } | null>(null);
 
-  // Tag filtering state
+  // Search and tag filtering state
+  const [searchQuery, setSearchQuery] = useState("");
   const [filteredNotesByTag, setFilteredNotesByTag] = useState<Note[] | null>(null);
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId) || null;
   const recordingNote = notes.find((n) => n.id === recordingNoteId) || null;
 
-  // Use filtered notes if a tag is selected, otherwise use all notes
-  const displayNotes = filteredNotesByTag !== null ? filteredNotesByTag : notes;
+  // Filter notes by search query and tag
+  const displayNotes = useMemo(() => {
+    let filtered = filteredNotesByTag !== null ? filteredNotesByTag : notes;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (note) =>
+          note.title.toLowerCase().includes(query) ||
+          note.description?.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [notes, filteredNotesByTag, searchQuery]);
 
   // Handle tag selection
   const handleTagSelect = useCallback(async (tagName: string | null) => {
+    selectTag(tagName);
     if (tagName) {
       try {
         const filtered = await tagsApi.getNotesByTag(tagName);
@@ -172,7 +187,7 @@ function App() {
     } else {
       setFilteredNotesByTag(null);
     }
-  }, []);
+  }, [selectTag]);
   // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId
     ? (isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
@@ -639,8 +654,14 @@ function App() {
           </button>
         </div>
 
-        {/* Tags Filter */}
-        <TagsFilter onTagSelect={handleTagSelect} />
+        {/* Search with Tag Filter */}
+        <NoteSearchWithTags
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          tags={tags}
+          selectedTag={selectedTag}
+          onTagSelect={handleTagSelect}
+        />
 
         {/* Note List */}
         <div className="flex-1 overflow-y-auto">
@@ -709,19 +730,39 @@ function App() {
                       {note.title}
                     </div>
                     <div
-                      className="text-xs"
+                      className="text-xs flex items-center gap-1 flex-wrap"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
-                      {formatTime(note.started_at)}
+                      <span>{formatTime(note.started_at)}</span>
                       {isRecording && recordingNoteId === note.id && (
                         <span
-                          className="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
+                          className="px-1.5 py-0.5 rounded text-xs font-medium"
                           style={{
                             backgroundColor: "var(--color-accent-light)",
                             color: "var(--color-accent)",
                           }}
                         >
                           Live
+                        </span>
+                      )}
+                      {getTagsForNote(note.id).slice(0, 3).map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="px-1.5 py-0.5 rounded text-[10px]"
+                          style={{
+                            backgroundColor: "var(--color-bg-subtle)",
+                            color: "var(--color-text-tertiary)",
+                          }}
+                        >
+                          #{tag.name}
+                        </span>
+                      ))}
+                      {getTagsForNote(note.id).length > 3 && (
+                        <span
+                          className="text-[10px]"
+                          style={{ color: "var(--color-text-tertiary)" }}
+                        >
+                          +{getTagsForNote(note.id).length - 3}
                         </span>
                       )}
                     </div>

@@ -12,6 +12,11 @@ export const tagsApi = {
     return invoke("get_note_tags", { noteId });
   },
 
+  /** Get all note-tag mappings (for inline display) */
+  getAllNoteTags: (): Promise<Record<string, NoteTag[]>> => {
+    return invoke("get_all_note_tags");
+  },
+
   /** Sync note tags based on content (extracts #tags from content) */
   syncNoteTags: (noteId: string, content: string): Promise<void> => {
     return invoke("sync_note_tags", { noteId, content });

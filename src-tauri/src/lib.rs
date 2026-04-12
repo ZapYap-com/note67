@@ -446,6 +446,7 @@ pub fn run() {
             // Tag commands
             commands::get_all_tags,
             commands::get_note_tags,
+            commands::get_all_note_tags,
             commands::sync_note_tags,
             commands::get_notes_by_tag,
             commands::delete_tag,

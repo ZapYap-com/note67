@@ -223,6 +223,44 @@ pub fn get_notes_by_tag(
     Ok(notes)
 }
 
+/// Get all note-tag mappings (for displaying inline tags efficiently)
+#[tauri::command]
+pub fn get_all_note_tags(db: State<Database>) -> Result<std::collections::HashMap<String, Vec<NoteTag>>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT nt.note_id, t.id, t.name, t.color
+             FROM note_tags nt
+             INNER JOIN tags t ON nt.tag_id = t.id
+             ORDER BY nt.note_id, t.name",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut result: std::collections::HashMap<String, Vec<NoteTag>> = std::collections::HashMap::new();
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                NoteTag {
+                    id: row.get(1)?,
+                    name: row.get(2)?,
+                    color: row.get(3)?,
+                },
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        if let Ok((note_id, tag)) = row {
+            result.entry(note_id).or_default().push(tag);
+        }
+    }
+
+    Ok(result)
+}
+
 /// Delete a tag globally (removes from all notes)
 #[tauri::command]
 pub fn delete_tag(db: State<Database>, tag_id: i64) -> Result<(), String> {
