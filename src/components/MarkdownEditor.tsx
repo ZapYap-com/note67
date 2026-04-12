@@ -560,8 +560,10 @@ export function MarkdownEditor({
     const handleClick = (e: MouseEvent) => {
       if (!onWikiLinkClickRef.current) return;
 
-      // Only handle Cmd/Ctrl+Click
-      if (!(e.metaKey || e.ctrlKey)) return;
+      // On Mac: Cmd+click (metaKey), on Windows/Linux: Ctrl+click (ctrlKey)
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const hasModifier = isMac ? e.metaKey : e.ctrlKey;
+      if (!hasModifier) return;
 
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
