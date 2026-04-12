@@ -18,3 +18,4 @@ export { AISidebar } from "./AISidebar";
 export { TagsFilter } from "./TagsFilter";
 export { NoteSearchWithTags } from "./NoteSearchWithTags";
 export { TagAutocomplete } from "./TagAutocomplete";
+export { SearchModal } from "./SearchModal";

@@ -13,6 +13,7 @@ import {
   MarkdownEditor,
   AISidebar,
   NoteSearchWithTags,
+  SearchModal,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
@@ -115,6 +116,7 @@ function App() {
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<
     | "profile"
     | "appearance"
@@ -275,6 +277,19 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNewNote]);
+
+  // Keyboard shortcut: Cmd/Ctrl + K for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowSearchModal(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Keyboard shortcut: Cmd/Ctrl + R for new note and start recording
   useEffect(() => {
@@ -1138,6 +1153,20 @@ function App() {
           onTabChange={setSettingsTab}
         />
       )}
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onSelectNote={(noteId) => {
+          const note = notes.find(n => n.id === noteId);
+          if (note) {
+            setSelectedNoteId(noteId);
+            setActiveTab("summary");
+          }
+        }}
+      />
+
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Note"
@@ -1202,6 +1231,27 @@ function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
           className="mt-4 flex flex-col items-start gap-2 text-xs mx-auto w-fit"
           style={{ color: "var(--color-text-tertiary)" }}
         >
+          <div className="flex items-center gap-2">
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              ⌘
+            </kbd>
+            <kbd
+              className="px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: "var(--color-sidebar)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              K
+            </kbd>
+            <span>search notes</span>
+          </div>
           <div className="flex items-center gap-2">
             <kbd
               className="px-1.5 py-0.5 rounded font-medium"
