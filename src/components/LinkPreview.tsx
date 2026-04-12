@@ -7,9 +7,11 @@ interface LinkPreviewProps {
   position: { top: number; left: number };
   onClose: () => void;
   onNavigate?: (noteId: string) => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
-export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPreviewProps) {
+export function LinkPreview({ noteTitle, position, onClose, onNavigate, onMouseEnter, onMouseLeave }: LinkPreviewProps) {
   const [note, setNote] = useState<BacklinkNote | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,6 +87,15 @@ export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPr
     }
   };
 
+  const handleMouseEnter = () => {
+    onMouseEnter?.();
+  };
+
+  const handleMouseLeave = () => {
+    onMouseLeave?.();
+    onClose();
+  };
+
   if (loading) {
     return (
       <div
@@ -93,7 +104,8 @@ export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPr
           top: adjustedPosition.top,
           left: adjustedPosition.left,
         }}
-        onMouseLeave={onClose}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="link-preview-title">Loading...</div>
       </div>
@@ -108,7 +120,8 @@ export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPr
           top: adjustedPosition.top,
           left: adjustedPosition.left,
         }}
-        onMouseLeave={onClose}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="link-preview-title" style={{ color: "var(--color-text-tertiary)" }}>
           Note not found
@@ -128,7 +141,8 @@ export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPr
         left: adjustedPosition.left,
         cursor: onNavigate ? "pointer" : "default",
       }}
-      onMouseLeave={onClose}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={handleClick}
     >
       <div className="link-preview-title">{note.title}</div>

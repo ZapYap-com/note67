@@ -75,6 +75,8 @@ export function MarkdownEditor({
     position: { top: number; left: number };
   } | null>(null);
   const hoverTimeoutRef = useRef<number | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+  const isHoveringPreviewRef = useRef(false);
 
   // Keep callback refs updated
   useEffect(() => {
@@ -660,7 +662,15 @@ export function MarkdownEditor({
         clearTimeout(hoverTimeoutRef.current);
         hoverTimeoutRef.current = null;
       }
-      setLinkPreview(null);
+      // Delay closing to allow mouse to move to preview card
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+      closeTimeoutRef.current = window.setTimeout(() => {
+        if (!isHoveringPreviewRef.current) {
+          setLinkPreview(null);
+        }
+      }, 150);
     };
 
     container.addEventListener("keydown", handleKeyDown, true);
@@ -679,6 +689,9 @@ export function MarkdownEditor({
       document.removeEventListener("selectionchange", handleSelectionChange);
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
+      }
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
       }
     };
   }, []);
@@ -903,6 +916,16 @@ export function MarkdownEditor({
           position={linkPreview.position}
           onClose={() => setLinkPreview(null)}
           onNavigate={onNavigateToNote}
+          onMouseEnter={() => {
+            isHoveringPreviewRef.current = true;
+            if (closeTimeoutRef.current) {
+              clearTimeout(closeTimeoutRef.current);
+              closeTimeoutRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            isHoveringPreviewRef.current = false;
+          }}
         />
       )}
     </>
