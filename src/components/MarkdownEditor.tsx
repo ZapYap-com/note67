@@ -294,69 +294,53 @@ export function MarkdownEditor({
 
   // Handle link selection from autocomplete
   const handleLinkSelect = useCallback((noteTitle: string) => {
-    const editorElement = containerRef.current?.querySelector(".ProseMirror");
-    if (!editorElement) return;
+    if (!crepeRef.current) return;
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    // Get current markdown
+    const currentMarkdown = crepeRef.current.getMarkdown();
 
-    const range = selection.getRangeAt(0);
-    const container = range.startContainer;
-    if (container.nodeType !== Node.TEXT_NODE) return;
+    // Find the last unclosed [[ pattern anywhere in the markdown
+    // Look for [[ that is NOT followed by ]] (unclosed link)
+    // We need to find the LAST occurrence of [[ that doesn't have a closing ]]
+    let lastOpenBracketIndex = -1;
+    let i = 0;
+    while (i < currentMarkdown.length - 1) {
+      if (currentMarkdown[i] === '[' && currentMarkdown[i + 1] === '[') {
+        // Found [[, check if it's closed
+        const afterBrackets = currentMarkdown.slice(i + 2);
+        const closingIndex = afterBrackets.indexOf(']]');
+        const nextOpenIndex = afterBrackets.indexOf('[[');
 
-    const text = container.textContent || "";
-    const cursorPos = range.startOffset;
-
-    // Find the [[ to replace
-    let bracketStart = -1;
-    for (let i = cursorPos - 1; i >= 1; i--) {
-      if (text[i] === "[" && text[i - 1] === "[") {
-        bracketStart = i - 1;
-        break;
+        // If no closing ]] or there's another [[ before the closing
+        if (closingIndex === -1 || (nextOpenIndex !== -1 && nextOpenIndex < closingIndex)) {
+          lastOpenBracketIndex = i;
+        }
+        i += 2;
+      } else {
+        i++;
       }
     }
 
-    if (bracketStart === -1) return;
+    if (lastOpenBracketIndex === -1) return;
 
-    // Check if we're inside an existing [[...]] link by looking for ]] after cursor
-    let bracketEnd = cursorPos;
-    for (let i = cursorPos; i < text.length - 1; i++) {
-      if (text[i] === "]" && text[i + 1] === "]") {
-        bracketEnd = i + 2; // Skip past the ]]
-        break;
-      }
-      // Stop if we hit another [[ (nested/new link)
-      if (text[i] === "[" && text[i + 1] === "[") {
-        break;
-      }
-    }
+    // Find where the partial text ends (cursor position approximation)
+    const beforeBrackets = currentMarkdown.slice(0, lastOpenBracketIndex);
+    const afterBrackets = currentMarkdown.slice(lastOpenBracketIndex + 2);
 
-    // Replace [[...]] or [[partial with [[Full Title]] followed by a space
-    const before = text.slice(0, bracketStart);
-    const after = text.slice(bracketEnd);
-    const newText = before + "[[" + noteTitle + "]]" + (after.startsWith(" ") ? "" : " ") + after;
+    // The partial text is everything after [[ until a newline or end of string
+    const partialEndMatch = afterBrackets.match(/^[^\n\]]*/);;
+    const partialText = partialEndMatch ? partialEndMatch[0] : '';
+    const afterPartial = afterBrackets.slice(partialText.length);
 
-    // Update text content
-    container.textContent = newText;
+    // Build the new markdown with the completed link
+    const newMarkdown = beforeBrackets + `[[${noteTitle}]]` + afterPartial;
 
-    // Move cursor to after the inserted link + space
-    const newCursorPos = bracketStart + noteTitle.length + 5; // +5 for [[ ]] and space
-    const newRange = document.createRange();
-    newRange.setStart(container, Math.min(newCursorPos, newText.length));
-    newRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-
-    // Close autocomplete
+    // Close autocomplete first
     setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
 
-    // Trigger markdown update
-    setTimeout(() => {
-      const markdown = crepeRef.current?.getMarkdown() || "";
-      isInternalChange.current = true;
-      lastExternalValue.current = markdown;
-      onChangeRef.current(markdown);
-    }, 0);
+    // Update the markdown - DON'T set lastExternalValue so the editor will
+    // recreate and re-parse the [[Title]] into a proper wiki link node
+    onChangeRef.current(newMarkdown);
   }, []);
 
   // Handle autocomplete keyboard navigation (tags)
@@ -570,50 +554,65 @@ export function MarkdownEditor({
         hoverTimeoutRef.current = null;
       }
 
-      // Use caretRangeFromPoint to find text under cursor
-      let range: Range | null = null;
-      if (document.caretRangeFromPoint) {
-        range = document.caretRangeFromPoint(e.clientX, e.clientY);
-      }
+      // Check if hovering over a rendered wiki link element
+      const target = e.target as HTMLElement;
+      const wikiLink = target.closest(".wiki-link") as HTMLElement;
 
-      if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
-        // Don't clear preview immediately - might be moving between nodes
+      if (!wikiLink) {
+        // Also check for raw [[...]] text for unrendered links
+        let range: Range | null = null;
+        if (document.caretRangeFromPoint) {
+          range = document.caretRangeFromPoint(e.clientX, e.clientY);
+        }
+
+        if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
+          setLinkPreview(null);
+          return;
+        }
+
+        const text = range.startContainer.textContent || '';
+        const offset = range.startOffset;
+
+        // Find wiki link at cursor position - handles [[Title]] and [[Title|alias]]
+        const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+        let match;
+        let foundTitle: string | null = null;
+
+        while ((match = wikiLinkRegex.exec(text)) !== null) {
+          if (offset >= match.index && offset <= match.index + match[0].length) {
+            foundTitle = match[1].trim();
+            break;
+          }
+        }
+
+        if (!foundTitle) {
+          setLinkPreview(null);
+          return;
+        }
+
+        // Show preview after 300ms delay
+        const title = foundTitle;
+        hoverTimeoutRef.current = window.setTimeout(() => {
+          setLinkPreview({
+            noteTitle: title,
+            position: { top: e.clientY + 10, left: e.clientX + 10 },
+          });
+        }, 300);
         return;
       }
 
-      const textNode = range.startContainer;
-      const text = textNode.textContent || '';
-      const offset = range.startOffset;
-
-      // Find wiki link at cursor position - handles [[Title]] and [[Title|alias]]
-      const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-      let match;
-      let foundTitle: string | null = null;
-
-      while ((match = wikiLinkRegex.exec(text)) !== null) {
-        const linkStart = match.index;
-        const linkEnd = match.index + match[0].length;
-
-        if (offset >= linkStart && offset <= linkEnd) {
-          foundTitle = match[1].trim();
-          break;
-        }
-      }
-
-      if (!foundTitle) {
+      // Hovering over rendered wiki link - get target from data attribute
+      const noteTitle = wikiLink.getAttribute("data-target");
+      if (!noteTitle) {
         setLinkPreview(null);
         return;
       }
 
       // Show preview after 300ms delay
-      const title = foundTitle;
       hoverTimeoutRef.current = window.setTimeout(() => {
         setLinkPreview({
-          noteTitle: title,
-          position: {
-            top: e.clientY + 10,
-            left: e.clientX + 10,
-          },
+          noteTitle,
+          position: { top: e.clientY + 10, left: e.clientX + 10 },
         });
       }, 300);
     };
@@ -634,10 +633,25 @@ export function MarkdownEditor({
       }, 150);
     };
 
+    // Handle wiki link clicks at container level (persists across editor recreations)
+    const handleWikiLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const wikiLink = target.closest(".wiki-link") as HTMLElement;
+      if (wikiLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        const noteTitle = wikiLink.getAttribute("data-target");
+        if (noteTitle && onWikiLinkClickRef.current) {
+          onWikiLinkClickRef.current(noteTitle);
+        }
+      }
+    };
+
     container.addEventListener("keydown", handleKeyDown, true);
     container.addEventListener("input", handleInputEvent, true);
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
+    container.addEventListener("mousedown", handleWikiLinkClick, true);
     document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
@@ -645,6 +659,7 @@ export function MarkdownEditor({
       container.removeEventListener("input", handleInputEvent, true);
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
+      container.removeEventListener("mousedown", handleWikiLinkClick, true);
       document.removeEventListener("selectionchange", handleSelectionChange);
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
@@ -717,27 +732,6 @@ export function MarkdownEditor({
             }
           }
         }, true); // Use capture phase
-
-        // Add click handler for wiki links
-        editorElement.addEventListener("click", (e: Event) => {
-          const target = e.target as HTMLElement;
-          if (target.classList.contains("wiki-link")) {
-            e.preventDefault();
-            e.stopPropagation();
-            const noteTitle = target.getAttribute("data-target");
-            if (noteTitle && onNavigateToNoteRef.current) {
-              // Find note by title and navigate
-              linksApi.searchNotesByTitle(noteTitle).then(notes => {
-                const match = notes.find(n =>
-                  n.title.toLowerCase() === noteTitle.toLowerCase()
-                );
-                if (match) {
-                  onNavigateToNoteRef.current?.(match.id);
-                }
-              });
-            }
-          }
-        });
       }
     });
 
@@ -783,6 +777,9 @@ export function MarkdownEditor({
           features,
           featureConfigs,
         });
+
+        // Add wiki link plugin for rendering [[links]]
+        newCrepe.editor.use(wikiLinkPlugins);
 
         newCrepe.on((listener) => {
           listener.markdownUpdated((_, markdown) => {

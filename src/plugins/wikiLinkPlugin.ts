@@ -121,6 +121,7 @@ export const wikiLinkNode = $node('wikiLink', () => ({
         'data-alias': alias || '',
         'data-broken': isBroken ? 'true' : 'false',
         'title': `Link to: ${target}`,
+        'contenteditable': 'false',
       },
       displayText,
     ];

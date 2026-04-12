@@ -100,7 +100,11 @@ export function LinkAutocomplete({
             ref={(el) => {
               itemRefs.current[index] = el;
             }}
-            onClick={() => handleSelect(note.title)}
+            onMouseDown={(e) => {
+              e.preventDefault(); // Prevent focus change
+              e.stopPropagation();
+              handleSelect(note.title);
+            }}
             className="w-full px-3 py-2 text-left text-sm transition-colors"
             style={{
               backgroundColor: isSelected ? "var(--color-sidebar-selected)" : "transparent",

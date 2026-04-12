@@ -294,6 +294,8 @@
   border-radius: 3px;
   text-decoration: none;
   transition: background-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .wiki-link:hover {
