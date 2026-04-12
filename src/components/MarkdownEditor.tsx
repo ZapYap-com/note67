@@ -370,13 +370,34 @@ export function MarkdownEditor({
     // Update the markdown
     onChangeRef.current(newMarkdown);
 
-    // Refocus the editor after selection
+    // Refocus the editor and position cursor after the inserted link
     setTimeout(() => {
       const editorElement = containerRef.current?.querySelector(".ProseMirror") as HTMLElement;
       if (editorElement) {
         editorElement.focus();
+
+        // Find the last wiki-link element (the one we just inserted) and position cursor after it
+        const wikiLinks = editorElement.querySelectorAll('.wiki-link');
+        if (wikiLinks.length > 0) {
+          const lastLink = wikiLinks[wikiLinks.length - 1];
+          const range = document.createRange();
+          const selection = window.getSelection();
+
+          // Position cursor after the wiki link
+          if (lastLink.nextSibling) {
+            range.setStart(lastLink.nextSibling, 0);
+          } else if (lastLink.parentNode) {
+            range.setStartAfter(lastLink);
+          }
+          range.collapse(true);
+
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }
       }
-    }, 0);
+    }, 100); // Small delay to allow editor to re-render with wiki link nodes
   }, []);
 
   // Handle autocomplete keyboard navigation (tags)
