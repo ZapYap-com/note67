@@ -171,6 +171,66 @@ pub fn search_notes_by_title(
     Ok(notes)
 }
 
+/// Update all incoming links when a note's title changes
+/// Finds all notes that link to this note and updates their content
+pub fn update_incoming_links_internal(
+    conn: &rusqlite::Connection,
+    note_id: &str,
+    _old_title: &str,
+    new_title: &str,
+) -> Result<(), String> {
+    // Find all notes that link to this note
+    let mut stmt = conn
+        .prepare(
+            "SELECT source_note_id, target_title FROM note_links WHERE target_note_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let links: Vec<(String, String)> = stmt
+        .query_map([note_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Update each source note's content
+    for (source_note_id, target_title) in links {
+        // Get the source note's description
+        let description: Option<String> = conn
+            .query_row(
+                "SELECT description FROM notes WHERE id = ?1",
+                [&source_note_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+
+        if let Some(desc) = description {
+            // Replace [[old_title]] with [[new_title]]
+            // Use the target_title from the link record (the exact text used in the link)
+            let old_link = format!("[[{}]]", target_title);
+            let new_link = format!("[[{}]]", new_title);
+            let updated_desc = desc.replace(&old_link, &new_link);
+
+            // Only update if content actually changed
+            if updated_desc != desc {
+                // Update the note's description
+                conn.execute(
+                    "UPDATE notes SET description = ?1 WHERE id = ?2",
+                    params![updated_desc, source_note_id],
+                )
+                .map_err(|e| e.to_string())?;
+
+                // Re-sync links for the updated note
+                sync_note_links_internal(conn, &source_note_id, &updated_desc)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

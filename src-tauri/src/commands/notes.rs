@@ -5,7 +5,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::audio::converter::get_audio_duration_ms;
-use crate::commands::links::sync_note_links_internal;
+use crate::commands::links::{sync_note_links_internal, update_incoming_links_internal};
 use crate::commands::tags::sync_note_tags_internal;
 use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
@@ -115,6 +115,18 @@ pub fn update_note(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
 
+    // Get old title if we're updating the title (for link updates)
+    let old_title: Option<String> = if update.title.is_some() {
+        conn.query_row(
+            "SELECT title FROM notes WHERE id = ?1",
+            [&id],
+            |row| row.get(0),
+        )
+        .ok()
+    } else {
+        None
+    };
+
     // Build dynamic update query
     let mut updates = vec!["updated_at = ?1"];
     let mut param_idx = 2;
@@ -174,6 +186,13 @@ pub fn update_note(
     if let Some(ref description) = update.description {
         sync_note_tags_internal(&conn, &id, description)?;
         sync_note_links_internal(&conn, &id, description)?;
+    }
+
+    // Update incoming links if title changed
+    if let (Some(old), Some(new)) = (old_title, update.title.as_ref()) {
+        if &old != new {
+            update_incoming_links_internal(&conn, &id, &old, new)?;
+        }
     }
 
     // Return updated note
