@@ -103,6 +103,7 @@ export function LinkAutocomplete({
             onMouseDown={(e) => {
               e.preventDefault(); // Prevent focus change
               e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
               handleSelect(note.title);
             }}
             className="w-full px-3 py-2 text-left text-sm transition-colors"

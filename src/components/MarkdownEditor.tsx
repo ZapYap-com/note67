@@ -299,37 +299,38 @@ export function MarkdownEditor({
     // Get current markdown
     const currentMarkdown = crepeRef.current.getMarkdown();
 
-    // Find the last unclosed [[ pattern anywhere in the markdown
-    // Look for [[ that is NOT followed by ]] (unclosed link)
-    // We need to find the LAST occurrence of [[ that doesn't have a closing ]]
-    let lastOpenBracketIndex = -1;
-    let i = 0;
-    while (i < currentMarkdown.length - 1) {
-      if (currentMarkdown[i] === '[' && currentMarkdown[i + 1] === '[') {
-        // Found [[, check if it's closed
-        const afterBrackets = currentMarkdown.slice(i + 2);
-        const closingIndex = afterBrackets.indexOf(']]');
-        const nextOpenIndex = afterBrackets.indexOf('[[');
+    // Find the last unclosed [[ pattern by searching backwards
+    // Look for [[ that doesn't have a matching ]]
+    let lastUnclosedIndex = -1;
+    let searchPos = currentMarkdown.length;
 
-        // If no closing ]] or there's another [[ before the closing
-        if (closingIndex === -1 || (nextOpenIndex !== -1 && nextOpenIndex < closingIndex)) {
-          lastOpenBracketIndex = i;
-        }
-        i += 2;
-      } else {
-        i++;
+    while (searchPos > 0) {
+      const openIndex = currentMarkdown.lastIndexOf('[[', searchPos - 1);
+      if (openIndex === -1) break;
+
+      // Check if this [[ has a closing ]] after it
+      const afterOpen = currentMarkdown.slice(openIndex + 2);
+      const closeIndex = afterOpen.indexOf(']]');
+
+      if (closeIndex === -1) {
+        // No closing ]] found, this is unclosed
+        lastUnclosedIndex = openIndex;
+        break;
       }
+
+      // Move search position before this [[
+      searchPos = openIndex;
     }
 
-    if (lastOpenBracketIndex === -1) return;
+    if (lastUnclosedIndex === -1) return;
 
-    // Find where the partial text ends (cursor position approximation)
-    const beforeBrackets = currentMarkdown.slice(0, lastOpenBracketIndex);
-    const afterBrackets = currentMarkdown.slice(lastOpenBracketIndex + 2);
+    // Get text before the [[
+    const beforeBrackets = currentMarkdown.slice(0, lastUnclosedIndex);
+    const afterBrackets = currentMarkdown.slice(lastUnclosedIndex + 2);
 
-    // The partial text is everything after [[ until a newline or end of string
-    const partialEndMatch = afterBrackets.match(/^[^\n\]]*/);;
-    const partialText = partialEndMatch ? partialEndMatch[0] : '';
+    // The partial text is everything after [[ until a newline, ] or end of string
+    const partialMatch = afterBrackets.match(/^[^\n\]]*/)
+    const partialText = partialMatch ? partialMatch[0] : '';
     const afterPartial = afterBrackets.slice(partialText.length);
 
     // Build the new markdown with the completed link
@@ -338,8 +339,7 @@ export function MarkdownEditor({
     // Close autocomplete first
     setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
 
-    // Update the markdown - DON'T set lastExternalValue so the editor will
-    // recreate and re-parse the [[Title]] into a proper wiki link node
+    // Update the markdown
     onChangeRef.current(newMarkdown);
   }, []);
 
@@ -415,10 +415,14 @@ export function MarkdownEditor({
         return true;
       case "Enter":
       case "Tab":
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         if (filteredNotes[linkAutocomplete.selectedIndex]) {
-          e.preventDefault();
-          e.stopPropagation();
           handleLinkSelect(filteredNotes[linkAutocomplete.selectedIndex].title);
+        } else {
+          // Close autocomplete if no selection
+          setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
         }
         return true;
       case "Escape":
