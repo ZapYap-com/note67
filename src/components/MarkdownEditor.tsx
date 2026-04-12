@@ -10,6 +10,7 @@ import { LinkPreview } from "./LinkPreview";
 import { useTagsStore } from "../stores/tagsStore";
 import { linksApi } from "../api/links";
 import type { BacklinkNote } from "../types";
+import { wikiLinkPlugins } from "../plugins/wikiLinkPlugin";
 
 interface MarkdownEditorProps {
   value: string;
@@ -48,6 +49,7 @@ export function MarkdownEditor({
   const onBlurRef = useRef(onBlur);
   const noteIdRef = useRef(noteId);
   const onWikiLinkClickRef = useRef(onWikiLinkClick);
+  const onNavigateToNoteRef = useRef(onNavigateToNote);
 
   // Tag autocomplete state
   const { tags } = useTagsStore();
@@ -94,6 +96,10 @@ export function MarkdownEditor({
   useEffect(() => {
     onWikiLinkClickRef.current = onWikiLinkClick;
   }, [onWikiLinkClick]);
+
+  useEffect(() => {
+    onNavigateToNoteRef.current = onNavigateToNote;
+  }, [onNavigateToNote]);
 
   // Save on unmount (when switching tabs/notes)
   useEffect(() => {
@@ -662,6 +668,9 @@ export function MarkdownEditor({
       featureConfigs,
     });
 
+    // Add wiki link plugin for rendering [[links]]
+    crepe.editor.use(wikiLinkPlugins);
+
     crepe.on((listener) => {
       listener.markdownUpdated((_, markdown) => {
         isInternalChange.current = true;
@@ -708,6 +717,27 @@ export function MarkdownEditor({
             }
           }
         }, true); // Use capture phase
+
+        // Add click handler for wiki links
+        editorElement.addEventListener("click", (e: Event) => {
+          const target = e.target as HTMLElement;
+          if (target.classList.contains("wiki-link")) {
+            e.preventDefault();
+            e.stopPropagation();
+            const noteTitle = target.getAttribute("data-target");
+            if (noteTitle && onNavigateToNoteRef.current) {
+              // Find note by title and navigate
+              linksApi.searchNotesByTitle(noteTitle).then(notes => {
+                const match = notes.find(n =>
+                  n.title.toLowerCase() === noteTitle.toLowerCase()
+                );
+                if (match) {
+                  onNavigateToNoteRef.current?.(match.id);
+                }
+              });
+            }
+          }
+        });
       }
     });
 
