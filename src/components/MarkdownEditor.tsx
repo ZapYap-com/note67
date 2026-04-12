@@ -369,6 +369,14 @@ export function MarkdownEditor({
 
     // Update the markdown
     onChangeRef.current(newMarkdown);
+
+    // Refocus the editor after selection
+    setTimeout(() => {
+      const editorElement = containerRef.current?.querySelector(".ProseMirror") as HTMLElement;
+      if (editorElement) {
+        editorElement.focus();
+      }
+    }, 0);
   }, []);
 
   // Handle autocomplete keyboard navigation (tags)
