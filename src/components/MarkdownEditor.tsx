@@ -42,7 +42,6 @@ export function MarkdownEditor({
   const onChangeRef = useRef(onChange);
   const onBlurRef = useRef(onBlur);
   const noteIdRef = useRef(noteId);
-  const autocompleteCleanupRef = useRef<(() => void) | null>(null);
 
   // Tag autocomplete state
   const { tags } = useTagsStore();
@@ -483,17 +482,13 @@ export function MarkdownEditor({
     handleLinkKeyDownRef.current = handleLinkAutocompleteKeyDown;
   }, [handleLinkAutocompleteKeyDown]);
 
-  // Setup autocomplete event handlers
-  const setupAutocompleteHandlers = useCallback((editorElement: Element) => {
-    // Prevent duplicate setup
-    if (autocompleteCleanupRef.current) {
-      autocompleteCleanupRef.current();
-      autocompleteCleanupRef.current = null;
-    }
+  // Setup autocomplete event handlers using container-level delegation
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
     const handleKeyDown = (e: Event) => {
       const keyEvent = e as KeyboardEvent;
-      // Try tag autocomplete first, then link autocomplete
       if (handleTagKeyDownRef.current(keyEvent)) {
         return;
       }
@@ -503,23 +498,26 @@ export function MarkdownEditor({
     };
 
     const handleInputEvent = () => {
-      handleInputRef.current(editorElement);
-    };
-
-    // Also handle selection change for cursor movement
-    const handleSelectionChange = () => {
-      if (document.activeElement === editorElement || editorElement.contains(document.activeElement)) {
+      const editorElement = container.querySelector(".ProseMirror");
+      if (editorElement) {
         handleInputRef.current(editorElement);
       }
     };
 
-    editorElement.addEventListener("keydown", handleKeyDown, true);
-    editorElement.addEventListener("input", handleInputEvent, true);
+    const handleSelectionChange = () => {
+      const editorElement = container.querySelector(".ProseMirror");
+      if (editorElement && (document.activeElement === editorElement || editorElement.contains(document.activeElement))) {
+        handleInputRef.current(editorElement);
+      }
+    };
+
+    container.addEventListener("keydown", handleKeyDown, true);
+    container.addEventListener("input", handleInputEvent, true);
     document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
-      editorElement.removeEventListener("keydown", handleKeyDown, true);
-      editorElement.removeEventListener("input", handleInputEvent, true);
+      container.removeEventListener("keydown", handleKeyDown, true);
+      container.removeEventListener("input", handleInputEvent, true);
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
   }, []);
@@ -552,9 +550,6 @@ export function MarkdownEditor({
       const editorElement = containerRef.current?.querySelector(".ProseMirror");
       if (editorElement) {
         editorElement.addEventListener("blur", () => onBlurRef.current?.());
-
-        // Setup autocomplete handlers
-        autocompleteCleanupRef.current = setupAutocompleteHandlers(editorElement);
 
         // Add paste handler for images (capture phase to run before other handlers)
         editorElement.addEventListener("paste", async (e: Event) => {
@@ -590,8 +585,6 @@ export function MarkdownEditor({
     });
 
     return () => {
-      autocompleteCleanupRef.current?.();
-      autocompleteCleanupRef.current = null;
       crepe.destroy();
       crepeRef.current = null;
     };
@@ -619,12 +612,8 @@ export function MarkdownEditor({
       setAutocomplete(prev => ({ ...prev, isOpen: false }));
       setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
 
-      // Clean up old autocomplete handlers
-      autocompleteCleanupRef.current?.();
-      autocompleteCleanupRef.current = null;
-
       // Destroy old editor
-      const oldCrepe = crepeRef.current;
+      const oldCrepe = crepeRef.current!;
       crepeRef.current = null;
 
       oldCrepe.destroy().then(() => {
@@ -653,11 +642,6 @@ export function MarkdownEditor({
             containerRef.current?.querySelector(".ProseMirror");
           if (editorElement) {
             editorElement.addEventListener("blur", () => onBlurRef.current?.());
-
-            // Setup autocomplete handlers
-            const cleanup = setupAutocompleteHandlers(editorElement);
-            // Store cleanup in ref so it can be called later
-            autocompleteCleanupRef.current = cleanup;
 
             // Add paste handler for images (capture phase to run before other handlers)
             editorElement.addEventListener("paste", async (e: Event) => {
@@ -691,7 +675,7 @@ export function MarkdownEditor({
       });
 
     }
-  }, [value, features, featureConfigs, setupAutocompleteHandlers]);
+  }, [value, features, featureConfigs]);
 
   // Close autocomplete on click outside editor
   useEffect(() => {
