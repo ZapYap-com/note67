@@ -14,6 +14,7 @@ import {
   AISidebar,
   NoteSearchWithTags,
   SearchModal,
+  BacklinksPanel,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
@@ -1016,6 +1017,12 @@ function App() {
             }}
             showAISidebar={showAISidebar}
             onToggleAISidebar={() => setShowAISidebar((prev) => !prev)}
+            onNavigateToNote={(noteId) => {
+              const targetNote = notes.find(n => n.id === noteId);
+              if (targetNote) {
+                handleSelectNote(targetNote);
+              }
+            }}
           />
         ) : (
           <EmptyState
@@ -1396,6 +1403,8 @@ interface NoteViewProps {
   // AI sidebar props
   showAISidebar?: boolean;
   onToggleAISidebar?: () => void;
+  // Backlinks navigation
+  onNavigateToNote?: (noteId: string) => void;
 }
 
 function NoteView({
@@ -1427,6 +1436,7 @@ function NoteView({
   onTranscriptUpdated,
   showAISidebar = false,
   onToggleAISidebar,
+  onNavigateToNote,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
@@ -2090,6 +2100,14 @@ function NoteView({
           />
         )}
       </div>
+
+      {/* Backlinks Panel - show linked references */}
+      {activeTab === "notes" && onNavigateToNote && (
+        <BacklinksPanel
+          noteId={note.id}
+          onNavigate={onNavigateToNote}
+        />
+      )}
 
       {/* Audio Player - show when there's audio to play and not recording */}
       {!isRecording && playingAudioPath && (

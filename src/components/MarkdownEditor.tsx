@@ -5,7 +5,10 @@ import "@milkdown/crepe/theme/frame.css";
 import "../styles/milkdown-theme.css";
 import { uploadImage } from "../utils/imageUploader";
 import { TagAutocomplete } from "./TagAutocomplete";
+import { LinkAutocomplete } from "./LinkAutocomplete";
 import { useTagsStore } from "../stores/tagsStore";
+import { linksApi } from "../api/links";
+import type { BacklinkNote } from "../types";
 
 interface MarkdownEditorProps {
   value: string;
@@ -49,6 +52,16 @@ export function MarkdownEditor({
     selectedIndex: 0,
     startOffset: 0,
   });
+
+  // Link autocomplete state
+  const [linkAutocomplete, setLinkAutocomplete] = useState<AutocompleteState>({
+    isOpen: false,
+    query: "",
+    position: { top: 0, left: 0 },
+    selectedIndex: 0,
+    startOffset: 0,
+  });
+  const [linkNotes, setLinkNotes] = useState<BacklinkNote[]>([]);
 
   // Keep callback refs updated
   useEffect(() => {
@@ -147,6 +160,47 @@ export function MarkdownEditor({
     return { word, startOffset: wordStart, rect };
   }, []);
 
+  // Get word at cursor position (looking for [[link pattern)
+  const getLinkAtCursor = useCallback((_element: Element): { word: string; startOffset: number; rect: DOMRect } | null => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) return null;
+
+    const container = range.startContainer;
+    if (container.nodeType !== Node.TEXT_NODE) return null;
+
+    const text = container.textContent || "";
+    const cursorPos = range.startOffset;
+
+    // Find the start of [[ pattern (looking backward)
+    let bracketStart = -1;
+    for (let i = cursorPos - 1; i >= 1; i--) {
+      // Check for closing ]] which means we're outside a link
+      if (text[i] === "]" && text[i - 1] === "]") {
+        return null;
+      }
+      // Check for opening [[
+      if (text[i] === "[" && text[i - 1] === "[") {
+        bracketStart = i - 1;
+        break;
+      }
+    }
+
+    if (bracketStart === -1) return null;
+
+    const word = text.slice(bracketStart + 2, cursorPos); // Exclude the [[
+
+    // Get position for the dropdown
+    const tempRange = document.createRange();
+    tempRange.setStart(container, bracketStart);
+    tempRange.setEnd(container, bracketStart);
+    const rect = tempRange.getBoundingClientRect();
+
+    return { word, startOffset: bracketStart, rect };
+  }, []);
+
   // Handle tag selection from autocomplete
   const handleTagSelect = useCallback((tagName: string) => {
     const editorElement = containerRef.current?.querySelector(".ProseMirror");
@@ -200,8 +254,62 @@ export function MarkdownEditor({
     }, 0);
   }, []);
 
-  // Handle autocomplete keyboard navigation
-  const handleAutocompleteKeyDown = useCallback((e: KeyboardEvent) => {
+  // Handle link selection from autocomplete
+  const handleLinkSelect = useCallback((noteTitle: string) => {
+    const editorElement = containerRef.current?.querySelector(".ProseMirror");
+    if (!editorElement) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const container = range.startContainer;
+    if (container.nodeType !== Node.TEXT_NODE) return;
+
+    const text = container.textContent || "";
+    const cursorPos = range.startOffset;
+
+    // Find the [[ to replace
+    let bracketStart = -1;
+    for (let i = cursorPos - 1; i >= 1; i--) {
+      if (text[i] === "[" && text[i - 1] === "[") {
+        bracketStart = i - 1;
+        break;
+      }
+    }
+
+    if (bracketStart === -1) return;
+
+    // Replace [[partial with [[Full Title]] followed by a space
+    const before = text.slice(0, bracketStart);
+    const after = text.slice(cursorPos);
+    const newText = before + "[[" + noteTitle + "]] " + after;
+
+    // Update text content
+    container.textContent = newText;
+
+    // Move cursor to after the inserted link + space
+    const newCursorPos = bracketStart + noteTitle.length + 5; // +5 for [[ ]] and space
+    const newRange = document.createRange();
+    newRange.setStart(container, Math.min(newCursorPos, newText.length));
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+
+    // Close autocomplete
+    setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
+
+    // Trigger markdown update
+    setTimeout(() => {
+      const markdown = crepeRef.current?.getMarkdown() || "";
+      isInternalChange.current = true;
+      lastExternalValue.current = markdown;
+      onChangeRef.current(markdown);
+    }, 0);
+  }, []);
+
+  // Handle autocomplete keyboard navigation (tags)
+  const handleTagAutocompleteKeyDown = useCallback((e: KeyboardEvent) => {
     if (!autocomplete.isOpen) return false;
 
     const filteredTags = tags.filter(tag =>
@@ -244,24 +352,77 @@ export function MarkdownEditor({
     }
   }, [autocomplete.isOpen, autocomplete.query, autocomplete.selectedIndex, tags, handleTagSelect]);
 
-  // Check for tag pattern on input
-  const handleInput = useCallback((editorElement: Element) => {
-    const result = getTagAtCursor(editorElement);
+  // Handle autocomplete keyboard navigation (links)
+  const handleLinkAutocompleteKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!linkAutocomplete.isOpen) return false;
 
-    if (result) {
-      // Show autocomplete
+    const filteredNotes = linkNotes.filter(note =>
+      note.title.toLowerCase().startsWith(linkAutocomplete.query.toLowerCase())
+    );
+    const maxIndex = Math.min(filteredNotes.length - 1, 5);
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        e.stopPropagation();
+        setLinkAutocomplete(prev => ({
+          ...prev,
+          selectedIndex: prev.selectedIndex < maxIndex ? prev.selectedIndex + 1 : 0,
+        }));
+        return true;
+      case "ArrowUp":
+        e.preventDefault();
+        e.stopPropagation();
+        setLinkAutocomplete(prev => ({
+          ...prev,
+          selectedIndex: prev.selectedIndex > 0 ? prev.selectedIndex - 1 : maxIndex,
+        }));
+        return true;
+      case "Enter":
+      case "Tab":
+        if (filteredNotes[linkAutocomplete.selectedIndex]) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleLinkSelect(filteredNotes[linkAutocomplete.selectedIndex].title);
+        }
+        return true;
+      case "Escape":
+        e.preventDefault();
+        e.stopPropagation();
+        setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
+        return true;
+      default:
+        return false;
+    }
+  }, [linkAutocomplete.isOpen, linkAutocomplete.query, linkAutocomplete.selectedIndex, linkNotes, handleLinkSelect]);
+
+  // Check for tag pattern on input
+  const handleInput = useCallback(async (editorElement: Element) => {
+    // Check for tag pattern first
+    const tagResult = getTagAtCursor(editorElement);
+
+    if (tagResult) {
+      // Show tag autocomplete
       setAutocomplete({
         isOpen: true,
-        query: result.word,
+        query: tagResult.word,
         position: {
-          top: result.rect.bottom + window.scrollY + 4,
-          left: result.rect.left + window.scrollX,
+          top: tagResult.rect.bottom + window.scrollY + 4,
+          left: tagResult.rect.left + window.scrollX,
         },
         selectedIndex: 0,
-        startOffset: result.startOffset,
+        startOffset: tagResult.startOffset,
       });
+      // Close link autocomplete
+      setLinkAutocomplete(prev => {
+        if (prev.isOpen) {
+          return { ...prev, isOpen: false };
+        }
+        return prev;
+      });
+      return;
     } else {
-      // Close autocomplete
+      // Close tag autocomplete
       setAutocomplete(prev => {
         if (prev.isOpen) {
           return { ...prev, isOpen: false };
@@ -269,14 +430,50 @@ export function MarkdownEditor({
         return prev;
       });
     }
-  }, [getTagAtCursor]);
+
+    // Check for link pattern
+    const linkResult = getLinkAtCursor(editorElement);
+
+    if (linkResult) {
+      // Fetch notes for autocomplete if query changed
+      try {
+        const notes = await linksApi.searchNotesByTitle(linkResult.word);
+        setLinkNotes(notes);
+      } catch (error) {
+        console.error("Failed to search notes:", error);
+      }
+
+      // Show link autocomplete
+      setLinkAutocomplete({
+        isOpen: true,
+        query: linkResult.word,
+        position: {
+          top: linkResult.rect.bottom + window.scrollY + 4,
+          left: linkResult.rect.left + window.scrollX,
+        },
+        selectedIndex: 0,
+        startOffset: linkResult.startOffset,
+      });
+    } else {
+      // Close link autocomplete
+      setLinkAutocomplete(prev => {
+        if (prev.isOpen) {
+          return { ...prev, isOpen: false };
+        }
+        return prev;
+      });
+    }
+  }, [getTagAtCursor, getLinkAtCursor]);
 
   // Setup autocomplete event handlers
   const setupAutocompleteHandlers = useCallback((editorElement: Element) => {
     const handleKeyDown = (e: Event) => {
       const keyEvent = e as KeyboardEvent;
-      if (handleAutocompleteKeyDown(keyEvent)) {
-        // Event was handled by autocomplete
+      // Try tag autocomplete first, then link autocomplete
+      if (handleTagAutocompleteKeyDown(keyEvent)) {
+        return;
+      }
+      if (handleLinkAutocompleteKeyDown(keyEvent)) {
         return;
       }
     };
@@ -301,7 +498,7 @@ export function MarkdownEditor({
       editorElement.removeEventListener("input", handleInputEvent);
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [handleInput, handleAutocompleteKeyDown]);
+  }, [handleInput, handleTagAutocompleteKeyDown, handleLinkAutocompleteKeyDown]);
 
   // Create editor on mount only
   useEffect(() => {
@@ -396,6 +593,7 @@ export function MarkdownEditor({
 
       // Close autocomplete when switching notes
       setAutocomplete(prev => ({ ...prev, isOpen: false }));
+      setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
 
       // Destroy old editor
       const oldCrepe = crepeRef.current;
@@ -472,21 +670,23 @@ export function MarkdownEditor({
 
   // Close autocomplete on click outside editor
   useEffect(() => {
-    if (!autocomplete.isOpen) return;
+    if (!autocomplete.isOpen && !linkAutocomplete.isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       const isInsideEditor = containerRef.current?.contains(target);
-      const isInsideAutocomplete = (target as Element).closest?.(".tag-autocomplete");
+      const isInsideTagAutocomplete = (target as Element).closest?.(".tag-autocomplete");
+      const isInsideLinkAutocomplete = (target as Element).closest?.(".link-autocomplete");
 
-      if (!isInsideEditor && !isInsideAutocomplete) {
+      if (!isInsideEditor && !isInsideTagAutocomplete && !isInsideLinkAutocomplete) {
         setAutocomplete(prev => ({ ...prev, isOpen: false }));
+        setLinkAutocomplete(prev => ({ ...prev, isOpen: false }));
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [autocomplete.isOpen]);
+  }, [autocomplete.isOpen, linkAutocomplete.isOpen]);
 
   return (
     <>
@@ -515,6 +715,16 @@ export function MarkdownEditor({
                 : (prev.selectedIndex > 0 ? prev.selectedIndex - 1 : maxIndex),
             }));
           }}
+        />
+      )}
+      {linkAutocomplete.isOpen && (
+        <LinkAutocomplete
+          notes={linkNotes}
+          query={linkAutocomplete.query}
+          position={linkAutocomplete.position}
+          selectedIndex={linkAutocomplete.selectedIndex}
+          onSelect={handleLinkSelect}
+          onClose={() => setLinkAutocomplete(prev => ({ ...prev, isOpen: false }))}
         />
       )}
     </>

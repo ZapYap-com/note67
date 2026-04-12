@@ -450,6 +450,10 @@ pub fn run() {
             commands::sync_note_tags,
             commands::get_notes_by_tag,
             commands::delete_tag,
+            // Link commands
+            commands::get_backlinks,
+            commands::get_note_links,
+            commands::search_notes_by_title,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

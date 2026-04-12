@@ -17,6 +17,8 @@ export type {
   RetranscribeResult,
   Tag,
   NoteTag,
+  NoteLink,
+  BacklinkNote,
 } from "./note";
 
 export { RecordingPhase } from "./note";

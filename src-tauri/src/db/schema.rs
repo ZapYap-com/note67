@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 8;
+pub const SCHEMA_VERSION: i32 = 9;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -29,6 +29,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 8 {
         migrate_v8(conn)?;
+    }
+    if version < 9 {
+        migrate_v9(conn)?;
     }
 
     Ok(())
@@ -345,6 +348,36 @@ fn migrate_v8(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 8)?;
+
+    Ok(())
+}
+
+fn migrate_v9(conn: &Connection) -> rusqlite::Result<()> {
+    // Note links table for wiki-style [[Note Title]] links
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS note_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_note_id TEXT NOT NULL,
+            target_note_id TEXT,
+            target_title TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (source_note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_note_id) REFERENCES notes(id) ON DELETE SET NULL
+        )",
+        [],
+    )?;
+
+    // Indexes for faster lookups
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_note_links_source ON note_links(source_note_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_note_links_target ON note_links(target_note_id)",
+        [],
+    )?;
+
+    set_schema_version(conn, 9)?;
 
     Ok(())
 }
