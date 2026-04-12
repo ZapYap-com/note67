@@ -26,6 +26,9 @@ export function UpdatesTab() {
       version: "0.1.21",
       date: "April 2026",
       changes: [
+        "Wiki-style links - type [[Note Title]] to link between notes",
+        "Link autocomplete - type [[ to see note suggestions",
+        "Backlinks panel - see which notes link to the current note",
         "Hashtag support - type #tag in notes for auto-extraction and filtering",
         "Tag autocomplete - type # to see suggestions with keyboard navigation",
         "Auto-generated tag colors based on tag name",
