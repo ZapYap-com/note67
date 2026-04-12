@@ -23,6 +23,13 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.21",
+      date: "April 2026",
+      changes: [
+        "Updated recommended Ollama model to Gemma 4",
+      ],
+    },
+    {
       version: "0.1.20",
       date: "April 2026",
       changes: [

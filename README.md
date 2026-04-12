@@ -8,7 +8,11 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.20)
+## What's New (v0.1.21)
+
+- Updated recommended Ollama model to Gemma 4
+
+### v0.1.20
 
 - Whisper large-v3-turbo model — 8x faster, similar accuracy to large-v3
 - Quantized model variants (Q8) — smaller downloads, lower memory usage

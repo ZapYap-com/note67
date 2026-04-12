@@ -30,9 +30,9 @@ export function OllamaTab() {
   // Model recommendations
   const getRecommendation = (modelName: string) => {
     const lower = modelName.toLowerCase();
-    if (lower === "gemma3:latest" || lower === "gemma3") return "Recommended";
-    if (lower === "gemma3:27b") return "High-end";
-    if (lower === "gemma3:1b" || lower === "gemma3:1b-it") return "Lightweight";
+    if (lower === "gemma4:latest" || lower === "gemma4") return "Recommended";
+    if (lower === "gemma4:27b") return "High-end";
+    if (lower === "gemma4:1b" || lower === "gemma4:1b-it") return "Lightweight";
     return null;
   };
 
@@ -105,13 +105,13 @@ export function OllamaTab() {
           </p>
           <ul className="space-y-1 text-xs">
             <li>
-              <strong>gemma3:latest</strong> — Best for most users
+              <strong>gemma4:latest</strong> — Best for most users
             </li>
             <li>
-              <strong>gemma3:1b</strong> — Lightweight, for older computers
+              <strong>gemma4:1b</strong> — Lightweight, for older computers
             </li>
             <li>
-              <strong>gemma3:27b</strong> — High quality, for newer computers
+              <strong>gemma4:27b</strong> — High quality, for newer computers
               with GPU
             </li>
           </ul>
