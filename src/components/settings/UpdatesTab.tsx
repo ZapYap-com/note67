@@ -26,6 +26,10 @@ export function UpdatesTab() {
       version: "0.1.21",
       date: "April 2026",
       changes: [
+        "Hashtag support - type #tag in notes for auto-extraction and filtering",
+        "Tag autocomplete - type # to see suggestions with keyboard navigation",
+        "Auto-generated tag colors based on tag name",
+        "Global search (Cmd+K) - full-text search across all notes with highlights",
         "Updated recommended Ollama model to Gemma 4",
       ],
     },
