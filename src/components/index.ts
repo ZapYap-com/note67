@@ -15,3 +15,4 @@ export { UploadedAudioList } from "./UploadedAudioList";
 export { AudioFilesList } from "./AudioFilesList";
 export { MarkdownEditor } from "./MarkdownEditor";
 export { AISidebar } from "./AISidebar";
+export { TagsFilter } from "./TagsFilter";

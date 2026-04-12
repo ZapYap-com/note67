@@ -281,3 +281,6 @@
 .crepe .milkdown .milkdown-slash-menu li.selected {
   background: var(--color-sidebar-selected);
 }
+
+/* Hashtag styling - visual highlight for #tags in content */
+/* Note: Full interactive tag nodes require a Milkdown plugin (deferred to future iteration) */

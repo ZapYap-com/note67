@@ -12,8 +12,10 @@ import {
   MeetingDetectedPopup,
   MarkdownEditor,
   AISidebar,
+  TagsFilter,
 } from "./components";
-import { exportApi, aiApi, notesApi, transcriptionApi } from "./api";
+import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
+import { useTagsStore } from "./stores/tagsStore";
 import {
   useNotes,
   useModels,
@@ -78,11 +80,17 @@ function App() {
   const theme = useThemeStore((state) => state.theme);
   const loadTheme = useThemeStore((state) => state.loadTheme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
+  const { fetchTags } = useTagsStore();
 
   // Load theme from database on mount
   useEffect(() => {
     loadTheme();
   }, [loadTheme]);
+
+  // Refresh tags when notes change
+  useEffect(() => {
+    fetchTags();
+  }, [notes, fetchTags]);
 
   // Show main window once frontend is ready (handles autostart gracefully)
   useEffect(() => {
@@ -142,8 +150,29 @@ function App() {
     noteId?: string;
   } | null>(null);
 
+  // Tag filtering state
+  const [filteredNotesByTag, setFilteredNotesByTag] = useState<Note[] | null>(null);
+
   const selectedNote = notes.find((n) => n.id === selectedNoteId) || null;
   const recordingNote = notes.find((n) => n.id === recordingNoteId) || null;
+
+  // Use filtered notes if a tag is selected, otherwise use all notes
+  const displayNotes = filteredNotesByTag !== null ? filteredNotesByTag : notes;
+
+  // Handle tag selection
+  const handleTagSelect = useCallback(async (tagName: string | null) => {
+    if (tagName) {
+      try {
+        const filtered = await tagsApi.getNotesByTag(tagName);
+        setFilteredNotesByTag(filtered);
+      } catch (error) {
+        console.error("Failed to filter notes by tag:", error);
+        setFilteredNotesByTag(null);
+      }
+    } else {
+      setFilteredNotesByTag(null);
+    }
+  }, []);
   // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId
     ? (isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
@@ -160,7 +189,7 @@ function App() {
     const todayNotes: Note[] = [];
     const olderGroups: Map<string, Note[]> = new Map();
 
-    notes.forEach((note) => {
+    displayNotes.forEach((note) => {
       const date = new Date(note.started_at);
       date.setHours(0, 0, 0, 0);
       const diffDays = Math.floor(
@@ -187,7 +216,7 @@ function App() {
     });
 
     return groups;
-  }, [notes]);
+  }, [displayNotes]);
 
   const handleNewNote = useCallback(async () => {
     const note = await createNote("Untitled");
@@ -609,6 +638,9 @@ function App() {
             </svg>
           </button>
         </div>
+
+        {/* Tags Filter */}
+        <TagsFilter onTagSelect={handleTagSelect} />
 
         {/* Note List */}
         <div className="flex-1 overflow-y-auto">

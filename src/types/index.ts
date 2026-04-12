@@ -15,6 +15,8 @@ export type {
   UploadedAudio,
   AudioItem,
   RetranscribeResult,
+  Tag,
+  NoteTag,
 } from "./note";
 
 export { RecordingPhase } from "./note";

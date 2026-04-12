@@ -4,6 +4,7 @@ pub mod export;
 pub mod images;
 pub mod notes;
 pub mod settings;
+pub mod tags;
 pub mod transcription;
 pub mod upload;
 
@@ -13,5 +14,6 @@ pub use export::*;
 pub use images::*;
 pub use notes::*;
 pub use settings::*;
+pub use tags::*;
 pub use transcription::*;
 pub use upload::*;

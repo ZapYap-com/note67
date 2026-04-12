@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 7;
+pub const SCHEMA_VERSION: i32 = 8;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -26,6 +26,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 7 {
         migrate_v7(conn)?;
+    }
+    if version < 8 {
+        migrate_v8(conn)?;
     }
 
     Ok(())
@@ -302,6 +305,46 @@ fn migrate_v7(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 7)?;
+
+    Ok(())
+}
+
+fn migrate_v8(conn: &Connection) -> rusqlite::Result<()> {
+    // Tags table (unique tag names)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            color TEXT,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Note-tag junction table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS note_tags (
+            note_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (note_id, tag_id),
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Indexes for faster lookups
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(note_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id)",
+        [],
+    )?;
+
+    set_schema_version(conn, 8)?;
 
     Ok(())
 }

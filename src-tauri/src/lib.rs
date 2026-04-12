@@ -443,6 +443,12 @@ pub fn run() {
             commands::save_image,
             commands::get_attachments_dir,
             commands::delete_note_attachments,
+            // Tag commands
+            commands::get_all_tags,
+            commands::get_note_tags,
+            commands::sync_note_tags,
+            commands::get_notes_by_tag,
+            commands::delete_tag,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

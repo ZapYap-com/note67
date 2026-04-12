@@ -5,6 +5,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::audio::converter::get_audio_duration_ms;
+use crate::commands::tags::sync_note_tags_internal;
 use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
 
@@ -167,6 +168,11 @@ pub fn update_note(
         (None, None, None) => conn.execute(&sql, rusqlite::params![now.to_rfc3339(), id]),
     }
     .map_err(|e| e.to_string())?;
+
+    // Sync tags if description was updated
+    if let Some(ref description) = update.description {
+        sync_note_tags_internal(&conn, &id, description)?;
+    }
 
     // Return updated note
     drop(conn);

@@ -142,3 +142,18 @@ export interface RetranscribeResult {
   failedItems: string[];
   totalSegments: number;
 }
+
+// Tag with note count (from get_all_tags)
+export interface Tag {
+  id: number;
+  name: string;
+  color: string | null;
+  note_count: number;
+}
+
+// Tag for a specific note (from get_note_tags)
+export interface NoteTag {
+  id: number;
+  name: string;
+  color: string | null;
+}
