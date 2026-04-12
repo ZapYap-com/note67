@@ -300,40 +300,68 @@ export function MarkdownEditor({
     const currentMarkdown = crepeRef.current.getMarkdown();
 
     // Find the last unclosed [[ pattern by searching backwards
-    // Look for [[ that doesn't have a matching ]]
+    // Milkdown may escape brackets as \[\[ so we need to check for both
     let lastUnclosedIndex = -1;
+    let isEscaped = false;
     let searchPos = currentMarkdown.length;
 
     while (searchPos > 0) {
+      // Look for both [[ and \[\[
       const openIndex = currentMarkdown.lastIndexOf('[[', searchPos - 1);
-      if (openIndex === -1) break;
+      const escapedOpenIndex = currentMarkdown.lastIndexOf('\\[\\[', searchPos - 1);
+
+      // Use whichever is found last (closest to cursor)
+      let foundIndex = -1;
+      let foundEscaped = false;
+
+      if (openIndex !== -1 && escapedOpenIndex !== -1) {
+        if (escapedOpenIndex > openIndex) {
+          foundIndex = escapedOpenIndex;
+          foundEscaped = true;
+        } else {
+          foundIndex = openIndex;
+          foundEscaped = false;
+        }
+      } else if (escapedOpenIndex !== -1) {
+        foundIndex = escapedOpenIndex;
+        foundEscaped = true;
+      } else if (openIndex !== -1) {
+        foundIndex = openIndex;
+        foundEscaped = false;
+      }
+
+      if (foundIndex === -1) break;
 
       // Check if this [[ has a closing ]] after it
-      const afterOpen = currentMarkdown.slice(openIndex + 2);
-      const closeIndex = afterOpen.indexOf(']]');
+      const bracketLen = foundEscaped ? 4 : 2; // \[\[ is 4 chars, [[ is 2
+      const afterOpen = currentMarkdown.slice(foundIndex + bracketLen);
+      const closePattern = foundEscaped ? '\\]\\]' : ']]';
+      const closeIndex = afterOpen.indexOf(closePattern);
 
       if (closeIndex === -1) {
         // No closing ]] found, this is unclosed
-        lastUnclosedIndex = openIndex;
+        lastUnclosedIndex = foundIndex;
+        isEscaped = foundEscaped;
         break;
       }
 
       // Move search position before this [[
-      searchPos = openIndex;
+      searchPos = foundIndex;
     }
 
     if (lastUnclosedIndex === -1) return;
 
     // Get text before the [[
+    const bracketLen = isEscaped ? 4 : 2;
     const beforeBrackets = currentMarkdown.slice(0, lastUnclosedIndex);
-    const afterBrackets = currentMarkdown.slice(lastUnclosedIndex + 2);
+    const afterBrackets = currentMarkdown.slice(lastUnclosedIndex + bracketLen);
 
     // The partial text is everything after [[ until a newline, ] or end of string
-    const partialMatch = afterBrackets.match(/^[^\n\]]*/)
+    const partialMatch = afterBrackets.match(/^[^\n\]\\]*/)
     const partialText = partialMatch ? partialMatch[0] : '';
     const afterPartial = afterBrackets.slice(partialText.length);
 
-    // Build the new markdown with the completed link
+    // Build the new markdown with the completed link (use unescaped format)
     const newMarkdown = beforeBrackets + `[[${noteTitle}]]` + afterPartial;
 
     // Close autocomplete first
