@@ -1024,7 +1024,8 @@ function App() {
             onNavigateToNote={(noteId) => {
               const targetNote = notes.find(n => n.id === noteId);
               if (targetNote) {
-                handleSelectNote(targetNote);
+                setSelectedNoteId(targetNote.id);
+                setActiveTab("notes");
               }
             }}
             onWikiLinkClick={(title) => {
@@ -1032,7 +1033,8 @@ function App() {
                 n.title.toLowerCase() === title.toLowerCase()
               );
               if (targetNote) {
-                handleSelectNote(targetNote);
+                setSelectedNoteId(targetNote.id);
+                setActiveTab("notes");
               }
             }}
             onOpenGuide={() => {
