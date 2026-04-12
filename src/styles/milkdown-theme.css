@@ -284,3 +284,28 @@
 
 /* Hashtag styling - visual highlight for #tags in content */
 /* Note: Full interactive tag nodes require a Milkdown plugin (deferred to future iteration) */
+
+/* Tag Autocomplete Dropdown */
+.tag-autocomplete {
+  animation: tag-autocomplete-fade-in 0.15s ease-out;
+}
+
+@keyframes tag-autocomplete-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tag-autocomplete button:focus {
+  outline: none;
+}
+
+.tag-autocomplete button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}

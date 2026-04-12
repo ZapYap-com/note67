@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { Tag } from "../types";
+import { getTagColor } from "../utils/tagColors";
 
 interface NoteSearchWithTagsProps {
   searchQuery: string;
@@ -144,28 +145,35 @@ export function NoteSearchWithTags({
                   <div className="my-1 border-t" style={{ borderColor: "var(--color-border)" }} />
                 </>
               )}
-              {tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag.name)}
-                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-black/5 flex items-center justify-between"
-                  style={{
-                    color: selectedTag === tag.name ? "var(--color-accent)" : "var(--color-text)",
-                    backgroundColor: selectedTag === tag.name ? "var(--color-accent-light)" : "transparent",
-                  }}
-                >
-                  <span>#{tag.name}</span>
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded-full"
+              {tags.map((tag) => {
+                const tagColor = getTagColor(tag.name);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => handleTagClick(tag.name)}
+                    className="w-full px-3 py-1.5 text-left text-xs hover:bg-black/5 flex items-center gap-2"
                     style={{
-                      backgroundColor: "var(--color-bg-subtle)",
-                      color: "var(--color-text-tertiary)",
+                      color: selectedTag === tag.name ? "var(--color-accent)" : "var(--color-text)",
+                      backgroundColor: selectedTag === tag.name ? "var(--color-accent-light)" : "transparent",
                     }}
                   >
-                    {tag.note_count}
-                  </span>
-                </button>
-              ))}
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: tagColor }}
+                    />
+                    <span className="flex-1">#{tag.name}</span>
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: "var(--color-bg-subtle)",
+                        color: "var(--color-text-tertiary)",
+                      }}
+                    >
+                      {tag.note_count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

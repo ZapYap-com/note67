@@ -15,6 +15,7 @@ import {
   NoteSearchWithTags,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
+import { getTagColor } from "./utils/tagColors";
 import { useTagsStore } from "./stores/tagsStore";
 import {
   useNotes,
@@ -745,18 +746,21 @@ function App() {
                           Live
                         </span>
                       )}
-                      {getTagsForNote(note.id).slice(0, 3).map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="px-1.5 py-0.5 rounded text-[10px]"
-                          style={{
-                            backgroundColor: "var(--color-bg-subtle)",
-                            color: "var(--color-text-tertiary)",
-                          }}
-                        >
-                          #{tag.name}
-                        </span>
-                      ))}
+                      {getTagsForNote(note.id).slice(0, 3).map((tag) => {
+                        const tagColor = getTagColor(tag.name);
+                        return (
+                          <span
+                            key={tag.id}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                            style={{
+                              backgroundColor: tagColor,
+                              color: "white",
+                            }}
+                          >
+                            #{tag.name}
+                          </span>
+                        );
+                      })}
                       {getTagsForNote(note.id).length > 3 && (
                         <span
                           className="text-[10px]"
