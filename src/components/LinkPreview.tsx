@@ -6,9 +6,10 @@ interface LinkPreviewProps {
   noteTitle: string;
   position: { top: number; left: number };
   onClose: () => void;
+  onNavigate?: (noteId: string) => void;
 }
 
-export function LinkPreview({ noteTitle, position, onClose }: LinkPreviewProps) {
+export function LinkPreview({ noteTitle, position, onClose, onNavigate }: LinkPreviewProps) {
   const [note, setNote] = useState<BacklinkNote | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -77,6 +78,13 @@ export function LinkPreview({ noteTitle, position, onClose }: LinkPreviewProps) 
     return plainText.length > 120 ? plainText.slice(0, 120) + "..." : plainText;
   };
 
+  const handleClick = () => {
+    if (note && onNavigate) {
+      onNavigate(note.id);
+      onClose();
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -118,12 +126,26 @@ export function LinkPreview({ noteTitle, position, onClose }: LinkPreviewProps) 
       style={{
         top: adjustedPosition.top,
         left: adjustedPosition.left,
+        cursor: onNavigate ? "pointer" : "default",
       }}
       onMouseLeave={onClose}
+      onClick={handleClick}
     >
       <div className="link-preview-title">{note.title}</div>
       <div className="link-preview-snippet">{getSnippet(note.description)}</div>
       <div className="link-preview-date">{formatDate(note.started_at)}</div>
+      {onNavigate && (
+        <div
+          className="link-preview-hint"
+          style={{
+            color: "var(--color-text-tertiary)",
+            fontSize: "10px",
+            marginTop: "6px",
+          }}
+        >
+          Click to open
+        </div>
+      )}
     </div>
   );
 }

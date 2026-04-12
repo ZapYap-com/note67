@@ -2097,6 +2097,7 @@ function NoteView({
               placeholder="Take notes or press / for commands..."
               noteId={note.id}
               onWikiLinkClick={onWikiLinkClick}
+              onNavigateToNote={onNavigateToNote}
             />
           </div>
         )}

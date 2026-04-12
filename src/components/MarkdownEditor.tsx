@@ -18,6 +18,7 @@ interface MarkdownEditorProps {
   placeholder?: string;
   noteId: string;
   onWikiLinkClick?: (noteTitle: string) => void;
+  onNavigateToNote?: (noteId: string) => void;
 }
 
 interface AutocompleteState {
@@ -35,6 +36,7 @@ export function MarkdownEditor({
   placeholder = "",
   noteId,
   onWikiLinkClick,
+  onNavigateToNote,
 }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
@@ -205,6 +207,19 @@ export function MarkdownEditor({
 
     if (bracketStart === -1) return null;
 
+    // Check if this is a complete link (has ]] after cursor)
+    // If so, don't show autocomplete - user clicked inside existing link
+    for (let i = cursorPos; i < text.length - 1; i++) {
+      if (text[i] === "]" && text[i + 1] === "]") {
+        // Found closing brackets - this is a complete link, don't show autocomplete
+        return null;
+      }
+      // Stop if we hit another [[ (new link starting)
+      if (text[i] === "[" && text[i + 1] === "[") {
+        break;
+      }
+    }
+
     const word = text.slice(bracketStart + 2, cursorPos); // Exclude the [[
 
     // Get position for the dropdown
@@ -295,10 +310,23 @@ export function MarkdownEditor({
 
     if (bracketStart === -1) return;
 
-    // Replace [[partial with [[Full Title]] followed by a space
+    // Check if we're inside an existing [[...]] link by looking for ]] after cursor
+    let bracketEnd = cursorPos;
+    for (let i = cursorPos; i < text.length - 1; i++) {
+      if (text[i] === "]" && text[i + 1] === "]") {
+        bracketEnd = i + 2; // Skip past the ]]
+        break;
+      }
+      // Stop if we hit another [[ (nested/new link)
+      if (text[i] === "[" && text[i + 1] === "[") {
+        break;
+      }
+    }
+
+    // Replace [[...]] or [[partial with [[Full Title]] followed by a space
     const before = text.slice(0, bracketStart);
-    const after = text.slice(cursorPos);
-    const newText = before + "[[" + noteTitle + "]] " + after;
+    const after = text.slice(bracketEnd);
+    const newText = before + "[[" + noteTitle + "]]" + (after.startsWith(" ") ? "" : " ") + after;
 
     // Update text content
     container.textContent = newText;
@@ -874,6 +902,7 @@ export function MarkdownEditor({
           noteTitle={linkPreview.noteTitle}
           position={linkPreview.position}
           onClose={() => setLinkPreview(null)}
+          onNavigate={onNavigateToNote}
         />
       )}
     </>
