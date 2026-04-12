@@ -15,6 +15,7 @@ import {
   NoteSearchWithTags,
   SearchModal,
   BacklinksPanel,
+  UnlinkedMentionsPanel,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
@@ -1026,6 +1027,14 @@ function App() {
                 handleSelectNote(targetNote);
               }
             }}
+            onWikiLinkClick={(title) => {
+              const targetNote = notes.find(n =>
+                n.title.toLowerCase() === title.toLowerCase()
+              );
+              if (targetNote) {
+                handleSelectNote(targetNote);
+              }
+            }}
             onOpenGuide={() => {
               setSettingsTab("guide");
               setShowSettings(true);
@@ -1412,6 +1421,8 @@ interface NoteViewProps {
   onToggleAISidebar?: () => void;
   // Backlinks navigation
   onNavigateToNote?: (noteId: string) => void;
+  // Wiki link navigation
+  onWikiLinkClick?: (noteTitle: string) => void;
   // Help
   onOpenGuide?: () => void;
 }
@@ -1446,6 +1457,7 @@ function NoteView({
   showAISidebar = false,
   onToggleAISidebar,
   onNavigateToNote,
+  onWikiLinkClick,
   onOpenGuide,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
@@ -2084,6 +2096,7 @@ function NoteView({
               onBlur={() => onUpdateDescription(descValue)}
               placeholder="Take notes or press / for commands..."
               noteId={note.id}
+              onWikiLinkClick={onWikiLinkClick}
             />
           </div>
         )}
@@ -2128,6 +2141,15 @@ function NoteView({
       {activeTab === "notes" && onNavigateToNote && (
         <BacklinksPanel
           noteId={note.id}
+          onNavigate={onNavigateToNote}
+        />
+      )}
+
+      {/* Unlinked Mentions Panel - show notes that mention this note's title */}
+      {activeTab === "notes" && onNavigateToNote && (
+        <UnlinkedMentionsPanel
+          noteId={note.id}
+          noteTitle={note.title}
           onNavigate={onNavigateToNote}
         />
       )}

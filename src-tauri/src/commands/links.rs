@@ -23,11 +23,13 @@ pub struct BacklinkNote {
 }
 
 /// Extract wiki links from content using regex
-/// Matches [[Note Title]] pattern
+/// Matches [[Note Title]] and [[Note Title|alias]] patterns
+/// Returns only the title part (before the |)
 pub fn extract_links(content: &str) -> Vec<String> {
-    let re = Regex::new(r"\[\[([^\]]+)\]\]").unwrap();
+    // Matches [[title]] or [[title|alias]] and captures only the title
+    let re = Regex::new(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]").unwrap();
     re.captures_iter(content)
-        .map(|cap| cap[1].to_string())
+        .map(|cap| cap[1].trim().to_string())
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect()
@@ -134,6 +136,27 @@ pub fn get_note_links(db: State<Database>, note_id: String) -> Result<Vec<NoteLi
     Ok(links)
 }
 
+/// Get broken link titles - links that don't have a matching target note
+#[tauri::command]
+pub fn get_broken_link_titles(db: State<Database>, note_id: String) -> Result<Vec<String>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT target_title FROM note_links
+             WHERE source_note_id = ?1 AND target_note_id IS NULL",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let titles = stmt
+        .query_map([&note_id], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(titles)
+}
+
 /// Search notes by title for autocomplete
 #[tauri::command]
 pub fn search_notes_by_title(
@@ -169,6 +192,94 @@ pub fn search_notes_by_title(
         .collect();
 
     Ok(notes)
+}
+
+#[derive(Debug, Serialize)]
+pub struct UnlinkedMention {
+    pub note_id: String,
+    pub note_title: String,
+    pub context: String,
+}
+
+/// Get unlinked mentions - notes that mention this note's title but without [[]] links
+#[tauri::command]
+pub fn get_unlinked_mentions(
+    db: State<Database>,
+    note_id: String,
+) -> Result<Vec<UnlinkedMention>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get current note's title
+    let title: String = conn
+        .query_row("SELECT title FROM notes WHERE id = ?1", [&note_id], |row| {
+            row.get(0)
+        })
+        .map_err(|e| e.to_string())?;
+
+    // Skip short or generic titles that would cause too many false positives
+    if title.len() < 3 || title.to_lowercase() == "untitled" {
+        return Ok(vec![]);
+    }
+
+    // Search all other notes for title text NOT inside [[...]]
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, description FROM notes
+             WHERE id != ?1 AND description IS NOT NULL",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let title_lower = title.to_lowercase();
+    let title_pattern = format!("[[{}]]", title);
+    let title_pattern_lower = title_pattern.to_lowercase();
+
+    let mentions: Vec<UnlinkedMention> = stmt
+        .query_map([&note_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .filter_map(|(id, note_title, description)| {
+            let desc = description?;
+            let desc_lower = desc.to_lowercase();
+
+            // Check if title is mentioned (case-insensitive)
+            if !desc_lower.contains(&title_lower) {
+                return None;
+            }
+
+            // Check if it's already linked
+            if desc_lower.contains(&title_pattern_lower) {
+                return None;
+            }
+
+            // Extract context around the mention (50 chars before/after)
+            if let Some(pos) = desc_lower.find(&title_lower) {
+                let start = pos.saturating_sub(50);
+                let end = (pos + title.len() + 50).min(desc.len());
+                let context = format!(
+                    "{}{}{}",
+                    if start > 0 { "..." } else { "" },
+                    &desc[start..end],
+                    if end < desc.len() { "..." } else { "" }
+                );
+
+                Some(UnlinkedMention {
+                    note_id: id,
+                    note_title,
+                    context,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(mentions)
 }
 
 /// Update all incoming links when a note's title changes
@@ -263,7 +374,24 @@ mod tests {
     fn test_extract_links_nested_brackets() {
         let content = "Invalid [[nested [[bracket]]]] pattern";
         let links = extract_links(content);
-        // Should match "nested [[bracket" which is imperfect but acceptable
+        // With new regex, should match "nested [[bracket" which is imperfect but acceptable
         assert_eq!(links.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_links_with_alias() {
+        let content = "Link to [[Note A|display text]] and [[Note B]]";
+        let links = extract_links(content);
+        assert_eq!(links.len(), 2);
+        assert!(links.contains(&"Note A".to_string()));
+        assert!(links.contains(&"Note B".to_string()));
+    }
+
+    #[test]
+    fn test_extract_links_alias_only() {
+        let content = "Only alias [[Long Note Title|short]]";
+        let links = extract_links(content);
+        assert_eq!(links.len(), 1);
+        assert!(links.contains(&"Long Note Title".to_string()));
     }
 }

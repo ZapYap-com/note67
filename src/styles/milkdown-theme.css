@@ -285,6 +285,72 @@
 /* Hashtag styling - visual highlight for #tags in content */
 /* Note: Full interactive tag nodes require a Milkdown plugin (deferred to future iteration) */
 
+/* Wiki link styling - clickable links with Cmd/Ctrl+click */
+.crepe .milkdown .ProseMirror .wiki-link {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.crepe .milkdown .ProseMirror .wiki-link:hover {
+  text-decoration-style: solid;
+}
+
+.crepe .milkdown .ProseMirror .wiki-link-broken {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Link preview card */
+.link-preview {
+  position: fixed;
+  z-index: 100;
+  max-width: 280px;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  animation: link-preview-fade-in 0.15s ease-out;
+}
+
+@keyframes link-preview-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.link-preview-title {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.link-preview-snippet {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.link-preview-date {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  margin-top: 8px;
+}
+
 /* Tag Autocomplete Dropdown */
 .tag-autocomplete {
   animation: tag-autocomplete-fade-in 0.15s ease-out;

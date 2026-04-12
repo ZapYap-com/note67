@@ -20,4 +20,5 @@ export { NoteSearchWithTags } from "./NoteSearchWithTags";
 export { TagAutocomplete } from "./TagAutocomplete";
 export { LinkAutocomplete } from "./LinkAutocomplete";
 export { BacklinksPanel } from "./BacklinksPanel";
+export { UnlinkedMentionsPanel } from "./UnlinkedMentionsPanel";
 export { SearchModal } from "./SearchModal";

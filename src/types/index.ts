@@ -19,6 +19,7 @@ export type {
   NoteTag,
   NoteLink,
   BacklinkNote,
+  UnlinkedMention,
 } from "./note";
 
 export { RecordingPhase } from "./note";

@@ -6,6 +6,7 @@ import "../styles/milkdown-theme.css";
 import { uploadImage } from "../utils/imageUploader";
 import { TagAutocomplete } from "./TagAutocomplete";
 import { LinkAutocomplete } from "./LinkAutocomplete";
+import { LinkPreview } from "./LinkPreview";
 import { useTagsStore } from "../stores/tagsStore";
 import { linksApi } from "../api/links";
 import type { BacklinkNote } from "../types";
@@ -16,6 +17,7 @@ interface MarkdownEditorProps {
   onBlur?: () => void;
   placeholder?: string;
   noteId: string;
+  onWikiLinkClick?: (noteTitle: string) => void;
 }
 
 interface AutocompleteState {
@@ -32,6 +34,7 @@ export function MarkdownEditor({
   onBlur,
   placeholder = "",
   noteId,
+  onWikiLinkClick,
 }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
@@ -42,6 +45,7 @@ export function MarkdownEditor({
   const onChangeRef = useRef(onChange);
   const onBlurRef = useRef(onBlur);
   const noteIdRef = useRef(noteId);
+  const onWikiLinkClickRef = useRef(onWikiLinkClick);
 
   // Tag autocomplete state
   const { tags } = useTagsStore();
@@ -63,6 +67,13 @@ export function MarkdownEditor({
   });
   const [linkNotes, setLinkNotes] = useState<BacklinkNote[]>([]);
 
+  // Link preview hover state
+  const [linkPreview, setLinkPreview] = useState<{
+    noteTitle: string;
+    position: { top: number; left: number };
+  } | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
+
   // Keep callback refs updated
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -75,6 +86,10 @@ export function MarkdownEditor({
   useEffect(() => {
     noteIdRef.current = noteId;
   }, [noteId]);
+
+  useEffect(() => {
+    onWikiLinkClickRef.current = onWikiLinkClick;
+  }, [onWikiLinkClick]);
 
   // Save on unmount (when switching tabs/notes)
   useEffect(() => {
@@ -511,14 +526,132 @@ export function MarkdownEditor({
       }
     };
 
+    // Handle clicks on wiki links [[Note Title]] or [[Note Title|alias]]
+    const handleClick = (e: MouseEvent) => {
+      if (!onWikiLinkClickRef.current) return;
+
+      // Only handle Cmd/Ctrl+Click
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      const node = selection.anchorNode;
+      if (!node || node.nodeType !== Node.TEXT_NODE) return;
+
+      const text = node.textContent || '';
+      const cursorPos = selection.anchorOffset;
+
+      // Find all wiki links in this text node
+      const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+      let match;
+      while ((match = wikiLinkRegex.exec(text)) !== null) {
+        const linkStart = match.index;
+        const linkEnd = match.index + match[0].length;
+
+        // Check if cursor is within this link
+        if (cursorPos >= linkStart && cursorPos <= linkEnd) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Extract title (before the | if present)
+          const title = match[1].trim();
+          onWikiLinkClickRef.current(title);
+          return;
+        }
+      }
+    };
+
+    // Handle hover over wiki links for preview (debounced)
+    const handleMouseMove = (e: MouseEvent) => {
+      // Clear any pending hover timeout
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+
+      const target = e.target as Node;
+      if (!target || target.nodeType !== Node.TEXT_NODE) {
+        // Check if we're over an element containing text nodes
+        const element = e.target as HTMLElement;
+        if (!element.textContent?.includes("[[")) {
+          setLinkPreview(null);
+          return;
+        }
+      }
+
+      // Use document.caretPositionFromPoint or caretRangeFromPoint to find text under cursor
+      let range: Range | null = null;
+      if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      }
+
+      if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
+        setLinkPreview(null);
+        return;
+      }
+
+      const textNode = range.startContainer;
+      const text = textNode.textContent || '';
+      const offset = range.startOffset;
+
+      // Find wiki link at cursor position
+      const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+      let match;
+      let foundTitle: string | null = null;
+
+      while ((match = wikiLinkRegex.exec(text)) !== null) {
+        const linkStart = match.index;
+        const linkEnd = match.index + match[0].length;
+
+        if (offset >= linkStart && offset <= linkEnd) {
+          foundTitle = match[1].trim();
+          break;
+        }
+      }
+
+      if (!foundTitle) {
+        setLinkPreview(null);
+        return;
+      }
+
+      // Show preview after 300ms delay
+      const title = foundTitle;
+      hoverTimeoutRef.current = window.setTimeout(() => {
+        setLinkPreview({
+          noteTitle: title,
+          position: {
+            top: e.clientY + 10,
+            left: e.clientX + 10,
+          },
+        });
+      }, 300);
+    };
+
+    const handleMouseLeave = () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      setLinkPreview(null);
+    };
+
     container.addEventListener("keydown", handleKeyDown, true);
     container.addEventListener("input", handleInputEvent, true);
+    container.addEventListener("click", handleClick, true);
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseleave", handleMouseLeave);
     document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       container.removeEventListener("keydown", handleKeyDown, true);
       container.removeEventListener("input", handleInputEvent, true);
+      container.removeEventListener("click", handleClick, true);
+      container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseleave", handleMouseLeave);
       document.removeEventListener("selectionchange", handleSelectionChange);
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -734,6 +867,13 @@ export function MarkdownEditor({
           selectedIndex={linkAutocomplete.selectedIndex}
           onSelect={handleLinkSelect}
           onClose={() => setLinkAutocomplete(prev => ({ ...prev, isOpen: false }))}
+        />
+      )}
+      {linkPreview && (
+        <LinkPreview
+          noteTitle={linkPreview.noteTitle}
+          position={linkPreview.position}
+          onClose={() => setLinkPreview(null)}
         />
       )}
     </>
