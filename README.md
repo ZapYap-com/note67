@@ -10,6 +10,17 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 
 ## What's New (v0.1.21)
 
+- Wiki-style links — type `[[Note Title]]` to link between notes
+- Link aliases — use `[[Title|display text]]` syntax for custom link text
+- Link preview on hover — see snippet, click to navigate
+- Link autocomplete — type `[[` to see note suggestions
+- Backlinks panel — see which notes link to the current note
+- Unlinked mentions — find notes that mention this note's title without `[[]]`
+- Auto-update links when note title changes
+- Hashtag support — type `#tag` in notes for auto-extraction and filtering
+- Tag autocomplete — type `#` to see suggestions with keyboard navigation
+- Auto-generated tag colors based on tag name
+- Global search (`Cmd+K`) — full-text search across all notes with highlights
 - Updated recommended Ollama model to Gemma 4
 
 ### v0.1.20
@@ -61,6 +72,11 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Local image storage with paste support
 - [x] Slash commands for quick formatting
 - [x] LaTeX/math support in notes
+- [x] Wiki-style links with `[[Note Title]]` syntax
+- [x] Link aliases, preview on hover, and autocomplete
+- [x] Backlinks panel and unlinked mentions
+- [x] Hashtag support with autocomplete and auto-generated colors
+- [x] Global search (`Cmd+K`) with full-text search
 - [ ] Linux system audio support
 
 ## Screenshots
