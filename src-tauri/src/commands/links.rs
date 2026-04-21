@@ -75,27 +75,6 @@ pub fn sync_note_links_internal(
     Ok(())
 }
 
-/// Debug: Get all links in database
-#[tauri::command]
-pub fn debug_get_all_links(db: State<Database>) -> Result<Vec<(String, Option<String>, String)>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT source_note_id, target_note_id, target_title FROM note_links")
-        .map_err(|e| e.to_string())?;
-    let links = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(links)
-}
-
 /// Get backlinks - notes that link TO this note
 #[tauri::command]
 pub fn get_backlinks(db: State<Database>, note_id: String) -> Result<Vec<BacklinkNote>, String> {
