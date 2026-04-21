@@ -196,7 +196,7 @@ export function GraphControls({
           <button
             onClick={onFitView}
             className="p-1.5 bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
-            title="Fit to view"
+            title="Reset view"
           >
             <svg
               className="w-4 h-4"
@@ -205,7 +205,8 @@ export function GraphControls({
               stroke="currentColor"
               strokeWidth="2"
             >
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
             </svg>
           </button>
         </div>

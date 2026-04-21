@@ -92,13 +92,11 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
   }, []);
 
   const handleFitView = useCallback(() => {
-    if (svgRef.current && zoomRef.current && containerRef.current) {
+    if (svgRef.current && zoomRef.current) {
       const svg = d3.select(svgRef.current);
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
       svg.transition().call(
         zoomRef.current.transform,
-        d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+        d3.zoomIdentity.translate(0, 0).scale(1)
       );
     }
   }, []);
