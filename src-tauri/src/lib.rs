@@ -456,6 +456,7 @@ pub fn run() {
             commands::search_notes_by_title,
             commands::get_broken_link_titles,
             commands::get_unlinked_mentions,
+            commands::debug_get_all_links,
             // Graph commands
             commands::get_graph_data,
             commands::get_local_graph,
