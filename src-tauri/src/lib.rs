@@ -456,6 +456,8 @@ pub fn run() {
             commands::search_notes_by_title,
             commands::get_broken_link_titles,
             commands::get_unlinked_mentions,
+            // Graph commands
+            commands::get_graph_data,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

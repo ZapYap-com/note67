@@ -20,6 +20,9 @@ export type {
   NoteLink,
   BacklinkNote,
   UnlinkedMention,
+  GraphNode,
+  GraphEdge,
+  GraphData,
 } from "./note";
 
 export { RecordingPhase } from "./note";

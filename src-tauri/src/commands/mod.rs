@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod audio;
 pub mod export;
+pub mod graph;
 pub mod images;
 pub mod links;
 pub mod notes;
@@ -12,6 +13,7 @@ pub mod upload;
 pub use ai::*;
 pub use audio::*;
 pub use export::*;
+pub use graph::*;
 pub use images::*;
 pub use links::*;
 pub use notes::*;

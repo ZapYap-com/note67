@@ -180,3 +180,27 @@ export interface UnlinkedMention {
   note_title: string;
   context: string;
 }
+
+// Graph visualization types
+export interface GraphNode {
+  id: string;
+  title: string;
+  link_count: number;
+  // D3 adds these at runtime
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number | null;
+  fy?: number | null;
+}
+
+export interface GraphEdge {
+  source: string | GraphNode;
+  target: string | GraphNode;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}

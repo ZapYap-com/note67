@@ -16,6 +16,7 @@ import {
   SearchModal,
   BacklinksPanel,
   UnlinkedMentionsPanel,
+  GraphView,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
@@ -117,6 +118,7 @@ function App() {
   }, [theme]);
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<"notes" | "graph">("notes");
   const [showSettings, setShowSettings] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<
@@ -364,6 +366,8 @@ function App() {
         } else if (showSettings) {
           setShowSettings(false);
           refreshSystemStatus();
+        } else if (currentView === "graph") {
+          setCurrentView("notes");
         } else if (selectedNoteId) {
           setSelectedNoteId(null);
         }
@@ -376,6 +380,7 @@ function App() {
     contextMenu,
     showDeleteConfirm,
     showSettings,
+    currentView,
     selectedNoteId,
     refreshSystemStatus,
   ]);
@@ -597,6 +602,7 @@ function App() {
 
   const handleSelectNote = async (note: Note) => {
     setSelectedNoteId(note.id);
+    setCurrentView("notes"); // Exit graph view when selecting a note
     setActiveTab("summary");
     if (!noteTranscripts[note.id]) {
       const segments = await loadTranscript(note.id);
@@ -647,12 +653,40 @@ function App() {
       >
         {/* Sidebar Header */}
         <div className="px-4 py-3 flex items-center justify-between">
-          <span
-            className="text-base font-semibold"
-            style={{ color: "var(--color-text)" }}
-          >
-            Notes
-          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentView("notes")}
+              className={`px-2 py-1 text-sm font-medium rounded transition-colors ${
+                currentView === "notes"
+                  ? "text-[var(--color-text)]"
+                  : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+              }`}
+            >
+              Notes
+            </button>
+            <button
+              onClick={() => setCurrentView("graph")}
+              className={`px-2 py-1 text-sm font-medium rounded transition-colors ${
+                currentView === "graph"
+                  ? "text-[var(--color-text)]"
+                  : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+              }`}
+              title="Graph View"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="6" cy="6" r="2.5" strokeWidth="1.5" />
+                <circle cx="18" cy="6" r="2.5" strokeWidth="1.5" />
+                <circle cx="6" cy="18" r="2.5" strokeWidth="1.5" />
+                <circle cx="18" cy="18" r="2.5" strokeWidth="1.5" />
+                <path strokeWidth="1.5" d="M8.5 6h7M6 8.5v7M18 8.5v7M8.5 18h7" />
+              </svg>
+            </button>
+          </div>
           <button
             onClick={handleNewNote}
             className="p-2 rounded-lg hover:bg-black/5 transition-colors"
@@ -920,7 +954,15 @@ function App() {
         className="flex-1 flex flex-col relative"
         style={{ backgroundColor: "var(--color-bg)" }}
       >
-        {selectedNote ? (
+        {currentView === "graph" ? (
+          <GraphView
+            onSelectNote={(noteId) => {
+              setSelectedNoteId(noteId);
+              setCurrentView("notes");
+              setActiveTab("notes");
+            }}
+          />
+        ) : selectedNote ? (
           <NoteView
             key={selectedNote.id}
             note={selectedNote}
@@ -1053,8 +1095,8 @@ function App() {
         )}
 
         {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
-        {/* Hide when viewing a note (unless recording or generating) */}
-        {!(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
+        {/* Hide when viewing a note (unless recording or generating) or in graph view */}
+        {currentView !== "graph" && !(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
             {isGeneratingSummaryTitle ? (
               <div

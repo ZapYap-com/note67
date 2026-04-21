@@ -22,3 +22,4 @@ export { LinkAutocomplete } from "./LinkAutocomplete";
 export { BacklinksPanel } from "./BacklinksPanel";
 export { UnlinkedMentionsPanel } from "./UnlinkedMentionsPanel";
 export { SearchModal } from "./SearchModal";
+export { GraphView } from "./graph";
