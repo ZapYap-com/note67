@@ -954,7 +954,7 @@ function App() {
         className="flex-1 flex flex-col relative"
         style={{ backgroundColor: "var(--color-bg)" }}
       >
-        {currentView === "graph" ? (
+        {currentView === "graph" && (
           <GraphView
             onSelectNote={(noteId) => {
               setSelectedNoteId(noteId);
@@ -962,7 +962,8 @@ function App() {
               setActiveTab("notes");
             }}
           />
-        ) : selectedNote ? (
+        )}
+        {currentView === "notes" && selectedNote ? (
           <NoteView
             key={selectedNote.id}
             note={selectedNote}
@@ -1084,7 +1085,7 @@ function App() {
               setShowSettings(true);
             }}
           />
-        ) : (
+        ) : currentView === "notes" ? (
           <EmptyState
             needsSetup={!loadedModel || !ollamaRunning || !ollamaModel}
             onOpenSettings={() => {
@@ -1092,7 +1093,7 @@ function App() {
               setShowSettings(true);
             }}
           />
-        )}
+        ) : null}
 
         {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
         {/* Hide when viewing a note (unless recording or generating) or in graph view */}

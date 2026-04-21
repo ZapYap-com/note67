@@ -29,9 +29,11 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     localCenterNoteId,
   } = useGraphStore();
 
+  // Fetch graph data on mount
   useEffect(() => {
     fetchGraphData();
-  }, [fetchGraphData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filter nodes by tag (client-side filtering)
   const filteredData = useMemo(() => {
