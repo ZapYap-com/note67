@@ -230,8 +230,11 @@ pub fn get_unlinked_mentions(
         .map_err(|e| e.to_string())?;
 
     let title_lower = title.to_lowercase();
-    let title_pattern = format!("[[{}]]", title);
-    let title_pattern_lower = title_pattern.to_lowercase();
+    // Escape regex special characters in title for pattern matching
+    let escaped_title = regex::escape(&title_lower);
+    // Pattern matches [[title]] or [[title|alias]] (case-insensitive)
+    let link_pattern = Regex::new(&format!(r"\[\[{}\s*(?:\|[^\]]+)?\]\]", escaped_title))
+        .map_err(|e| e.to_string())?;
 
     let mentions: Vec<UnlinkedMention> = stmt
         .query_map([&note_id], |row| {
@@ -252,8 +255,8 @@ pub fn get_unlinked_mentions(
                 return None;
             }
 
-            // Check if it's already linked
-            if desc_lower.contains(&title_pattern_lower) {
+            // Check if it's already linked (handles both [[title]] and [[title|alias]])
+            if link_pattern.is_match(&desc_lower) {
                 return None;
             }
 

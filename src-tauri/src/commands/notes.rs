@@ -31,6 +31,12 @@ pub fn create_note(db: State<Database>, input: NewNote) -> Result<Note, String> 
     )
     .map_err(|e| e.to_string())?;
 
+    // Sync tags and links if description was provided
+    if let Some(ref description) = input.description {
+        sync_note_tags_internal(&conn, &id, description)?;
+        sync_note_links_internal(&conn, &id, description)?;
+    }
+
     Ok(Note {
         id,
         title: input.title,
