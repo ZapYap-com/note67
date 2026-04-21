@@ -1,8 +1,11 @@
 import { useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
 import { useGraphStore } from "../../stores/graphStore";
+import { useGraphSettingsStore } from "../../stores/graphSettingsStore";
+import { useTagsStore } from "../../stores/tagsStore";
 import { GraphNodePreview } from "./GraphNodePreview";
 import { GraphControls } from "./GraphControls";
+import { useGraphUpdates } from "../../hooks/useGraphUpdates";
 import type { GraphNode, GraphEdge } from "../../types";
 
 interface GraphViewProps {
@@ -15,6 +18,7 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(
     null
   );
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
   const {
     nodes,
@@ -28,6 +32,12 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     viewMode,
     localCenterNoteId,
   } = useGraphStore();
+
+  const settings = useGraphSettingsStore();
+  const { getTagColor } = useTagsStore();
+
+  // Enable real-time updates
+  useGraphUpdates();
 
   // Fetch graph data on mount
   useEffect(() => {
@@ -64,8 +74,70 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     );
   }, [nodes, searchQuery]);
 
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .call(zoomRef.current.scaleBy, 1.5);
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .call(zoomRef.current.scaleBy, 0.67);
+    }
+  }, []);
+
+  const handleFitView = useCallback(() => {
+    if (svgRef.current && zoomRef.current && containerRef.current) {
+      const svg = d3.select(svgRef.current);
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      svg.transition().call(
+        zoomRef.current.transform,
+        d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+      );
+    }
+  }, []);
+
+  // Get node radius based on settings
+  const getNodeRadius = useCallback(
+    (d: GraphNode) => {
+      if (settings.nodeSize === "fixed") return 10;
+      return Math.max(6, Math.min(20, 6 + d.link_count * 2));
+    },
+    [settings.nodeSize]
+  );
+
+  // Get node color based on settings
+  const getNodeColor = useCallback(
+    (d: GraphNode) => {
+      if (settings.colorBy === "tag" && d.tags.length > 0) {
+        return getTagColor(d.tags[0]);
+      }
+      // Highlight center node in local view
+      if (viewMode === "local" && d.id === localCenterNoteId) {
+        return "var(--color-accent-emphasis, #1d4ed8)";
+      }
+      // Dim orphan nodes
+      if (d.is_orphan) {
+        return "var(--color-text-tertiary)";
+      }
+      return "var(--color-accent)";
+    },
+    [settings.colorBy, viewMode, localCenterNoteId, getTagColor]
+  );
+
   const renderGraph = useCallback(() => {
-    if (!svgRef.current || !containerRef.current || filteredData.nodes.length === 0) return;
+    if (
+      !svgRef.current ||
+      !containerRef.current ||
+      filteredData.nodes.length === 0
+    )
+      return;
 
     const svg = d3.select(svgRef.current);
     const container = containerRef.current;
@@ -78,6 +150,23 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     // Set SVG dimensions
     svg.attr("width", width).attr("height", height);
 
+    // Add arrow marker for directed edges
+    if (settings.showArrows) {
+      svg
+        .append("defs")
+        .append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "-0 -5 10 10")
+        .attr("refX", 20)
+        .attr("refY", 0)
+        .attr("orient", "auto")
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .append("path")
+        .attr("d", "M 0,-5 L 10,0 L 0,5")
+        .attr("fill", "var(--color-border)");
+    }
+
     // Create container group for zoom/pan
     const g = svg.append("g");
 
@@ -87,13 +176,25 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       .scaleExtent([0.1, 4])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
+        // Fade text based on zoom level and threshold
+        const scale = event.transform.k;
+        g.selectAll(".node-label").style(
+          "opacity",
+          scale >= settings.textFadeThreshold ? 1 : 0
+        );
       });
 
     svg.call(zoom);
+    zoomRef.current = zoom;
 
     // Create a working copy of nodes and edges for D3
     const nodesCopy: GraphNode[] = filteredData.nodes.map((n) => ({ ...n }));
     const edgesCopy: GraphEdge[] = filteredData.edges.map((e) => ({ ...e }));
+
+    // Map settings (0-100) to actual force values
+    const centerStrength = settings.centerForce / 100;
+    const repelStrength = -100 - settings.repelForce * 5; // -100 to -600
+    const linkDist = 50 + settings.linkDistance * 2; // 50 to 250
 
     // Create force simulation
     const simulation = d3
@@ -103,10 +204,13 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
         d3
           .forceLink<GraphNode, GraphEdge>(edgesCopy)
           .id((d) => d.id)
-          .distance(120)
+          .distance(linkDist)
       )
-      .force("charge", d3.forceManyBody().strength(-400))
-      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("charge", d3.forceManyBody().strength(repelStrength))
+      .force(
+        "center",
+        d3.forceCenter(width / 2, height / 2).strength(centerStrength)
+      )
       .force("collision", d3.forceCollide().radius(50));
 
     simulationRef.current = simulation;
@@ -120,7 +224,8 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       .join("line")
       .attr("stroke", "var(--color-border)")
       .attr("stroke-opacity", 0.5)
-      .attr("stroke-width", 1);
+      .attr("stroke-width", 1)
+      .attr("marker-end", settings.showArrows ? "url(#arrowhead)" : null);
 
     // Draw nodes
     const node = g
@@ -138,21 +243,11 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
           .on("end", dragended)
       );
 
-    // Node circles - size based on link count
+    // Node circles
     node
       .append("circle")
-      .attr("r", (d) => Math.max(6, Math.min(20, 6 + d.link_count * 2)))
-      .attr("fill", (d) => {
-        // Highlight center node in local view
-        if (viewMode === "local" && d.id === localCenterNoteId) {
-          return "var(--color-accent-emphasis, #1d4ed8)";
-        }
-        // Dim orphan nodes
-        if (d.is_orphan) {
-          return "var(--color-text-tertiary)";
-        }
-        return "var(--color-accent)";
-      })
+      .attr("r", getNodeRadius)
+      .attr("fill", getNodeColor)
       .attr("stroke", (d) => {
         // Highlight search matches with yellow border
         if (highlightedNodeIds.has(d.id)) {
@@ -163,20 +258,48 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       .attr("stroke-width", (d) => (highlightedNodeIds.has(d.id) ? 3 : 2))
       .attr("opacity", (d) => (d.is_orphan ? 0.5 : 1));
 
+    // Pin indicator for pinned nodes
+    node
+      .filter((d) => settings.pinnedNodes.includes(d.id))
+      .append("circle")
+      .attr("class", "pin-indicator")
+      .attr("r", 4)
+      .attr("cx", (d) => getNodeRadius(d) - 4)
+      .attr("cy", (d) => -getNodeRadius(d) + 4)
+      .attr("fill", "#ef4444");
+
     // Node labels
     node
       .append("text")
+      .attr("class", "node-label")
       .text((d) => d.title)
-      .attr("x", (d) => Math.max(6, Math.min(20, 6 + d.link_count * 2)) + 6)
+      .attr("x", (d) => getNodeRadius(d) + 6)
       .attr("y", 4)
       .attr("font-size", "12px")
       .attr("fill", "var(--color-text)")
-      .attr("font-weight", (d) => (highlightedNodeIds.has(d.id) ? "bold" : "normal"))
+      .attr("font-weight", (d) =>
+        highlightedNodeIds.has(d.id) ? "bold" : "normal"
+      )
       .attr("cursor", "pointer");
 
-    // Click to navigate
-    node.on("click", (_event, d) => {
-      onSelectNote(d.id);
+    // Click to navigate (or shift+click to pin)
+    node.on("click", (event, d) => {
+      if (event.shiftKey) {
+        // Toggle pin
+        if (settings.isPinned(d.id)) {
+          settings.unpinNode(d.id);
+          d.fx = null;
+          d.fy = null;
+        } else {
+          settings.pinNode(d.id);
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+        // Refresh to show/hide pin indicator
+        simulation.alpha(0.1).restart();
+      } else {
+        onSelectNote(d.id);
+      }
     });
 
     // Hover handlers
@@ -226,6 +349,14 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       node.attr("transform", (d) => `translate(${d.x},${d.y})`);
     });
 
+    // Initialize pinned nodes
+    nodesCopy.forEach((d) => {
+      if (settings.pinnedNodes.includes(d.id)) {
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+    });
+
     // Drag handlers
     function dragstarted(
       event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>,
@@ -249,14 +380,27 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       d: GraphNode
     ) {
       if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
+      // Keep pinned if in pinnedNodes
+      if (!settings.pinnedNodes.includes(d.id)) {
+        d.fx = null;
+        d.fy = null;
+      }
     }
 
     // Center the view initially
     const initialTransform = d3.zoomIdentity.translate(0, 0).scale(1);
     svg.call(zoom.transform, initialTransform);
-  }, [filteredData, highlightedNodeIds, viewMode, localCenterNoteId, onSelectNote, setHoveredNode]);
+  }, [
+    filteredData,
+    highlightedNodeIds,
+    viewMode,
+    localCenterNoteId,
+    onSelectNote,
+    setHoveredNode,
+    settings,
+    getNodeRadius,
+    getNodeColor,
+  ]);
 
   useEffect(() => {
     renderGraph();
@@ -278,7 +422,9 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[var(--color-sidebar)]">
-        <div className="text-[var(--color-text-secondary)]">Loading graph...</div>
+        <div className="text-[var(--color-text-secondary)]">
+          Loading graph...
+        </div>
       </div>
     );
   }
@@ -307,7 +453,11 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
           No connections yet
         </h3>
         <p className="text-sm text-[var(--color-text-secondary)] max-w-sm">
-          Create links between notes using <code className="px-1 py-0.5 bg-[var(--color-surface)] rounded">[[Note Title]]</code> syntax to see them visualized here.
+          Create links between notes using{" "}
+          <code className="px-1 py-0.5 bg-[var(--color-surface)] rounded">
+            [[Note Title]]
+          </code>{" "}
+          syntax to see them visualized here.
         </p>
       </div>
     );
@@ -325,7 +475,8 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
             Graph View
           </h2>
           <p className="text-xs text-[var(--color-text-secondary)]">
-            {filteredData.nodes.length} notes · {filteredData.edges.length} links
+            {filteredData.nodes.length} notes · {filteredData.edges.length}{" "}
+            links
             {tagFilter && ` · #${tagFilter}`}
             {viewMode === "local" && " · Local view"}
           </p>
@@ -334,7 +485,11 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
 
       {/* Controls bar */}
       <div className="absolute top-16 left-4 right-4 z-10">
-        <GraphControls />
+        <GraphControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onFitView={handleFitView}
+        />
       </div>
 
       {/* D3 SVG canvas */}
@@ -345,7 +500,7 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
 
       {/* Instructions */}
       <div className="absolute bottom-4 left-4 text-xs text-[var(--color-text-tertiary)]">
-        Scroll to zoom · Drag to pan · Click node to open
+        Scroll to zoom · Drag to pan · Click node to open · Shift+click to pin
       </div>
     </div>
   );

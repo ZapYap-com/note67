@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::Utc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use crate::audio::converter::get_audio_duration_ms;
@@ -11,7 +11,11 @@ use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
 
 #[tauri::command]
-pub fn create_note(db: State<Database>, input: NewNote) -> Result<Note, String> {
+pub fn create_note(
+    app_handle: AppHandle,
+    db: State<Database>,
+    input: NewNote,
+) -> Result<Note, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
     let id = Uuid::new_v4().to_string();
@@ -36,6 +40,9 @@ pub fn create_note(db: State<Database>, input: NewNote) -> Result<Note, String> 
         sync_note_tags_internal(&conn, &id, description)?;
         sync_note_links_internal(&conn, &id, description)?;
     }
+
+    // Emit event for real-time updates
+    let _ = app_handle.emit("note-created", &id);
 
     Ok(Note {
         id,
@@ -114,6 +121,7 @@ pub fn list_notes(db: State<Database>) -> Result<Vec<Note>, String> {
 
 #[tauri::command]
 pub fn update_note(
+    app_handle: AppHandle,
     db: State<Database>,
     id: String,
     update: UpdateNote,
@@ -189,6 +197,7 @@ pub fn update_note(
     .map_err(|e| e.to_string())?;
 
     // Sync tags and links if description was updated
+    let links_changed = update.description.is_some();
     if let Some(ref description) = update.description {
         sync_note_tags_internal(&conn, &id, description)?;
         sync_note_links_internal(&conn, &id, description)?;
@@ -199,6 +208,12 @@ pub fn update_note(
         if &old != new {
             update_incoming_links_internal(&conn, &id, &old, new)?;
         }
+    }
+
+    // Emit events for real-time updates
+    let _ = app_handle.emit("note-updated", &id);
+    if links_changed {
+        let _ = app_handle.emit("note-links-changed", &id);
     }
 
     // Return updated note
@@ -269,7 +284,11 @@ pub fn end_note(
 }
 
 #[tauri::command]
-pub fn delete_note(db: State<Database>, id: String) -> Result<(), String> {
+pub fn delete_note(
+    app_handle: AppHandle,
+    db: State<Database>,
+    id: String,
+) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // First, get the audio path before deleting
@@ -293,6 +312,9 @@ pub fn delete_note(db: State<Database>, id: String) -> Result<(), String> {
             }
         }
     }
+
+    // Emit event for real-time updates
+    let _ = app_handle.emit("note-deleted", &id);
 
     Ok(())
 }
