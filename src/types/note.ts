@@ -186,6 +186,8 @@ export interface GraphNode {
   id: string;
   title: string;
   link_count: number;
+  tags: string[];
+  is_orphan: boolean;
   // D3 adds these at runtime
   x?: number;
   y?: number;

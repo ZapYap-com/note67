@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
 import { useGraphStore } from "../../stores/graphStore";
 import { GraphNodePreview } from "./GraphNodePreview";
+import { GraphControls } from "./GraphControls";
 import type { GraphNode, GraphEdge } from "../../types";
 
 interface GraphViewProps {
@@ -15,15 +16,54 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     null
   );
 
-  const { nodes, edges, fetchGraphData, setHoveredNode, hoveredNodeId, loading } =
-    useGraphStore();
+  const {
+    nodes,
+    edges,
+    fetchGraphData,
+    setHoveredNode,
+    hoveredNodeId,
+    loading,
+    searchQuery,
+    tagFilter,
+    viewMode,
+    localCenterNoteId,
+  } = useGraphStore();
 
   useEffect(() => {
     fetchGraphData();
   }, [fetchGraphData]);
 
+  // Filter nodes by tag (client-side filtering)
+  const filteredData = useMemo(() => {
+    let filteredNodes = nodes;
+    let filteredEdges = edges;
+
+    if (tagFilter) {
+      const nodeIds = new Set(
+        filteredNodes.filter((n) => n.tags.includes(tagFilter)).map((n) => n.id)
+      );
+      filteredNodes = filteredNodes.filter((n) => nodeIds.has(n.id));
+      filteredEdges = filteredEdges.filter((e) => {
+        const sourceId = typeof e.source === "object" ? e.source.id : e.source;
+        const targetId = typeof e.target === "object" ? e.target.id : e.target;
+        return nodeIds.has(sourceId) && nodeIds.has(targetId);
+      });
+    }
+
+    return { nodes: filteredNodes, edges: filteredEdges };
+  }, [nodes, edges, tagFilter]);
+
+  // Compute highlighted nodes from search
+  const highlightedNodeIds = useMemo(() => {
+    if (!searchQuery) return new Set<string>();
+    const query = searchQuery.toLowerCase();
+    return new Set(
+      nodes.filter((n) => n.title.toLowerCase().includes(query)).map((n) => n.id)
+    );
+  }, [nodes, searchQuery]);
+
   const renderGraph = useCallback(() => {
-    if (!svgRef.current || !containerRef.current || nodes.length === 0) return;
+    if (!svgRef.current || !containerRef.current || filteredData.nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
     const container = containerRef.current;
@@ -50,8 +90,8 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     svg.call(zoom);
 
     // Create a working copy of nodes and edges for D3
-    const nodesCopy: GraphNode[] = nodes.map((n) => ({ ...n }));
-    const edgesCopy: GraphEdge[] = edges.map((e) => ({ ...e }));
+    const nodesCopy: GraphNode[] = filteredData.nodes.map((n) => ({ ...n }));
+    const edgesCopy: GraphEdge[] = filteredData.edges.map((e) => ({ ...e }));
 
     // Create force simulation
     const simulation = d3
@@ -100,9 +140,26 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     node
       .append("circle")
       .attr("r", (d) => Math.max(6, Math.min(20, 6 + d.link_count * 2)))
-      .attr("fill", "var(--color-accent)")
-      .attr("stroke", "var(--color-background)")
-      .attr("stroke-width", 2);
+      .attr("fill", (d) => {
+        // Highlight center node in local view
+        if (viewMode === "local" && d.id === localCenterNoteId) {
+          return "var(--color-accent-emphasis, #1d4ed8)";
+        }
+        // Dim orphan nodes
+        if (d.is_orphan) {
+          return "var(--color-text-tertiary)";
+        }
+        return "var(--color-accent)";
+      })
+      .attr("stroke", (d) => {
+        // Highlight search matches with yellow border
+        if (highlightedNodeIds.has(d.id)) {
+          return "#fbbf24";
+        }
+        return "var(--color-background)";
+      })
+      .attr("stroke-width", (d) => (highlightedNodeIds.has(d.id) ? 3 : 2))
+      .attr("opacity", (d) => (d.is_orphan ? 0.5 : 1));
 
     // Node labels
     node
@@ -112,6 +169,7 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       .attr("y", 4)
       .attr("font-size", "12px")
       .attr("fill", "var(--color-text)")
+      .attr("font-weight", (d) => (highlightedNodeIds.has(d.id) ? "bold" : "normal"))
       .attr("cursor", "pointer");
 
     // Click to navigate
@@ -152,7 +210,7 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     node.on("mouseleave", () => {
       setHoveredNode(null);
       link.attr("stroke-opacity", 0.5).attr("stroke-width", 1);
-      node.select("circle").attr("opacity", 1);
+      node.select("circle").attr("opacity", (d) => (d.is_orphan ? 0.5 : 1));
     });
 
     // Update positions on simulation tick
@@ -196,7 +254,7 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
     // Center the view initially
     const initialTransform = d3.zoomIdentity.translate(0, 0).scale(1);
     svg.call(zoom.transform, initialTransform);
-  }, [nodes, edges, onSelectNote, setHoveredNode]);
+  }, [filteredData, highlightedNodeIds, viewMode, localCenterNoteId, onSelectNote, setHoveredNode]);
 
   useEffect(() => {
     renderGraph();
@@ -258,34 +316,24 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
       ref={containerRef}
       className="flex-1 relative bg-[var(--color-sidebar)] overflow-hidden"
     >
-      {/* Header */}
-      <div className="absolute top-4 left-4 z-10">
-        <h2 className="text-lg font-semibold text-[var(--color-text)]">
-          Graph View
-        </h2>
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          {nodes.length} notes · {edges.length} links
-        </p>
+      {/* Header with controls */}
+      <div className="absolute top-4 left-4 right-4 z-10 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">
+            Graph View
+          </h2>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            {filteredData.nodes.length} notes · {filteredData.edges.length} links
+            {tagFilter && ` · #${tagFilter}`}
+            {viewMode === "local" && " · Local view"}
+          </p>
+        </div>
       </div>
 
-      {/* Refresh button */}
-      <button
-        onClick={() => fetchGraphData()}
-        className="absolute top-4 right-4 z-10 p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] transition-colors"
-        title="Refresh graph"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-          <path d="M21 3v5h-5" />
-        </svg>
-      </button>
+      {/* Controls bar */}
+      <div className="absolute top-16 left-4 right-4 z-10">
+        <GraphControls />
+      </div>
 
       {/* D3 SVG canvas */}
       <svg ref={svgRef} className="w-full h-full" />

@@ -458,6 +458,7 @@ pub fn run() {
             commands::get_unlinked_mentions,
             // Graph commands
             commands::get_graph_data,
+            commands::get_local_graph,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
