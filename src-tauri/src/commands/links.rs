@@ -221,7 +221,17 @@ pub fn get_unlinked_mentions(
         return Ok(vec![]);
     }
 
-    // Search all other notes for title text NOT inside [[...]]
+    // Get all notes that already link to this note (from note_links table)
+    let mut linked_stmt = conn
+        .prepare("SELECT source_note_id FROM note_links WHERE target_note_id = ?1")
+        .map_err(|e| e.to_string())?;
+    let linked_notes: std::collections::HashSet<String> = linked_stmt
+        .query_map([&note_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Search all other notes for title text
     let mut stmt = conn
         .prepare(
             "SELECT id, title, description FROM notes
@@ -230,11 +240,6 @@ pub fn get_unlinked_mentions(
         .map_err(|e| e.to_string())?;
 
     let title_lower = title.to_lowercase();
-    // Escape regex special characters in title for pattern matching
-    let escaped_title = regex::escape(&title_lower);
-    // Pattern matches [[title]] or [[title|alias]] (case-insensitive)
-    let link_pattern = Regex::new(&format!(r"\[\[{}\s*(?:\|[^\]]+)?\]\]", escaped_title))
-        .map_err(|e| e.to_string())?;
 
     let mentions: Vec<UnlinkedMention> = stmt
         .query_map([&note_id], |row| {
@@ -255,8 +260,8 @@ pub fn get_unlinked_mentions(
                 return None;
             }
 
-            // Check if it's already linked (handles both [[title]] and [[title|alias]])
-            if link_pattern.is_match(&desc_lower) {
+            // Check if this note already links to target (using note_links table)
+            if linked_notes.contains(&id) {
                 return None;
             }
 
