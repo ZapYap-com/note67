@@ -43,11 +43,22 @@ export function UpdateNotification({ onOpenSettings }: UpdateNotificationProps) 
 
   // Listen for tray install action
   useEffect(() => {
-    const unlisten = listen("tray-install-update", () => {
+    let unlistenFn: (() => void) | null = null;
+    let mounted = true;
+
+    listen("tray-install-update", () => {
       downloadAndInstall();
+    }).then((fn) => {
+      if (mounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
+
     return () => {
-      unlisten.then((fn) => fn());
+      mounted = false;
+      unlistenFn?.();
     };
   }, [downloadAndInstall]);
 

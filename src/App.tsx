@@ -320,7 +320,10 @@ function App() {
 
   // Listen for tray "New Note" event
   useEffect(() => {
-    const unlisten = listen("tray-new-note", () => {
+    let unlistenFn: (() => void) | null = null;
+    let mounted = true;
+
+    listen("tray-new-note", () => {
       // Start a new note if not already recording and setup is complete
       if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
         handleStartRecording();
@@ -328,10 +331,17 @@ function App() {
         // Just create a new note
         handleNewNote();
       }
+    }).then((fn) => {
+      if (mounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      mounted = false;
+      unlistenFn?.();
     };
   }, [
     isRecording,
@@ -344,13 +354,23 @@ function App() {
 
   // Listen for tray "Settings" event
   useEffect(() => {
-    const unlisten = listen("tray-open-settings", () => {
+    let unlistenFn: (() => void) | null = null;
+    let mounted = true;
+
+    listen("tray-open-settings", () => {
       setSettingsTab("about");
       setShowSettings(true);
+    }).then((fn) => {
+      if (mounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      mounted = false;
+      unlistenFn?.();
     };
   }, []);
 
