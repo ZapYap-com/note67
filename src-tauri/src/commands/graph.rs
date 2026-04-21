@@ -81,9 +81,12 @@ pub fn get_graph_data(
         *link_counts.entry(edge.target.clone()).or_insert(0) += 1;
     }
 
-    // Get tags for each note
+    // Get tags for each note (join with tags table to get tag name)
     let mut stmt = conn
-        .prepare("SELECT note_id, tag FROM note_tags")
+        .prepare(
+            "SELECT nt.note_id, t.name FROM note_tags nt
+             INNER JOIN tags t ON nt.tag_id = t.id"
+        )
         .map_err(|e| e.to_string())?;
 
     let mut note_tags: HashMap<String, Vec<String>> = HashMap::new();
@@ -204,10 +207,12 @@ pub fn get_local_graph(
         *link_counts.entry(edge.target.clone()).or_insert(0) += 1;
     }
 
-    // Get tags for visited nodes
+    // Get tags for visited nodes (join with tags table to get tag name)
     if !visited_vec.is_empty() {
         let tag_sql = format!(
-            "SELECT note_id, tag FROM note_tags WHERE note_id IN ({})",
+            "SELECT nt.note_id, t.name FROM note_tags nt
+             INNER JOIN tags t ON nt.tag_id = t.id
+             WHERE nt.note_id IN ({})",
             placeholders
         );
         let mut stmt = conn.prepare(&tag_sql).map_err(|e| e.to_string())?;
