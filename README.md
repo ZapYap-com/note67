@@ -8,7 +8,14 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.21)
+## What's New (v0.1.22)
+
+- Listen-only recording mode — capture system audio without microphone
+- Record meetings when mic is unavailable or only system audio is needed
+- Live transcription support in listen-only mode
+- Improved loading indicator during post-recording retranscription
+
+### v0.1.21
 
 - Wiki-style links — type `[[Note Title]]` to link between notes
 - Link aliases — use `[[Title|display text]]` syntax for custom link text
@@ -53,6 +60,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Auto-retranscribe after recording for improved accuracy
 - [x] Pause/Resume recording
 - [x] Continue recording on existing notes (Listen)
+- [x] Listen-only mode (system audio without microphone)
 - [x] Upload external audio files for transcription
 - [x] Download and delete audio files
 - [x] Reorder audio files with up/down controls
