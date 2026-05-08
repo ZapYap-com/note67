@@ -23,6 +23,16 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.22",
+      date: "May 2026",
+      changes: [
+        "Listen-only recording mode - capture system audio without microphone",
+        "Record meetings when mic is unavailable or only system audio is needed",
+        "Live transcription support in listen-only mode",
+        "Improved loading indicator during post-recording retranscription",
+      ],
+    },
+    {
       version: "0.1.21",
       date: "April 2026",
       changes: [
