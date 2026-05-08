@@ -367,7 +367,8 @@ export function SystemTab({ onPermissionChange }: SystemTabProps) {
           >
             <p>
               <strong>No microphone detected.</strong> Connect an external
-              microphone or headset to record your voice.
+              microphone or headset to record your voice. You can still record
+              system audio in listen-only mode if system audio is enabled below.
             </p>
           </div>
         )}

@@ -59,7 +59,12 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
   const profileNeedsSetup = !profile.name;
   const whisperNeedsSetup = !loadedModel;
   const ollamaNeedsSetup = !ollamaRunning || !ollamaModel;
-  const systemNeedsSetup = !systemLoading && (!micAvailable || !micPermission || (systemAudioSupported && !systemAudioPermission));
+  // Listen-only (system-audio-only) recording is allowed when mic is missing
+  // but system audio is granted, so warn only when *no* input is available.
+  const systemNeedsSetup =
+    !systemLoading &&
+    !(micAvailable && micPermission) &&
+    !(systemAudioSupported && systemAudioPermission);
 
   type TabItem = {
     id: SettingsTab;

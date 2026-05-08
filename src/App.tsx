@@ -51,6 +51,7 @@ function App() {
     isRecording,
     isPaused,
     audioLevel,
+    recordingMode,
     startRecording,
     stopRecording,
     pauseRecording,
@@ -75,11 +76,12 @@ function App() {
     loading: systemLoading,
     refresh: refreshSystemStatus,
   } = useSystemStatus();
-  const systemNeedsSetup =
-    !systemLoading &&
-    (!micAvailable ||
-      !micPermission ||
-      (systemAudioSupported && !systemAudioPermission));
+  // System needs setup only when *no* audio input is available.
+  // Listen-only (system-audio-only) recording is allowed when mic is missing
+  // but system audio is granted, so we don't warn in that case.
+  const micOk = micAvailable && micPermission;
+  const systemOk = systemAudioSupported && systemAudioPermission;
+  const systemNeedsSetup = !systemLoading && !micOk && !systemOk;
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
@@ -247,9 +249,12 @@ function App() {
   }, [createNote]);
 
   const handleStartRecording = useCallback(async () => {
-    // Refresh and check microphone permission before starting
+    // Refresh and check that *some* audio input (mic or system audio) is available.
     const status = await refreshSystemStatus();
-    if (!status.micAvailable || !status.micPermission) {
+    const canMic = status.micAvailable && status.micPermission;
+    const canSystem =
+      status.systemAudioSupported && status.systemAudioPermission;
+    if (!canMic && !canSystem) {
       setSettingsTab("system");
       setShowSettings(true);
       return;
@@ -260,8 +265,10 @@ function App() {
     setRecordingNoteId(note.id);
     setActiveTab("transcript");
     await startRecording(note.id);
-    // Start live transcription
-    await startLiveTranscription(note.id, profile?.name || "Me");
+    // Live transcription needs the mic; skip in listen-only mode.
+    if (canMic) {
+      await startLiveTranscription(note.id, profile?.name || "Me");
+    }
   }, [
     createNote,
     startRecording,
@@ -991,6 +998,7 @@ function App() {
             isRecording={isRecording && recordingNoteId === selectedNote.id}
             isPaused={isPaused && recordingNoteId === selectedNote.id}
             audioLevel={audioLevel}
+            recordingMode={recordingMode}
             activeTab={activeTab}
             editingTitle={editingTitle}
             ollamaRunning={ollamaRunning}
@@ -1015,9 +1023,13 @@ function App() {
             }}
             onResumeRecording={async () => {
               try {
-                // Check microphone permission before resuming
+                // At least one audio input (mic or system audio) must be available.
                 const status = await refreshSystemStatus();
-                if (!status.micAvailable || !status.micPermission) {
+                const canMic =
+                  status.micAvailable && status.micPermission;
+                const canSystem =
+                  status.systemAudioSupported && status.systemAudioPermission;
+                if (!canMic && !canSystem) {
                   setSettingsTab("system");
                   setShowSettings(true);
                   return;
@@ -1025,12 +1037,14 @@ function App() {
 
                 if (recordingNoteId) {
                   await resumeRecording(recordingNoteId);
-                  // Pass current liveSegments to preserve them when resuming
-                  await startLiveTranscription(
-                    recordingNoteId,
-                    profile?.name || "Me",
-                    liveSegments
-                  );
+                  // Live transcription needs the mic; skip in listen-only mode.
+                  if (canMic) {
+                    await startLiveTranscription(
+                      recordingNoteId,
+                      profile?.name || "Me",
+                      liveSegments
+                    );
+                  }
                 }
               } catch (error) {
                 console.error("Resume recording failed:", error);
@@ -1038,9 +1052,13 @@ function App() {
             }}
             onContinueRecording={async () => {
               try {
-                // Check microphone permission before continuing
+                // At least one audio input (mic or system audio) must be available.
                 const status = await refreshSystemStatus();
-                if (!status.micAvailable || !status.micPermission) {
+                const canMic =
+                  status.micAvailable && status.micPermission;
+                const canSystem =
+                  status.systemAudioSupported && status.systemAudioPermission;
+                if (!canMic && !canSystem) {
                   setSettingsTab("system");
                   setShowSettings(true);
                   return;
@@ -1050,11 +1068,14 @@ function App() {
                 // Load existing transcripts before starting
                 const existingSegments = await loadTranscript(selectedNote.id);
                 await continueRecording(selectedNote.id);
-                await startLiveTranscription(
-                  selectedNote.id,
-                  profile?.name || "Me",
-                  existingSegments
-                );
+                // Live transcription needs the mic; skip in listen-only mode.
+                if (canMic) {
+                  await startLiveTranscription(
+                    selectedNote.id,
+                    profile?.name || "Me",
+                    existingSegments
+                  );
+                }
                 setActiveTab("transcript");
               } catch (error) {
                 console.error("Continue recording failed:", error);
@@ -1460,6 +1481,7 @@ interface NoteViewProps {
   isRecording: boolean;
   isPaused: boolean;
   audioLevel: number;
+  recordingMode: import("./hooks/useRecording").RecordingMode;
   activeTab: "notes" | "transcript" | "summary";
   editingTitle: boolean;
   ollamaRunning: boolean;
@@ -1498,6 +1520,7 @@ function NoteView({
   isRecording,
   isPaused,
   audioLevel,
+  recordingMode,
   activeTab,
   editingTitle,
   ollamaRunning,
@@ -1666,12 +1689,13 @@ function NoteView({
       // Then load segments
       const segments = await notesApi.getAudioSegments(note.id);
       setAudioSegments(segments);
-      // If migration happened, set the playing path to the migrated segment
+      // If migration happened, set the playing path to the migrated segment.
+      // Listen-only segments have mic_path === null, so fall back to system_path.
       if (migrated) {
-        setPlayingAudioPath(migrated.mic_path);
+        setPlayingAudioPath(migrated.mic_path ?? migrated.system_path);
       } else if (segments.length > 0 && !playingAudioPath) {
-        // If no current selection, select first segment
-        setPlayingAudioPath(segments[0].mic_path);
+        const first = segments[0];
+        setPlayingAudioPath(first.mic_path ?? first.system_path);
       }
     };
     loadSegments().catch(console.error);
@@ -2068,21 +2092,30 @@ function NoteView({
           <span
             className="text-xs font-medium"
             style={{ color: "var(--color-accent)" }}
+            title={
+              recordingMode === "system-only"
+                ? "Microphone is off — capturing system audio only. Your voice will not be recorded."
+                : undefined
+            }
           >
-            Recording
+            {recordingMode === "system-only"
+              ? "Listening (system audio only)"
+              : "Recording"}
           </span>
-          <div
-            className="flex-1 h-1 rounded-full overflow-hidden"
-            style={{ backgroundColor: "rgba(229, 77, 46, 0.2)" }}
-          >
+          {recordingMode !== "system-only" && (
             <div
-              className="h-full rounded-full transition-all duration-100"
-              style={{
-                width: `${Math.min(100, audioLevel * 400)}%`,
-                backgroundColor: "var(--color-accent)",
-              }}
-            />
-          </div>
+              className="flex-1 h-1 rounded-full overflow-hidden"
+              style={{ backgroundColor: "rgba(229, 77, 46, 0.2)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-100"
+                style={{
+                  width: `${Math.min(100, audioLevel * 400)}%`,
+                  backgroundColor: "var(--color-accent)",
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 

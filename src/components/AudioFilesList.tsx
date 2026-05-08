@@ -316,7 +316,8 @@ export function AudioFilesList({
 
   const getItemPath = (item: AudioItem): string => {
     if (item.type === "segment") {
-      return item.data.mic_path;
+      // Listen-only segments have mic_path === null; use the system file instead.
+      return item.data.mic_path ?? item.data.system_path ?? "";
     }
     return item.data.file_path;
   };
@@ -410,7 +411,7 @@ export function AudioFilesList({
                 <PlayButton
                   isActive={isActive}
                   isPlaying={isPlaying}
-                  onPlay={() => handlePlay(segment.mic_path)}
+                  onPlay={() => handlePlay(path)}
                 />
                 <div className="flex-1 min-w-0">
                   <p
@@ -435,7 +436,7 @@ export function AudioFilesList({
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <DownloadButton onDownload={() => handleDownload(segment.mic_path, `recording-${segment.segment_index + 1}`)} />
+                  <DownloadButton onDownload={() => handleDownload(path, `recording-${segment.segment_index + 1}`)} />
                 </div>
               </li>
             );

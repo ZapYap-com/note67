@@ -102,7 +102,8 @@ export interface AudioSegment {
   id: number;
   note_id: string;
   segment_index: number;
-  mic_path: string;
+  /** null for listen-only (system-audio-only) segments */
+  mic_path: string | null;
   system_path: string | null;
   start_offset_ms: number;
   duration_ms: number | null;

@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 /** Result of dual recording containing paths to all recorded files */
 export interface DualRecordingResult {
-  /** Path to the mic recording (always present) */
-  micPath: string;
+  /** Path to the mic recording (null for listen-only / system-audio-only sessions) */
+  micPath: string | null;
   /** Path to the system audio recording (only on supported platforms with permission) */
   systemPath: string | null;
   /** Path to the merged playback file (created after recording stops) */
@@ -103,5 +103,44 @@ export const audioApi = {
   /** Continue recording on an ended note */
   continueNoteRecording: (noteId: string): Promise<DualRecordingResult> => {
     return invoke("continue_note_recording", { noteId });
+  },
+
+  // ========== Listen-only (system-audio-only) recording ==========
+  // Used when the microphone is unavailable or denied but system audio is supported.
+
+  /** Check if microphone is available on this device */
+  hasMicrophoneAvailable: (): Promise<boolean> => {
+    return invoke("has_microphone_available");
+  },
+
+  /** Check if the app has permission to use the microphone */
+  hasMicrophonePermission: (): Promise<boolean> => {
+    return invoke("has_microphone_permission");
+  },
+
+  /** Start listen-only recording (system audio only, no mic) with segment tracking */
+  startSystemOnlyRecordingWithSegments: (
+    noteId: string
+  ): Promise<DualRecordingResult> => {
+    return invoke("start_system_only_recording_with_segments", { noteId });
+  },
+
+  /** Stop listen-only recording */
+  stopSystemOnlyRecordingWithSegments: (
+    noteId: string
+  ): Promise<DualRecordingResult> => {
+    return invoke("stop_system_only_recording_with_segments", { noteId });
+  },
+
+  /** Pause listen-only recording */
+  pauseSystemOnlyRecording: (): Promise<number> => {
+    return invoke("pause_system_only_recording");
+  },
+
+  /** Resume listen-only recording after pause */
+  resumeSystemOnlyRecording: (
+    noteId: string
+  ): Promise<DualRecordingResult> => {
+    return invoke("resume_system_only_recording", { noteId });
   },
 };
