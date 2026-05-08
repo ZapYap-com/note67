@@ -278,7 +278,7 @@ impl Database {
         &self,
         note_id: &str,
         segment_index: i32,
-        mic_path: &str,
+        mic_path: Option<&str>,
         system_path: Option<&str>,
         start_offset_ms: i64,
     ) -> anyhow::Result<i64> {
@@ -681,7 +681,7 @@ impl Database {
             id: segment_id,
             note_id: note_id.to_string(),
             segment_index: 0,
-            mic_path: audio_path,
+            mic_path: Some(audio_path),
             system_path: None,
             start_offset_ms: 0,
             duration_ms,

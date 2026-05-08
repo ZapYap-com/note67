@@ -378,6 +378,11 @@ pub fn run() {
             commands::pause_dual_recording,
             commands::resume_dual_recording,
             commands::start_dual_recording_with_segments,
+            // Listen-only (system-audio-only) recording commands
+            commands::start_system_only_recording_with_segments,
+            commands::stop_system_only_recording_with_segments,
+            commands::pause_system_only_recording,
+            commands::resume_system_only_recording,
             commands::continue_note_recording,
             commands::reopen_note,
             commands::get_note_audio_segments,

@@ -96,7 +96,7 @@ pub struct AudioSegment {
     pub id: i64,
     pub note_id: String,
     pub segment_index: i32,
-    pub mic_path: String,
+    pub mic_path: Option<String>,
     pub system_path: Option<String>,
     pub start_offset_ms: i64,
     pub duration_ms: Option<i64>,
@@ -109,7 +109,7 @@ pub struct AudioSegment {
 pub struct NewAudioSegment {
     pub note_id: String,
     pub segment_index: i32,
-    pub mic_path: String,
+    pub mic_path: Option<String>,
     pub system_path: Option<String>,
     pub start_offset_ms: i64,
 }

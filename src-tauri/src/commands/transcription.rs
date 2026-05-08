@@ -609,42 +609,44 @@ pub async fn retranscribe_audio_segment(
         }
     }
 
-    // Now transcribe mic audio and filter out echoes
-    let mic_path_buf = PathBuf::from(&segment.mic_path);
-    let transcriber_clone = transcriber.clone();
-    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
-        .await
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
+    // Now transcribe mic audio and filter out echoes (if mic recording exists)
+    if let Some(ref mic_path) = segment.mic_path {
+        let mic_path_buf = PathBuf::from(mic_path);
+        let transcriber_clone = transcriber.clone();
+        let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
+            .await
+            .map_err(|e| {
+                state.is_transcribing.store(false, Ordering::SeqCst);
+                e.to_string()
+            })?
+            .map_err(|e| {
+                state.is_transcribing.store(false, Ordering::SeqCst);
+                e.to_string()
+            })?;
 
-    // Save mic segments to database with "You" speaker label, filtering out echoes
-    for seg in &mic_result.segments {
-        if should_skip_segment(&seg.text) {
-            continue;
+        // Save mic segments to database with "You" speaker label, filtering out echoes
+        for seg in &mic_result.segments {
+            if should_skip_segment(&seg.text) {
+                continue;
+            }
+
+            // Filter out segments that are echoes of system audio
+            if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
+                continue;
+            }
+
+            db.add_transcript_segment(
+                &segment.note_id,
+                seg.start_time,
+                seg.end_time,
+                &seg.text,
+                Some("You"),
+                Some("segment"),
+                Some(segment_id),
+            )
+            .map_err(|e| e.to_string())?;
+            total_segments += 1;
         }
-
-        // Filter out segments that are echoes of system audio
-        if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
-            continue;
-        }
-
-        db.add_transcript_segment(
-            &segment.note_id,
-            seg.start_time,
-            seg.end_time,
-            &seg.text,
-            Some("You"),
-            Some("segment"),
-            Some(segment_id),
-        )
-        .map_err(|e| e.to_string())?;
-        total_segments += 1;
     }
 
     state.is_transcribing.store(false, Ordering::SeqCst);
@@ -691,7 +693,7 @@ pub async fn retranscribe_note(
     println!("[retranscribe_note] note_id: {}", note_id);
     println!("[retranscribe_note] Found {} audio segments", segments.len());
     for seg in &segments {
-        println!("[retranscribe_note]   Segment {}: mic_path={}", seg.id, seg.mic_path);
+        println!("[retranscribe_note]   Segment {}: mic_path={:?}", seg.id, seg.mic_path);
     }
     println!("[retranscribe_note] Found {} uploads", uploads.len());
 
@@ -727,36 +729,40 @@ pub async fn retranscribe_note(
             "currentItem": item_name,
         }));
 
-        // Detect if this is a legacy merged audio file
+        // Detect if this is a legacy merged audio file (only applies when mic_path is set)
         // Legacy files are like "{noteId}.wav" (merged playback)
         // New format files have "_mic_seg" in the name
-        let stored_mic_path = PathBuf::from(&segment.mic_path);
-        let is_legacy_merged = segment.system_path.is_none()
-            && !segment.mic_path.contains("_mic_seg")
-            && !segment.mic_path.contains("_mic.");
+        let (actual_mic_path, actual_system_path): (Option<PathBuf>, Option<PathBuf>) = match &segment.mic_path {
+            Some(mic_path_str) => {
+                let stored_mic_path = PathBuf::from(mic_path_str);
+                let is_legacy_merged = segment.system_path.is_none()
+                    && !mic_path_str.contains("_mic_seg")
+                    && !mic_path_str.contains("_mic.");
 
-        // For legacy merged files, try to find the original separate mic/system files
-        let (actual_mic_path, actual_system_path) = if is_legacy_merged {
-            // Try to construct paths to original separate files
-            // From "{noteId}.wav" -> "{noteId}_mic.wav" and "{noteId}_system.wav"
-            if let Some(stem) = stored_mic_path.file_stem() {
-                let parent = stored_mic_path.parent().unwrap_or(std::path::Path::new(""));
-                let stem_str = stem.to_string_lossy();
-                let mic_file = parent.join(format!("{}_mic.wav", stem_str));
-                let system_file = parent.join(format!("{}_system.wav", stem_str));
+                if is_legacy_merged {
+                    // Try to construct paths to original separate files
+                    // From "{noteId}.wav" -> "{noteId}_mic.wav" and "{noteId}_system.wav"
+                    if let Some(stem) = stored_mic_path.file_stem() {
+                        let parent = stored_mic_path.parent().unwrap_or(std::path::Path::new(""));
+                        let stem_str = stem.to_string_lossy();
+                        let mic_file = parent.join(format!("{}_mic.wav", stem_str));
+                        let system_file = parent.join(format!("{}_system.wav", stem_str));
 
-                println!("[retranscribe_note] Legacy merged file detected: {:?}", stored_mic_path);
-                println!("[retranscribe_note] Looking for separate files: mic={:?}, system={:?}", mic_file, system_file);
+                        println!("[retranscribe_note] Legacy merged file detected: {:?}", stored_mic_path);
+                        println!("[retranscribe_note] Looking for separate files: mic={:?}, system={:?}", mic_file, system_file);
 
-                let mic = if mic_file.exists() { mic_file } else { stored_mic_path.clone() };
-                let system = if system_file.exists() { Some(system_file) } else { None };
-                (mic, system)
-            } else {
-                (stored_mic_path.clone(), None)
+                        let mic = if mic_file.exists() { mic_file } else { stored_mic_path.clone() };
+                        let system = if system_file.exists() { Some(system_file) } else { None };
+                        (Some(mic), system)
+                    } else {
+                        (Some(stored_mic_path), None)
+                    }
+                } else {
+                    (Some(stored_mic_path), segment.system_path.as_ref().map(PathBuf::from))
+                }
             }
-        } else {
-            // Use paths as stored in database
-            (stored_mic_path.clone(), segment.system_path.as_ref().map(PathBuf::from))
+            // Listen-only segment: no mic recording, system audio only.
+            None => (None, segment.system_path.as_ref().map(PathBuf::from)),
         };
 
         // Transcribe SYSTEM audio FIRST to collect segments for echo detection
@@ -798,51 +804,55 @@ pub async fn retranscribe_note(
             }
         }
 
-        // Now transcribe mic audio and filter out echoes
-        println!("[retranscribe_note] Transcribing mic: {:?}", actual_mic_path);
-        let mic_path_for_task = actual_mic_path.clone();
-        let transcriber_clone = transcriber.clone();
+        // Now transcribe mic audio and filter out echoes (if mic recording exists)
+        if let Some(mic_path) = actual_mic_path {
+            println!("[retranscribe_note] Transcribing mic: {:?}", mic_path);
+            let mic_path_for_task = mic_path.clone();
+            let transcriber_clone = transcriber.clone();
 
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task)).await {
-            Ok(Ok(result)) => {
-                println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
-                let mut echo_filtered = 0;
-                for seg in &result.segments {
-                    if should_skip_segment(&seg.text) {
-                        continue;
+            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task)).await {
+                Ok(Ok(result)) => {
+                    println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
+                    let mut echo_filtered = 0;
+                    for seg in &result.segments {
+                        if should_skip_segment(&seg.text) {
+                            continue;
+                        }
+
+                        // Filter out segments that are echoes of system audio
+                        if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
+                            println!("[retranscribe_note] Filtered echo: \"{}\"", seg.text);
+                            echo_filtered += 1;
+                            continue;
+                        }
+
+                        if let Ok(_) = db.add_transcript_segment(
+                            &note_id,
+                            seg.start_time,
+                            seg.end_time,
+                            &seg.text,
+                            Some("You"),
+                            Some("segment"),
+                            Some(segment.id),
+                        ) {
+                            total_segments_created += 1;
+                        }
                     }
-
-                    // Filter out segments that are echoes of system audio
-                    if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
-                        println!("[retranscribe_note] Filtered echo: \"{}\"", seg.text);
-                        echo_filtered += 1;
-                        continue;
-                    }
-
-                    if let Ok(_) = db.add_transcript_segment(
-                        &note_id,
-                        seg.start_time,
-                        seg.end_time,
-                        &seg.text,
-                        Some("You"),
-                        Some("segment"),
-                        Some(segment.id),
-                    ) {
-                        total_segments_created += 1;
+                    if echo_filtered > 0 {
+                        println!("[retranscribe_note] Filtered {} echo segments from mic", echo_filtered);
                     }
                 }
-                if echo_filtered > 0 {
-                    println!("[retranscribe_note] Filtered {} echo segments from mic", echo_filtered);
+                Ok(Err(e)) => {
+                    println!("[retranscribe_note] Mic transcription error: {}", e);
+                    failed_items.push(format!("{} (mic): {}", item_name, e));
+                }
+                Err(e) => {
+                    println!("[retranscribe_note] Mic task error: {}", e);
+                    failed_items.push(format!("{} (mic): {}", item_name, e));
                 }
             }
-            Ok(Err(e)) => {
-                println!("[retranscribe_note] Mic transcription error: {}", e);
-                failed_items.push(format!("{} (mic): {}", item_name, e));
-            }
-            Err(e) => {
-                println!("[retranscribe_note] Mic task error: {}", e);
-                failed_items.push(format!("{} (mic): {}", item_name, e));
-            }
+        } else {
+            println!("[retranscribe_note] Listen-only segment (no mic recording)");
         }
 
         completed_items += 1;

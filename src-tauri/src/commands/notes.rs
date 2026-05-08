@@ -381,9 +381,11 @@ pub fn delete_note_audio_segments(db: State<Database>, note_id: String) -> Resul
 
     // Delete audio files
     for segment in segments {
-        // Delete mic file
-        if let Err(e) = std::fs::remove_file(&segment.mic_path) {
-            eprintln!("Failed to delete mic segment file {}: {}", segment.mic_path, e);
+        // Delete mic file if present
+        if let Some(ref mic_path) = segment.mic_path {
+            if let Err(e) = std::fs::remove_file(mic_path) {
+                eprintln!("Failed to delete mic segment file {}: {}", mic_path, e);
+            }
         }
 
         // Delete system audio file if present

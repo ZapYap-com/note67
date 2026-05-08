@@ -15,8 +15,8 @@ use crate::db::Database;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DualRecordingResult {
-    /// Path to the mic recording (always present)
-    pub mic_path: String,
+    /// Path to the mic recording (None for listen-only / system-audio-only sessions)
+    pub mic_path: Option<String>,
     /// Path to the system audio recording (only on supported platforms with permission)
     pub system_path: Option<String>,
     /// Path to the merged playback file (created after recording stops)
@@ -269,7 +269,7 @@ pub fn start_dual_recording(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: if system_started {
             Some(system_path.to_string_lossy().to_string())
         } else {
@@ -334,7 +334,7 @@ pub fn stop_dual_recording(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: system_path.map(|p| p.to_string_lossy().to_string()),
         playback_path,
     })
@@ -403,7 +403,7 @@ pub fn stop_dual_recording_with_segments(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: system_path.map(|p| p.to_string_lossy().to_string()),
         playback_path,
     })
@@ -561,7 +561,7 @@ pub fn resume_dual_recording(
         .add_audio_segment(
             &note_id,
             segment_index,
-            mic_path.to_string_lossy().as_ref(),
+            Some(mic_path.to_string_lossy().as_ref()),
             Some(system_path.to_string_lossy().as_ref()),
             start_offset_ms,
         )
@@ -599,7 +599,7 @@ pub fn resume_dual_recording(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: if system_started {
             Some(system_path.to_string_lossy().to_string())
         } else {
@@ -695,7 +695,7 @@ pub fn continue_note_recording(
         .add_audio_segment(
             &note_id,
             segment_index,
-            mic_path.to_string_lossy().as_ref(),
+            Some(mic_path.to_string_lossy().as_ref()),
             Some(system_path.to_string_lossy().as_ref()),
             start_offset_ms,
         )
@@ -733,7 +733,7 @@ pub fn continue_note_recording(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: if system_started {
             Some(system_path.to_string_lossy().to_string())
         } else {
@@ -791,7 +791,7 @@ pub fn start_dual_recording_with_segments(
         .add_audio_segment(
             &note_id,
             segment_index,
-            mic_path.to_string_lossy().as_ref(),
+            Some(mic_path.to_string_lossy().as_ref()),
             Some(system_path.to_string_lossy().as_ref()),
             0, // First segment starts at 0
         )
@@ -829,12 +829,235 @@ pub fn start_dual_recording_with_segments(
     };
 
     Ok(DualRecordingResult {
-        mic_path: mic_path.to_string_lossy().to_string(),
+        mic_path: Some(mic_path.to_string_lossy().to_string()),
         system_path: if system_started {
             Some(system_path.to_string_lossy().to_string())
         } else {
             None
         },
+        playback_path: None,
+    })
+}
+
+// ========== System-audio-only ("listen-only") recording ==========
+// Used when the microphone is unavailable or denied but system audio is supported.
+// The user is just listening into a meeting; only system audio is captured.
+
+fn set_phase_for_system_only_session(state: &RecordingState) {
+    use std::time::Instant;
+    state.set_phase(RecordingPhase::Recording);
+    if let Ok(mut start_time) = state.segment_start_time.lock() {
+        *start_time = Some(Instant::now());
+    }
+}
+
+#[tauri::command]
+pub fn start_system_only_recording_with_segments(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    state.recording.reset_for_new_session();
+
+    {
+        let mut current_note = state
+            .recording
+            .current_note_id
+            .lock()
+            .map_err(|e| e.to_string())?;
+        *current_note = Some(note_id.clone());
+    }
+
+    let segment_index = db
+        .get_next_segment_index(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    let system_filename = format!("{}_system_seg{}.wav", note_id, segment_index);
+    let system_path = recordings_dir.join(&system_filename);
+
+    let segment_id = db
+        .add_audio_segment(
+            &note_id,
+            segment_index,
+            None,
+            Some(system_path.to_string_lossy().as_ref()),
+            0,
+        )
+        .map_err(|e| e.to_string())?;
+
+    state
+        .recording
+        .current_segment_db_id
+        .store(segment_id, Ordering::SeqCst);
+
+    // Start system audio capture. Errors here are fatal — without mic or system audio,
+    // there's nothing to record.
+    {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        let cap = capture
+            .as_ref()
+            .ok_or_else(|| "System audio capture not available".to_string())?;
+        cap.start(system_path.clone()).map_err(|e| e.to_string())?;
+    }
+    {
+        let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+        *sys_path = Some(system_path.clone());
+    }
+
+    set_phase_for_system_only_session(&state.recording);
+
+    Ok(DualRecordingResult {
+        mic_path: None,
+        system_path: Some(system_path.to_string_lossy().to_string()),
+        playback_path: None,
+    })
+}
+
+#[tauri::command]
+pub fn stop_system_only_recording_with_segments(
+    state: State<AudioState>,
+    db: State<Database>,
+    _note_id: String,
+) -> Result<DualRecordingResult, String> {
+    let duration_ms = state.recording.get_segment_elapsed_ms();
+
+    let system_path = {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        if let Some(cap) = capture.as_ref() {
+            cap.stop().map_err(|e| e.to_string())?
+        } else {
+            None
+        }
+    };
+
+    {
+        let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+        *sys_path = None;
+    }
+
+    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
+    if segment_id > 0 {
+        let _ = db.update_segment_duration(segment_id, duration_ms);
+    }
+
+    state.recording.set_phase(RecordingPhase::Idle);
+    state.recording.reset_for_new_session();
+
+    let system_path_str = system_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
+    Ok(DualRecordingResult {
+        mic_path: None,
+        // Listen-only has only one stream, so playback == system file.
+        playback_path: system_path_str.clone(),
+        system_path: system_path_str,
+    })
+}
+
+#[tauri::command]
+pub fn pause_system_only_recording(
+    state: State<AudioState>,
+    db: State<Database>,
+) -> Result<i64, String> {
+    if state.recording.get_phase() != RecordingPhase::Recording {
+        return Err("Recording is not active".to_string());
+    }
+    let duration_ms = state.recording.get_segment_elapsed_ms();
+
+    {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        if let Some(cap) = capture.as_ref() {
+            let _ = cap.stop();
+        }
+    }
+
+    state.recording.set_phase(RecordingPhase::Paused);
+
+    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
+    if segment_id > 0 {
+        let _ = db.update_segment_duration(segment_id, duration_ms);
+    }
+
+    Ok(duration_ms)
+}
+
+#[tauri::command]
+pub fn resume_system_only_recording(
+    app: AppHandle,
+    state: State<AudioState>,
+    db: State<Database>,
+    note_id: String,
+) -> Result<DualRecordingResult, String> {
+    if state.recording.get_phase() != RecordingPhase::Paused {
+        return Err("Recording is not paused".to_string());
+    }
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let recordings_dir = app_data_dir.join("recordings");
+    std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+
+    let segment_index = db
+        .get_next_segment_index(&note_id)
+        .map_err(|e| e.to_string())?;
+    let start_offset_ms = db
+        .get_total_segment_duration(&note_id)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .recording
+        .current_segment_index
+        .store(segment_index as u32, Ordering::SeqCst);
+    state
+        .recording
+        .segment_start_offset_ms
+        .store(start_offset_ms, Ordering::SeqCst);
+
+    let system_filename = format!("{}_system_seg{}.wav", note_id, segment_index);
+    let system_path = recordings_dir.join(&system_filename);
+
+    let segment_id = db
+        .add_audio_segment(
+            &note_id,
+            segment_index,
+            None,
+            Some(system_path.to_string_lossy().as_ref()),
+            start_offset_ms,
+        )
+        .map_err(|e| e.to_string())?;
+
+    state
+        .recording
+        .current_segment_db_id
+        .store(segment_id, Ordering::SeqCst);
+
+    {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        let cap = capture
+            .as_ref()
+            .ok_or_else(|| "System audio capture not available".to_string())?;
+        cap.start(system_path.clone()).map_err(|e| e.to_string())?;
+    }
+    {
+        let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+        *sys_path = Some(system_path.clone());
+    }
+
+    set_phase_for_system_only_session(&state.recording);
+
+    Ok(DualRecordingResult {
+        mic_path: None,
+        system_path: Some(system_path.to_string_lossy().to_string()),
         playback_path: None,
     })
 }

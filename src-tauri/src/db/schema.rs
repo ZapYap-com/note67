@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 9;
+pub const SCHEMA_VERSION: i32 = 10;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -32,6 +32,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     if version < 9 {
         migrate_v9(conn)?;
+    }
+    if version < 10 {
+        migrate_v10(conn)?;
     }
 
     Ok(())
@@ -378,6 +381,38 @@ fn migrate_v9(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 9)?;
+
+    Ok(())
+}
+
+fn migrate_v10(conn: &Connection) -> rusqlite::Result<()> {
+    // Make audio_segments.mic_path nullable to support listen-only (system-audio-only) recordings.
+    // SQLite cannot drop NOT NULL in place, so recreate the table.
+    conn.execute_batch(
+        "BEGIN;
+         CREATE TABLE audio_segments_new (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             note_id TEXT NOT NULL,
+             segment_index INTEGER NOT NULL,
+             mic_path TEXT,
+             system_path TEXT,
+             start_offset_ms INTEGER NOT NULL,
+             duration_ms INTEGER,
+             display_order INTEGER NOT NULL DEFAULT 0,
+             created_at TEXT NOT NULL,
+             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+         );
+         INSERT INTO audio_segments_new
+             (id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at)
+         SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
+         FROM audio_segments;
+         DROP TABLE audio_segments;
+         ALTER TABLE audio_segments_new RENAME TO audio_segments;
+         CREATE INDEX IF NOT EXISTS idx_audio_segments_note ON audio_segments(note_id);
+         COMMIT;",
+    )?;
+
+    set_schema_version(conn, 10)?;
 
     Ok(())
 }
