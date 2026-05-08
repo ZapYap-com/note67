@@ -147,6 +147,12 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [recordingNoteId, setRecordingNoteId] = useState<string | null>(null);
+  // True while the post-stop auto-retranscribe pass is running. Shown as a
+  // banner above the transcript so the user knows work is happening between
+  // "stop" and the final, higher-quality transcript appearing.
+  const [retranscribingNoteId, setRetranscribingNoteId] = useState<
+    string | null
+  >(null);
   const [isGeneratingSummaryTitle, setIsGeneratingSummaryTitle] =
     useState(false);
   const [summariesRefreshKey, setSummariesRefreshKey] = useState(0);
@@ -549,6 +555,7 @@ function App() {
       // Auto-retranscribe for better quality (runs in background)
       if (loadedModel) {
         console.log("[handleStopRecording] Starting auto-retranscribe for better quality");
+        setRetranscribingNoteId(noteId);
         try {
           await transcriptionApi.retranscribeNote(noteId);
           // Reload transcript with improved results
@@ -564,6 +571,8 @@ function App() {
         } catch (error) {
           console.error("Auto-retranscribe failed:", error);
           // Continue with live transcript if retranscribe fails
+        } finally {
+          setRetranscribingNoteId(null);
         }
       }
 
@@ -1005,6 +1014,7 @@ function App() {
             isTranscribing={
               isLiveTranscribing && recordingNoteId === selectedNote.id
             }
+            isAutoRetranscribing={retranscribingNoteId === selectedNote.id}
             summariesRefreshKey={summariesRefreshKey}
             loadedModel={loadedModel}
             onTabChange={setActiveTab}
@@ -1480,6 +1490,8 @@ interface NoteViewProps {
   hasOllamaModel: boolean;
   isRegenerating: boolean;
   isTranscribing: boolean;
+  /** True while the post-stop auto-retranscribe pass is running. */
+  isAutoRetranscribing: boolean;
   summariesRefreshKey: number;
   loadedModel: string | null;
   onTabChange: (tab: "notes" | "transcript" | "summary") => void;
@@ -1519,6 +1531,7 @@ function NoteView({
   hasOllamaModel,
   isRegenerating,
   isTranscribing,
+  isAutoRetranscribing,
   summariesRefreshKey,
   loadedModel,
   onTabChange,
@@ -2192,24 +2205,60 @@ function NoteView({
           </div>
         )}
 
-        {activeTab === "transcript" &&
-          (transcript.length > 0 ? (
-            <TranscriptSearch
-              segments={transcript}
-              audioSegments={audioSegments}
-              uploads={uploads}
-              isLive={isRecording}
-            />
-          ) : (
-            <div
-              className="text-center py-12 text-sm"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              {note.audio_path
-                ? "Transcribe this note to see the transcript"
-                : "No audio recorded"}
-            </div>
-          ))}
+        {activeTab === "transcript" && (
+          <>
+            {(isAutoRetranscribing || isRetranscribing) && (
+              <div
+                className="mb-3 px-3 py-2 rounded-lg flex items-center gap-2 text-xs"
+                style={{
+                  backgroundColor: "var(--color-accent-light)",
+                  color: "var(--color-accent)",
+                }}
+              >
+                <svg
+                  className="w-3.5 h-3.5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeOpacity="0.25"
+                  />
+                  <path
+                    d="M22 12a10 10 0 0 0-10-10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span>Improving transcript quality…</span>
+              </div>
+            )}
+            {transcript.length > 0 ? (
+              <TranscriptSearch
+                segments={transcript}
+                audioSegments={audioSegments}
+                uploads={uploads}
+                isLive={isRecording}
+              />
+            ) : (
+              <div
+                className="text-center py-12 text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {isAutoRetranscribing || isRetranscribing
+                  ? "Transcribing recorded audio…"
+                  : note.audio_path
+                    ? "Transcribe this note to see the transcript"
+                    : "No audio recorded"}
+              </div>
+            )}
+          </>
+        )}
 
         {activeTab === "summary" && (
           <SummaryPanel
