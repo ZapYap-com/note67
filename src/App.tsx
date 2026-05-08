@@ -265,10 +265,8 @@ function App() {
     setRecordingNoteId(note.id);
     setActiveTab("transcript");
     await startRecording(note.id);
-    // Live transcription needs the mic; skip in listen-only mode.
-    if (canMic) {
-      await startLiveTranscription(note.id, profile?.name || "Me");
-    }
+    // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
+    await startLiveTranscription(note.id, profile?.name || "Me");
   }, [
     createNote,
     startRecording,
@@ -1037,14 +1035,11 @@ function App() {
 
                 if (recordingNoteId) {
                   await resumeRecording(recordingNoteId);
-                  // Live transcription needs the mic; skip in listen-only mode.
-                  if (canMic) {
-                    await startLiveTranscription(
-                      recordingNoteId,
-                      profile?.name || "Me",
-                      liveSegments
-                    );
-                  }
+                  await startLiveTranscription(
+                    recordingNoteId,
+                    profile?.name || "Me",
+                    liveSegments
+                  );
                 }
               } catch (error) {
                 console.error("Resume recording failed:", error);
@@ -1068,14 +1063,11 @@ function App() {
                 // Load existing transcripts before starting
                 const existingSegments = await loadTranscript(selectedNote.id);
                 await continueRecording(selectedNote.id);
-                // Live transcription needs the mic; skip in listen-only mode.
-                if (canMic) {
-                  await startLiveTranscription(
-                    selectedNote.id,
-                    profile?.name || "Me",
-                    existingSegments
-                  );
-                }
+                await startLiveTranscription(
+                  selectedNote.id,
+                  profile?.name || "Me",
+                  existingSegments
+                );
                 setActiveTab("transcript");
               } catch (error) {
                 console.error("Continue recording failed:", error);

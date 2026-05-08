@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
-use crate::audio::{take_system_audio_samples, RecordingState};
+use crate::audio::{take_system_audio_samples, RecordingPhase, RecordingState};
 use crate::db::Database;
 use crate::transcription::{TranscriptionError, TranscriptionResult, TranscriptionSegment};
 use tauri::Manager;
@@ -174,8 +174,10 @@ pub async fn start_live_transcription(
                 break;
             }
 
-            // Check if still recording
-            if !recording_state_clone.is_recording.load(Ordering::SeqCst) {
+            // Check if still recording. Use the phase rather than is_recording, because
+            // listen-only (system-audio-only) sessions never set is_recording — that flag
+            // is owned by the mic recording thread.
+            if recording_state_clone.get_phase() != RecordingPhase::Recording {
                 break;
             }
 
