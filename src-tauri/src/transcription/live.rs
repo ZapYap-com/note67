@@ -8,24 +8,11 @@ use tokio::time::interval;
 
 use crate::audio::{take_system_audio_samples, RecordingPhase, RecordingState};
 use crate::db::Database;
-use crate::transcription::{TranscriptionError, TranscriptionResult, TranscriptionSegment};
+use crate::transcription::{
+    should_skip_segment, TranscriptionError, TranscriptionResult, TranscriptionSegment,
+};
 use tauri::Manager;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
-
-/// Check if a transcript segment should be skipped (blank audio, inaudible, etc.)
-fn should_skip_segment(text: &str) -> bool {
-    let text_lower = text.to_lowercase();
-    // Skip common Whisper artifacts for silence/noise
-    text_lower.contains("[blank_audio]")
-        || text_lower.contains("[inaudible]")
-        || text_lower.contains("[ inaudible ]")
-        || text_lower.contains("[silence]")
-        || text_lower.contains("[music]")
-        || text_lower.contains("[applause]")
-        || text_lower.contains("[laughter]")
-        || text_lower.contains("[audio out]")
-        || text.trim().is_empty()
-}
 
 /// Simple voice activity detection based on RMS energy
 /// Returns true if audio has enough energy to likely contain speech

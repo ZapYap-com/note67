@@ -7,23 +7,9 @@ use whisper_rs::{WhisperContext, WhisperContextParameters};
 use crate::commands::audio::AudioState;
 use crate::db::Database;
 use crate::transcription::{
-    live, LiveTranscriptionState, ModelInfo, ModelManager, ModelSize, TranscriptionResult,
-    Transcriber,
+    live, should_skip_segment, LiveTranscriptionState, ModelInfo, ModelManager, ModelSize,
+    TranscriptionResult, Transcriber,
 };
-
-/// Check if a transcript segment should be skipped (blank audio, inaudible, etc.)
-fn should_skip_segment(text: &str) -> bool {
-    let text_lower = text.to_lowercase();
-    text_lower.contains("[blank_audio]")
-        || text_lower.contains("[inaudible]")
-        || text_lower.contains("[ inaudible ]")
-        || text_lower.contains("[silence]")
-        || text_lower.contains("[music]")
-        || text_lower.contains("[applause]")
-        || text_lower.contains("[laughter]")
-        || text_lower.contains("[audio out]")
-        || text.trim().is_empty()
-}
 
 /// Clamp a segment's (start, end) so `start` never goes backwards relative to
 /// the previous segment in the same stream. Whisper occasionally emits a bogus
