@@ -9,7 +9,8 @@ use tokio::time::interval;
 use crate::audio::{take_system_audio_samples, RecordingPhase, RecordingState};
 use crate::db::Database;
 use crate::transcription::{
-    should_skip_segment, TranscriptionError, TranscriptionResult, TranscriptionSegment,
+    is_echo_of_system, should_skip_segment, TranscriptionError, TranscriptionResult,
+    TranscriptionSegment,
 };
 use tauri::Manager;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
@@ -24,50 +25,6 @@ fn has_voice_activity(samples: &[f32], threshold: f32) -> bool {
     let sum_sq: f32 = samples.iter().map(|s| s * s).sum();
     let rms = (sum_sq / samples.len() as f32).sqrt();
     rms > threshold
-}
-
-/// Fast check if a mic segment is likely an echo of system audio
-/// Uses simple first-words comparison for speed
-fn is_echo_of_system(
-    mic_text: &str,
-    mic_start: f64,
-    mic_end: f64,
-    system_segments: &[(f64, f64, String)], // (start, end, text)
-) -> bool {
-    // Quick early exit
-    if system_segments.is_empty() {
-        return false;
-    }
-
-    let mic_lower = mic_text.to_lowercase();
-    let mic_words: Vec<&str> = mic_lower.split_whitespace().take(5).collect();
-    if mic_words.is_empty() {
-        return false;
-    }
-
-    for (sys_start, sys_end, sys_text) in system_segments {
-        // Quick time overlap check (must overlap by at least 1 second)
-        let overlap_start = mic_start.max(*sys_start);
-        let overlap_end = mic_end.min(*sys_end);
-        if overlap_end - overlap_start < 1.0 {
-            continue;
-        }
-
-        // Fast text check: compare first 3-5 words
-        let sys_lower = sys_text.to_lowercase();
-        let sys_words: Vec<&str> = sys_lower.split_whitespace().take(5).collect();
-
-        // Count matching words in first 5
-        let matches = mic_words.iter()
-            .filter(|w| sys_words.contains(w))
-            .count();
-
-        // If 3+ words match out of first 5, it's likely echo
-        if matches >= 3 || (matches >= 2 && mic_words.len() <= 3) {
-            return true;
-        }
-    }
-    false
 }
 
 /// Live transcription state
@@ -288,7 +245,7 @@ pub async fn start_live_transcription(
                     let valid: Vec<_> = transcription
                         .segments
                         .iter()
-                        .filter(|s| !should_skip_segment(&s.text))
+                        .filter(|s| !should_skip_segment(&s.text, s.start_time, s.end_time))
                         .cloned()
                         .collect();
 
@@ -318,7 +275,7 @@ pub async fn start_live_transcription(
                     let valid_segments: Vec<_> = transcription
                         .segments
                         .into_iter()
-                        .filter(|s| !should_skip_segment(&s.text))
+                        .filter(|s| !should_skip_segment(&s.text, s.start_time, s.end_time))
                         .filter(|s| !is_echo_of_system(&s.text, s.start_time, s.end_time, &system_segments_for_echo_check))
                         .collect();
 

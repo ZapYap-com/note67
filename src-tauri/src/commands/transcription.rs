@@ -7,8 +7,8 @@ use whisper_rs::{WhisperContext, WhisperContextParameters};
 use crate::commands::audio::AudioState;
 use crate::db::Database;
 use crate::transcription::{
-    live, should_skip_segment, LiveTranscriptionState, ModelInfo, ModelManager, ModelSize,
-    TranscriptionResult, Transcriber,
+    is_echo_of_system, live, should_skip_segment, LiveTranscriptionState, ModelInfo, ModelManager,
+    ModelSize, TranscriptionResult, Transcriber,
 };
 
 /// Clamp a segment's (start, end) so `start` never goes backwards relative to
@@ -22,50 +22,6 @@ fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f64, f64) {
     *last_start = clamped_start;
     let clamped_end = end.max(clamped_start);
     (clamped_start, clamped_end)
-}
-
-/// Fast check if a mic segment is likely an echo of system audio
-/// Uses simple first-words comparison for speed
-fn is_echo_of_system(
-    mic_text: &str,
-    mic_start: f64,
-    mic_end: f64,
-    system_segments: &[(f64, f64, String)], // (start, end, text)
-) -> bool {
-    // Quick early exit
-    if system_segments.is_empty() {
-        return false;
-    }
-
-    let mic_lower = mic_text.to_lowercase();
-    let mic_words: Vec<&str> = mic_lower.split_whitespace().take(5).collect();
-    if mic_words.is_empty() {
-        return false;
-    }
-
-    for (sys_start, sys_end, sys_text) in system_segments {
-        // Quick time overlap check (must overlap by at least 1 second)
-        let overlap_start = mic_start.max(*sys_start);
-        let overlap_end = mic_end.min(*sys_end);
-        if overlap_end - overlap_start < 1.0 {
-            continue;
-        }
-
-        // Fast text check: compare first 3-5 words
-        let sys_lower = sys_text.to_lowercase();
-        let sys_words: Vec<&str> = sys_lower.split_whitespace().take(5).collect();
-
-        // Count matching words in first 5
-        let matches = mic_words.iter()
-            .filter(|w| sys_words.contains(w))
-            .count();
-
-        // If 3+ words match out of first 5, it's likely echo
-        if matches >= 3 || (matches >= 2 && mic_words.len() <= 3) {
-            return true;
-        }
-    }
-    false
 }
 
 /// State for transcription operations
@@ -308,7 +264,7 @@ pub async fn transcribe_audio(
 
     // Save segments to database (skip blank/noise segments)
     for segment in &result.segments {
-        if !should_skip_segment(&segment.text) {
+        if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
             db.add_transcript_segment(&note_id, segment.start_time, segment.end_time, &segment.text, speaker.as_deref(), None, None)
                 .map_err(|e| e.to_string())?;
         }
@@ -384,7 +340,7 @@ pub async fn transcribe_dual_audio(
 
     // Save mic segments to database with "You" speaker label (skip blank/noise)
     for segment in &mic_result.segments {
-        if !should_skip_segment(&segment.text) {
+        if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
             db.add_transcript_segment(
                 &note_id,
                 segment.start_time,
@@ -408,7 +364,7 @@ pub async fn transcribe_dual_audio(
             Ok(Ok(result)) => {
                 // Save system segments to database with "Others" speaker label (skip blank/noise)
                 for segment in &result.segments {
-                    if !should_skip_segment(&segment.text) {
+                    if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
                         db.add_transcript_segment(
                             &note_id,
                             segment.start_time,
@@ -581,7 +537,7 @@ pub async fn retranscribe_audio_segment(
         match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
             Ok(Ok(result)) => {
                 for seg in &result.segments {
-                    if !should_skip_segment(&seg.text) {
+                    if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
                         // Store for echo detection
                         system_segments_for_echo.push((seg.start_time, seg.end_time, seg.text.clone()));
 
@@ -625,7 +581,7 @@ pub async fn retranscribe_audio_segment(
 
         // Save mic segments to database with "You" speaker label, filtering out echoes
         for seg in &mic_result.segments {
-            if should_skip_segment(&seg.text) {
+            if should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
                 continue;
             }
 
@@ -777,7 +733,7 @@ pub async fn retranscribe_note(
                     println!("[retranscribe_note] System transcription succeeded, {} segments", result.segments.len());
                     let mut last_start = 0.0_f64;
                     for seg in &result.segments {
-                        if !should_skip_segment(&seg.text) {
+                        if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
                             // Store for echo detection (using raw Whisper times)
                             system_segments_for_echo.push((seg.start_time, seg.end_time, seg.text.clone()));
 
@@ -818,7 +774,7 @@ pub async fn retranscribe_note(
                     let mut echo_filtered = 0;
                     let mut last_start = 0.0_f64;
                     for seg in &result.segments {
-                        if should_skip_segment(&seg.text) {
+                        if should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
                             continue;
                         }
 
@@ -894,7 +850,7 @@ pub async fn retranscribe_note(
             Ok(Ok(result)) => {
                 let mut last_start = 0.0_f64;
                 for seg in &result.segments {
-                    if !should_skip_segment(&seg.text) {
+                    if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
                         let (start_time, end_time) =
                             clamp_monotonic(seg.start_time, seg.end_time, &mut last_start);
                         if let Ok(_) = db.add_transcript_segment(
