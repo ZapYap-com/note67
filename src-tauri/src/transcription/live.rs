@@ -185,6 +185,14 @@ pub async fn start_live_transcription(
             let mic_samples = recording_state_clone.take_audio_buffer();
             let system_samples = take_system_audio_samples();
 
+            // Track how much audio (in seconds) each stream actually consumed this
+            // pass, so the time offsets advance by real elapsed audio rather than by
+            // the last transcribed segment's end time (which drifts behind whenever
+            // there is trailing silence or VAD-skipped audio). System audio is
+            // already 16kHz mono.
+            let system_consumed_secs = system_samples.len() as f64 / 16000.0;
+            let mut mic_consumed_secs = 0.0_f64;
+
             // Build list of audio sources to process
             let mut audio_sources: Vec<(Vec<f32>, u32, usize, AudioSource)> = Vec::new();
 
@@ -193,6 +201,10 @@ pub async fn start_live_transcription(
                 let rate = recording_state_clone.sample_rate.load(Ordering::SeqCst);
                 let ch = recording_state_clone.channels.load(Ordering::SeqCst) as usize;
                 if rate > 0 && ch > 0 {
+                    // Duration of mic audio consumed this pass (counts silence too,
+                    // so the timeline still advances when VAD skips this buffer).
+                    mic_consumed_secs = (mic_samples.len() as f64 / ch as f64) / rate as f64;
+
                     // Convert mic to mono first if needed
                     let mono_mic: Vec<f32> = if ch > 1 {
                         mic_samples
@@ -315,10 +327,6 @@ pub async fn start_live_transcription(
             // Process mic results with echo filtering
             if let Some(transcription) = mic_result {
                 if !transcription.segments.is_empty() {
-                    if let Some(last) = transcription.segments.last() {
-                        *live_state_clone.mic_time_offset.lock().await = last.end_time;
-                    }
-
                     // Filter out blank segments AND echo duplicates
                     let valid_segments: Vec<_> = transcription
                         .segments
@@ -358,10 +366,6 @@ pub async fn start_live_transcription(
 
             // Now add system results to state and events (using already-filtered current_system_segments)
             if !current_system_segments.is_empty() {
-                if let Some(last) = current_system_segments.last() {
-                    *live_state_clone.system_time_offset.lock().await = last.end_time;
-                }
-
                 for segment in &current_system_segments {
                     db_segments.push((
                         note_id_clone.clone(),
@@ -399,6 +403,17 @@ pub async fn start_live_transcription(
             // Emit all events
             for event in all_events {
                 let _ = app_clone.emit("transcription-update", event);
+            }
+
+            // Advance per-stream time offsets by the audio actually consumed this
+            // pass so live timestamps track real elapsed time (staying aligned with
+            // the post-recording retranscription) instead of drifting behind when a
+            // pass had trailing silence or was skipped by VAD.
+            if mic_consumed_secs > 0.0 {
+                *live_state_clone.mic_time_offset.lock().await += mic_consumed_secs;
+            }
+            if system_consumed_secs > 0.0 {
+                *live_state_clone.system_time_offset.lock().await += system_consumed_secs;
             }
         }
 
