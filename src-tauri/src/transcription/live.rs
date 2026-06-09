@@ -202,9 +202,9 @@ pub async fn start_live_transcription(
                         mic_samples
                     };
 
-                    // Only process if there's voice activity (RMS > 0.01)
+                    // Only process if there's voice activity (RMS > 0.02)
                     // This filters out silence and low background noise
-                    if has_voice_activity(&mono_mic, 0.01) {
+                    if has_voice_activity(&mono_mic, 0.02) {
                         // Resample mic to 16kHz for Whisper
                         let mic_16k = if rate != 16000 {
                             resample(&mono_mic, rate, 16000)
