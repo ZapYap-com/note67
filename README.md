@@ -8,7 +8,16 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.22)
+## What's New (v0.1.23)
+
+- Sentence-based transcript formatting — long monologues break into readable sentences instead of one block of text
+- Interval timestamps — a timestamp every 30 seconds within a speaker turn for easier navigation
+- Fixed transcript ordering — the last line no longer jumps to the top after post-recording enhancement
+- Smarter noise filtering — drops Whisper hallucinations (stray punctuation, repeated "Thank you", stuck words) on silence
+- Improved echo handling — better removal of mic pickup of speaker audio when not using headphones
+- Transcript search no longer breaks on special characters
+
+### v0.1.22
 
 - Listen-only recording mode — capture system audio without microphone
 - Record meetings when mic is unavailable or only system audio is needed
