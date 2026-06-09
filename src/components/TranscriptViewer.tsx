@@ -6,11 +6,20 @@ interface TranscriptViewerProps {
   isLoading?: boolean;
 }
 
-// Split a speaker turn into sentences (breaks only on . ! ? + whitespace, so
-// decimals stay intact and trailing text without punctuation is kept).
+// Common abbreviations that end in "." but don't end a sentence.
+const SENTENCE_ABBREVIATIONS = new Set([
+  "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "vs", "etc",
+  "e.g", "i.e", "a.m", "p.m", "u.s", "u.k",
+]);
+
+// Split a speaker turn into sentences (breaks on . ! ? + whitespace, but not
+// after a known abbreviation or a decimal like "3.5"; trailing text is kept).
 function splitIntoSentences(text: string): string[] {
   return text
-    .replace(/([.!?]+)\s+/g, "$1\n")
+    .replace(/([.!?]+)(\s+)/g, (match: string, _punct: string, _space: string, offset: number, full: string) => {
+      const prevWord = full.slice(0, offset).split(/\s+/).pop()?.toLowerCase() ?? "";
+      return SENTENCE_ABBREVIATIONS.has(prevWord) ? match : `${match.trimEnd()}\n`;
+    })
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);

@@ -3,13 +3,24 @@ import type { TranscriptSegment, AudioSegment, UploadedAudio, AudioItem } from "
 
 type SpeakerFilter = "all" | "you" | "others";
 
+// Common abbreviations that end in "." but don't end a sentence. Kept
+// collision-free (no "no"/"co" etc. which are also ordinary words).
+const SENTENCE_ABBREVIATIONS = new Set([
+  "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "vs", "etc",
+  "e.g", "i.e", "a.m", "p.m", "u.s", "u.k",
+]);
+
 // Split a speaker turn into sentences so each line is a complete thought,
 // rather than an arbitrary ~5s Whisper segment that may break mid-sentence.
-// Breaks only on sentence-ending punctuation (. ! ?) followed by whitespace, so
-// decimals like "3.5" stay intact. Trailing text without punctuation is kept.
+// Breaks on sentence-ending punctuation (. ! ?) followed by whitespace, but not
+// after a known abbreviation ("Mr.", "e.g.") or a decimal like "3.5" (no space
+// after the dot). Trailing text without punctuation is kept.
 function splitIntoSentences(text: string): string[] {
   return text
-    .replace(/([.!?]+)\s+/g, "$1\n")
+    .replace(/([.!?]+)(\s+)/g, (match: string, _punct: string, _space: string, offset: number, full: string) => {
+      const prevWord = full.slice(0, offset).split(/\s+/).pop()?.toLowerCase() ?? "";
+      return SENTENCE_ABBREVIATIONS.has(prevWord) ? match : `${match.trimEnd()}\n`;
+    })
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
