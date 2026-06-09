@@ -25,6 +25,19 @@ fn should_skip_segment(text: &str) -> bool {
         || text.trim().is_empty()
 }
 
+/// Clamp a segment's (start, end) so `start` never goes backwards relative to
+/// the previous segment in the same stream. Whisper occasionally emits a bogus
+/// (near-zero) timestamp for a trailing/short segment; without this guard that
+/// line would sort to the top of the transcript after retranscription. Whisper
+/// returns segments in chronological order, so clamping to the running maximum
+/// preserves the intended order while neutralizing bad timestamps.
+fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f64, f64) {
+    let clamped_start = start.max(*last_start);
+    *last_start = clamped_start;
+    let clamped_end = end.max(clamped_start);
+    (clamped_start, clamped_end)
+}
+
 /// Fast check if a mic segment is likely an echo of system audio
 /// Uses simple first-words comparison for speed
 fn is_echo_of_system(
@@ -776,15 +789,18 @@ pub async fn retranscribe_note(
             match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_clone)).await {
                 Ok(Ok(result)) => {
                     println!("[retranscribe_note] System transcription succeeded, {} segments", result.segments.len());
+                    let mut last_start = 0.0_f64;
                     for seg in &result.segments {
                         if !should_skip_segment(&seg.text) {
-                            // Store for echo detection
+                            // Store for echo detection (using raw Whisper times)
                             system_segments_for_echo.push((seg.start_time, seg.end_time, seg.text.clone()));
 
+                            let (start_time, end_time) =
+                                clamp_monotonic(seg.start_time, seg.end_time, &mut last_start);
                             if let Ok(_) = db.add_transcript_segment(
                                 &note_id,
-                                seg.start_time,
-                                seg.end_time,
+                                start_time,
+                                end_time,
                                 &seg.text,
                                 Some("Others"),
                                 Some("segment"),
@@ -814,22 +830,26 @@ pub async fn retranscribe_note(
                 Ok(Ok(result)) => {
                     println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
                     let mut echo_filtered = 0;
+                    let mut last_start = 0.0_f64;
                     for seg in &result.segments {
                         if should_skip_segment(&seg.text) {
                             continue;
                         }
 
                         // Filter out segments that are echoes of system audio
+                        // (using raw Whisper times for overlap matching)
                         if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
                             println!("[retranscribe_note] Filtered echo: \"{}\"", seg.text);
                             echo_filtered += 1;
                             continue;
                         }
 
+                        let (start_time, end_time) =
+                            clamp_monotonic(seg.start_time, seg.end_time, &mut last_start);
                         if let Ok(_) = db.add_transcript_segment(
                             &note_id,
-                            seg.start_time,
-                            seg.end_time,
+                            start_time,
+                            end_time,
                             &seg.text,
                             Some("You"),
                             Some("segment"),
@@ -886,12 +906,15 @@ pub async fn retranscribe_note(
 
         match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&file_path)).await {
             Ok(Ok(result)) => {
+                let mut last_start = 0.0_f64;
                 for seg in &result.segments {
                     if !should_skip_segment(&seg.text) {
+                        let (start_time, end_time) =
+                            clamp_monotonic(seg.start_time, seg.end_time, &mut last_start);
                         if let Ok(_) = db.add_transcript_segment(
                             &note_id,
-                            seg.start_time,
-                            seg.end_time,
+                            start_time,
+                            end_time,
                             &seg.text,
                             Some(&upload.speaker_label),
                             Some("upload"),

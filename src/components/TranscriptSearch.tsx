@@ -166,23 +166,26 @@ export function TranscriptSearch({
   const [searchQuery, setSearchQuery] = useState("");
   const [speakerFilter, setSpeakerFilter] = useState<SpeakerFilter>("all");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const prevSegmentCountRef = useRef(segments.length);
+  // Signature that changes whenever transcript content grows — captures both
+  // new segments and text appended to the last segment, so auto-scroll keeps
+  // up even during a long single-speaker monologue (where the segment count
+  // may not change between updates).
+  const contentSignature = `${segments.length}:${segments[segments.length - 1]?.text ?? ""}`;
+  const prevSignatureRef = useRef(contentSignature);
 
   // Check if we have speaker data in any segment
   const hasSpeakerData = useMemo(() => {
     return segments.some((s) => s.speaker !== null);
   }, [segments]);
 
-  // Auto-scroll to bottom when new segments arrive (only in live mode)
+  // Auto-scroll to bottom when transcript content grows (only in live mode)
   useEffect(() => {
-    if (isLive && segments.length > prevSegmentCountRef.current) {
-      scrollContainerRef.current?.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+    if (isLive && contentSignature !== prevSignatureRef.current) {
+      const el = scrollContainerRef.current;
+      el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }
-    prevSegmentCountRef.current = segments.length;
-  }, [segments.length, isLive]);
+    prevSignatureRef.current = contentSignature;
+  }, [contentSignature, isLive]);
 
   const filteredSegments = useMemo(() => {
     let result = segments;
@@ -220,7 +223,10 @@ export function TranscriptSearch({
 
   const highlightMatch = (text: string, query: string): React.ReactNode => {
     if (!query.trim()) return text;
-    const parts = text.split(new RegExp(`(${query})`, "gi"));
+    // Escape regex metacharacters so searches like "C++", "(", or "*" don't
+    // throw or mis-highlight (the query is raw user input).
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text.split(new RegExp(`(${escaped})`, "gi"));
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase() ? (
         <mark
@@ -367,7 +373,6 @@ export function TranscriptSearch({
               )}
               {/* Transcript segments within this source */}
               {groupedSegments.map((group) => {
-                const combinedText = group.texts.join(" ");
                 return (
                   <div
                     key={group.ids[0]}
@@ -386,9 +391,19 @@ export function TranscriptSearch({
                           <SpeakerLabel speaker={group.speaker} />
                         </div>
                       )}
-                      <p className="leading-relaxed" style={{ color: "var(--color-text)" }}>
-                        {highlightMatch(combinedText, searchQuery)}
-                      </p>
+                      {/* One paragraph per segment so a long single-speaker turn
+                          stays readable instead of one giant block of text. */}
+                      <div className="space-y-1.5">
+                        {group.segments.map((segment) => (
+                          <p
+                            key={segment.id}
+                            className="leading-relaxed"
+                            style={{ color: "var(--color-text)" }}
+                          >
+                            {highlightMatch(segment.text, searchQuery)}
+                          </p>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );

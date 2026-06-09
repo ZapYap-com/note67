@@ -173,34 +173,6 @@ export function useTranscription(): UseTranscriptionReturn {
   };
 }
 
-// Helper to merge consecutive segments from the same speaker
-function mergeConsecutiveSameSpeaker(
-  segments: TranscriptSegment[],
-  speaker: string
-): TranscriptSegment[] {
-  if (segments.length === 0) return [];
-
-  const result: TranscriptSegment[] = [];
-  let current = { ...segments[0] };
-
-  for (let i = 1; i < segments.length; i++) {
-    const seg = segments[i];
-    if (seg.speaker === speaker && current.speaker === speaker) {
-      // Merge with current
-      current = {
-        ...current,
-        end_time: seg.end_time,
-        text: current.text + " " + seg.text,
-      };
-    } else {
-      result.push(current);
-      current = { ...seg };
-    }
-  }
-  result.push(current);
-  return result;
-}
-
 interface UseLiveTranscriptionReturn {
   isLiveTranscribing: boolean;
   liveSegments: TranscriptSegment[];
@@ -216,6 +188,9 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
   const currentNoteIdRef = useRef<string | null>(null);
   const speakerNameRef = useRef<string>("Me");
   const unlistenRef = useRef<UnlistenFn | null>(null);
+  // Monotonic counter for live segment ids — guarantees unique React keys even
+  // when multiple transcription passes land in the same millisecond.
+  const nextSegmentIdRef = useRef(0);
 
   // Set up event listener
   useEffect(() => {
@@ -239,8 +214,8 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
 
           setLiveSegments((prev) => {
             // Convert new segments
-            const newSegments: TranscriptSegment[] = segments.map((s, idx) => ({
-              id: Date.now() + idx,
+            const newSegments: TranscriptSegment[] = segments.map((s) => ({
+              id: nextSegmentIdRef.current++,
               note_id,
               start_time: s.start_time,
               end_time: s.end_time,
@@ -253,25 +228,11 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
 
             if (newSegments.length === 0) return prev;
 
-            // Merge with previous if same speaker
-            const lastPrev = prev[prev.length - 1];
-            const firstNew = newSegments[0];
-
-            if (lastPrev && lastPrev.speaker === firstNew.speaker) {
-              // Merge the first new segment with the last previous segment
-              const merged: TranscriptSegment = {
-                ...lastPrev,
-                end_time: firstNew.end_time,
-                text: lastPrev.text + " " + firstNew.text,
-              };
-              // Merge consecutive same-speaker segments in newSegments
-              const mergedNew = mergeConsecutiveSameSpeaker(newSegments.slice(1), speaker);
-              return [...prev.slice(0, -1), merged, ...mergedNew];
-            } else {
-              // Merge consecutive same-speaker segments in newSegments
-              const mergedNew = mergeConsecutiveSameSpeaker(newSegments, speaker);
-              return [...prev, ...mergedNew];
-            }
+            // Keep each Whisper segment discrete so the UI controls visual
+            // grouping (one paragraph per segment instead of one giant block
+            // when a single speaker talks for a long time). Same-speaker turns
+            // are still grouped under one label/timestamp at render time.
+            return [...prev, ...newSegments];
           });
 
           if (is_final) {

@@ -96,9 +96,6 @@ function GroupedSegmentRow({ group }: { group: GroupedSegment }) {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Join consecutive texts with a space
-  const combinedText = group.texts.join(" ");
-
   return (
     <div className="flex gap-3 group">
       <span
@@ -113,9 +110,18 @@ function GroupedSegmentRow({ group }: { group: GroupedSegment }) {
             <SpeakerLabel speaker={group.speaker} />
           </div>
         )}
-        <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
-          {combinedText}
-        </p>
+        {/* One paragraph per segment so long single-speaker turns stay readable. */}
+        <div className="space-y-1.5">
+          {group.texts.map((text, i) => (
+            <p
+              key={group.ids[i]}
+              className="text-sm leading-relaxed"
+              style={{ color: "var(--color-text)" }}
+            >
+              {text}
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   );

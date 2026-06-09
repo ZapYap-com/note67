@@ -92,7 +92,9 @@ impl Database {
 
     /// Get all transcript segments for a note
     /// Orders by source display_order first (so transcripts from each audio appear together),
-    /// then by start_time within each source
+    /// then by start_time within each source, then by insertion id as a stable tiebreaker
+    /// (so segments with equal/duplicate start_times keep insertion order rather than
+    /// reordering nondeterministically).
     pub fn get_transcript_segments(&self, note_id: &str) -> anyhow::Result<Vec<TranscriptSegment>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -102,7 +104,7 @@ impl Database {
              LEFT JOIN audio_segments a ON t.source_type = 'segment' AND t.source_id = a.id
              LEFT JOIN uploaded_audio u ON t.source_type = 'upload' AND t.source_id = u.id
              WHERE t.note_id = ?1
-             ORDER BY COALESCE(a.display_order, u.display_order, 999999) ASC, t.start_time ASC",
+             ORDER BY COALESCE(a.display_order, u.display_order, 999999) ASC, t.start_time ASC, t.id ASC",
         )?;
 
         let segments = stmt
