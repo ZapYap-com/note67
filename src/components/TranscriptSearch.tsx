@@ -26,6 +26,50 @@ function splitIntoSentences(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+// Show an interval timestamp inside a speaker turn whenever a sentence crosses
+// into a new bucket of this many seconds (so long monologues stay navigable).
+const TIMESTAMP_INTERVAL_SECONDS = 30;
+
+interface SentenceLine {
+  text: string;
+  startTime: number;
+}
+
+// Split a speaker turn into sentences and map each one back to a real start
+// time. Each segment carries its own start_time; a sentence is attributed to the
+// segment that was being spoken at the sentence's character offset in the turn.
+function buildSentenceLines(segments: TranscriptSegment[]): SentenceLine[] {
+  if (segments.length === 0) return [];
+
+  const fullText = segments.map((s) => s.text).join(" ");
+
+  // Character offset where each segment's text begins in fullText.
+  const segPositions: { charStart: number; time: number }[] = [];
+  let pos = 0;
+  for (const seg of segments) {
+    segPositions.push({ charStart: pos, time: seg.start_time });
+    pos += seg.text.length + 1; // +1 for the join space
+  }
+  const timeAtOffset = (offset: number): number => {
+    let time = segments[0].start_time;
+    for (const p of segPositions) {
+      if (p.charStart <= offset) time = p.time;
+      else break;
+    }
+    return time;
+  };
+
+  const lines: SentenceLine[] = [];
+  let searchFrom = 0;
+  for (const sentence of splitIntoSentences(fullText)) {
+    const idx = fullText.indexOf(sentence, searchFrom);
+    const charOffset = idx >= 0 ? idx : searchFrom;
+    lines.push({ text: sentence, startTime: timeAtOffset(charOffset) });
+    searchFrom = charOffset + sentence.length;
+  }
+  return lines;
+}
+
 interface GroupedSegment {
   speaker: string | null;
   startTime: number;
@@ -396,37 +440,45 @@ export function TranscriptSearch({
               )}
               {/* Transcript segments within this source */}
               {groupedSegments.map((group) => {
+                const lines = buildSentenceLines(group.segments);
+                let lastBucket = -1;
                 return (
                   <div
                     key={group.ids[0]}
                     onClick={() => onSegmentClick?.(group.segments[0])}
-                    className="w-full flex gap-4 text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5 cursor-pointer"
+                    className="w-full text-left px-4 py-3 rounded-xl transition-colors hover:bg-black/5 cursor-pointer"
                   >
-                    <span
-                      className="text-sm font-mono shrink-0 pt-0.5"
-                      style={{ color: "var(--color-text-secondary)" }}
-                    >
-                      {formatTime(group.startTime)}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      {group.speaker && (
-                        <div className="mb-0.5">
-                          <SpeakerLabel speaker={group.speaker} />
-                        </div>
-                      )}
-                      {/* One line per sentence so a long single-speaker turn
-                          reads as prose instead of one giant block of text. */}
-                      <div className="space-y-1.5">
-                        {splitIntoSentences(group.texts.join(" ")).map((sentence, i) => (
-                          <p
-                            key={`${group.ids[0]}-${i}`}
-                            className="leading-relaxed"
-                            style={{ color: "var(--color-text)" }}
-                          >
-                            {highlightMatch(sentence, searchQuery)}
-                          </p>
-                        ))}
+                    {group.speaker && (
+                      <div className="flex gap-4 mb-1">
+                        <span className="w-14 shrink-0" aria-hidden="true" />
+                        <SpeakerLabel speaker={group.speaker} />
                       </div>
+                    )}
+                    {/* One line per sentence (reads as prose); a timestamp is
+                        shown whenever a sentence crosses a new 30s boundary so a
+                        long single-speaker turn stays navigable. */}
+                    <div className="space-y-1.5">
+                      {lines.map((line, i) => {
+                        const bucket = Math.floor(line.startTime / TIMESTAMP_INTERVAL_SECONDS);
+                        const showTime = i === 0 || bucket !== lastBucket;
+                        lastBucket = bucket;
+                        return (
+                          <div key={`${group.ids[0]}-${i}`} className="flex gap-4">
+                            <span
+                              className="w-14 shrink-0 text-sm font-mono pt-0.5"
+                              style={{ color: "var(--color-text-secondary)" }}
+                            >
+                              {showTime ? formatTime(line.startTime) : ""}
+                            </span>
+                            <p
+                              className="flex-1 min-w-0 leading-relaxed"
+                              style={{ color: "var(--color-text)" }}
+                            >
+                              {highlightMatch(line.text, searchQuery)}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
