@@ -23,6 +23,18 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.23",
+      date: "June 2026",
+      changes: [
+        "Cleaner transcripts - long monologues now break into readable sentences instead of one block of text",
+        "Interval timestamps - a timestamp is shown every 30 seconds within a speaker turn for easier navigation",
+        "Fixed transcript ordering - the last line no longer jumps to the top after post-recording enhancement",
+        "Smarter noise filtering - drops Whisper hallucinations (stray punctuation, repeated 'Thank you', stuck words) on silence",
+        "Improved echo handling - better removal of microphone pickup of speaker audio when not using headphones",
+        "Transcript search no longer breaks when searching for special characters",
+      ],
+    },
+    {
       version: "0.1.22",
       date: "May 2026",
       changes: [
