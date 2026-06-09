@@ -6,6 +6,16 @@ interface TranscriptViewerProps {
   isLoading?: boolean;
 }
 
+// Split a speaker turn into sentences (breaks only on . ! ? + whitespace, so
+// decimals stay intact and trailing text without punctuation is kept).
+function splitIntoSentences(text: string): string[] {
+  return text
+    .replace(/([.!?]+)\s+/g, "$1\n")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 interface GroupedSegment {
   speaker: string | null;
   startTime: number;
@@ -110,15 +120,15 @@ function GroupedSegmentRow({ group }: { group: GroupedSegment }) {
             <SpeakerLabel speaker={group.speaker} />
           </div>
         )}
-        {/* One paragraph per segment so long single-speaker turns stay readable. */}
+        {/* One line per sentence so long single-speaker turns read as prose. */}
         <div className="space-y-1.5">
-          {group.texts.map((text, i) => (
+          {splitIntoSentences(group.texts.join(" ")).map((sentence, i) => (
             <p
-              key={group.ids[i]}
+              key={`${group.ids[0]}-${i}`}
               className="text-sm leading-relaxed"
               style={{ color: "var(--color-text)" }}
             >
-              {text}
+              {sentence}
             </p>
           ))}
         </div>

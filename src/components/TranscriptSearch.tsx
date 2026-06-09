@@ -3,6 +3,18 @@ import type { TranscriptSegment, AudioSegment, UploadedAudio, AudioItem } from "
 
 type SpeakerFilter = "all" | "you" | "others";
 
+// Split a speaker turn into sentences so each line is a complete thought,
+// rather than an arbitrary ~5s Whisper segment that may break mid-sentence.
+// Breaks only on sentence-ending punctuation (. ! ?) followed by whitespace, so
+// decimals like "3.5" stay intact. Trailing text without punctuation is kept.
+function splitIntoSentences(text: string): string[] {
+  return text
+    .replace(/([.!?]+)\s+/g, "$1\n")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 interface GroupedSegment {
   speaker: string | null;
   startTime: number;
@@ -391,16 +403,16 @@ export function TranscriptSearch({
                           <SpeakerLabel speaker={group.speaker} />
                         </div>
                       )}
-                      {/* One paragraph per segment so a long single-speaker turn
-                          stays readable instead of one giant block of text. */}
+                      {/* One line per sentence so a long single-speaker turn
+                          reads as prose instead of one giant block of text. */}
                       <div className="space-y-1.5">
-                        {group.segments.map((segment) => (
+                        {splitIntoSentences(group.texts.join(" ")).map((sentence, i) => (
                           <p
-                            key={segment.id}
+                            key={`${group.ids[0]}-${i}`}
                             className="leading-relaxed"
                             style={{ color: "var(--color-text)" }}
                           >
-                            {highlightMatch(segment.text, searchQuery)}
+                            {highlightMatch(sentence, searchQuery)}
                           </p>
                         ))}
                       </div>
