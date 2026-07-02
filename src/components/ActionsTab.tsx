@@ -205,7 +205,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                   className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 flex items-center justify-center"
                   style={{
                     backgroundColor: item.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                    border: item.done ? "none" : "2px solid var(--color-border)",
+                    border: item.done ? "none" : "2px solid var(--color-accent)",
                   }}
                 >
                   {item.done && <span className="text-white text-[10px] leading-none">✓</span>}
@@ -274,7 +274,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                 className="w-5 h-5 mt-0.5 rounded-md shrink-0 flex items-center justify-center cursor-pointer"
                 style={{
                   backgroundColor: selected.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                  border: selected.done ? "none" : "2px solid var(--color-border)",
+                  border: selected.done ? "none" : "2px solid var(--color-accent)",
                 }}
               >
                 {selected.done && <span className="text-white text-xs leading-none">✓</span>}
@@ -349,7 +349,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                       className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center cursor-pointer"
                       style={{
                         backgroundColor: sub.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                        border: sub.done ? "none" : "2px solid var(--color-border)",
+                        border: sub.done ? "none" : "2px solid var(--color-accent)",
                       }}
                     >
                       {sub.done && <span className="text-white text-[10px] leading-none">✓</span>}
