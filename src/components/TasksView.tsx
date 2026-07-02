@@ -4,6 +4,7 @@ import type { ActionItem } from "../types";
 import { useTaskMutations } from "./tasks/useTaskMutations";
 import { TaskDetailPane } from "./tasks/TaskDetailPane";
 import { TaskCheckbox } from "./tasks/TaskCheckbox";
+import { DueChip } from "./tasks/DueChip";
 
 interface TasksViewProps {
   refreshKey?: number;
@@ -24,10 +25,6 @@ function bucketFor(due: string | null): Bucket {
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
   return "Future";
-}
-
-function formatDue(due: string) {
-  return new Date(due + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 type DateFilter = "all" | "past" | "today" | "upcoming" | "none";
@@ -133,10 +130,10 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
     <div className="flex-1 flex overflow-hidden">
       {/* Left: grouped task list */}
       <div
-        className="w-1/2 flex flex-col border-r overflow-y-auto"
+        className="w-1/2 flex flex-col border-r overflow-hidden"
         style={{ borderColor: "var(--color-border)" }}
       >
-        <div className="px-6 pt-5 pb-3">
+        <div className="px-6 pt-5 pb-3 shrink-0">
           <div className="flex items-center justify-between mb-2.5">
             <h1 className="text-xl font-semibold" style={{ color: "var(--color-text)" }}>
               Tasks
@@ -171,7 +168,7 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
           </div>
         </div>
 
-        <div className="px-4 pb-4">
+        <div className="flex-1 overflow-y-auto px-4 py-1">
           {!loaded ? (
             <p className="text-sm px-2" style={{ color: "var(--color-text-tertiary)" }}>
               Loading…
@@ -218,17 +215,10 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                         </span>
                         <span className="flex items-center gap-2 mt-0.5">
                           {task.due_date && (
-                            <span
-                              className="text-xs"
-                              style={{
-                                color:
-                                  bucketFor(task.due_date) === "Past"
-                                    ? "var(--color-accent)"
-                                    : "var(--color-text-tertiary)",
-                              }}
-                            >
-                              📅 {formatDue(task.due_date)}
-                            </span>
+                            <DueChip
+                              date={task.due_date}
+                              overdue={bucketFor(task.due_date) === "Past"}
+                            />
                           )}
                           <span className="text-xs truncate" style={{ color: "var(--color-text-tertiary)" }}>
                             {task.note_id ? noteTitles[task.note_id] ?? "Note" : "No note"}
@@ -261,10 +251,15 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
               </div>
             ))
           )}
+        </div>
 
-          {/* Add a standalone task (no note) */}
-          {loaded && (
-            <div className="flex items-center gap-2.5 p-2">
+        {/* Pinned add-task row (standalone task, no note) */}
+        {loaded && (
+          <div
+            className="shrink-0 border-t px-4 py-2"
+            style={{ borderColor: "var(--color-border)" }}
+          >
+            <div className="flex items-center gap-2.5 px-2">
               <span
                 className="w-4 h-4 rounded-[5px] shrink-0"
                 style={{ border: "2px dashed var(--color-border)" }}
@@ -279,8 +274,8 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                 style={{ color: "var(--color-text)" }}
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Right: task detail */}

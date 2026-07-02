@@ -4,6 +4,7 @@ import type { ActionItem } from "../types";
 import { useTaskMutations } from "./tasks/useTaskMutations";
 import { TaskDetailPane } from "./tasks/TaskDetailPane";
 import { TaskCheckbox } from "./tasks/TaskCheckbox";
+import { DueChip } from "./tasks/DueChip";
 
 interface ActionsTabProps {
   noteId: string;
@@ -111,13 +112,13 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   }
 
   return (
-    <div className="flex h-full -mx-6 -my-4" style={{ minHeight: "60vh" }}>
+    <div className="flex h-full -mx-6">
       {/* Left: task list */}
       <div
-        className="w-1/2 flex flex-col border-r overflow-y-auto"
+        className="w-1/2 flex flex-col border-r overflow-hidden"
         style={{ borderColor: "var(--color-border)" }}
       >
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
           <h2 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
             Tasks
             {topLevel.length > 0 && (
@@ -146,7 +147,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
           )}
         </div>
 
-        <div className="px-3 pb-3">
+        <div className="flex-1 overflow-y-auto px-3 py-1">
           {topLevel.map((item) => {
             const subs = items.filter((i) => i.parent_id === item.id);
             const isSel = selected?.id === item.id;
@@ -171,11 +172,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
                     {item.text}
                   </span>
                   <span className="flex items-center gap-2 mt-0.5">
-                    {item.due_date && (
-                      <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                        📅 {item.due_date}
-                      </span>
-                    )}
+                    {item.due_date && <DueChip date={item.due_date} />}
                     {subs.length > 0 && (
                       <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
                         ☑ {subs.filter((s) => s.done).length}/{subs.length}
@@ -186,8 +183,14 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
               </div>
             );
           })}
+        </div>
 
-          <div className="flex items-center gap-2.5 p-2">
+        {/* Pinned add-task row */}
+        <div
+          className="shrink-0 border-t px-3 py-2"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <div className="flex items-center gap-2.5 px-2">
             <span
               className="w-4 h-4 rounded-[5px] shrink-0"
               style={{ border: "2px dashed var(--color-border)" }}
