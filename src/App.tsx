@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   LogoImage,
   Settings,
+  SummaryPanel,
   TranscriptSearch,
   useProfile,
   AudioPlayer,
@@ -17,7 +18,6 @@ import {
   UnlinkedMentionsPanel,
   GraphView,
   OnboardingWizard,
-  MarkdownContent,
   TasksView,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi, tasksApi } from "./api";
@@ -168,7 +168,9 @@ function App() {
   const [noteTranscripts, setNoteTranscripts] = useState<
     Record<string, TranscriptSegment[]>
   >({});
-  const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
+  const [activeTab, setActiveTab] = useState<
+    "note" | "transcript" | "summary"
+  >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
   const [, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -605,7 +607,7 @@ function App() {
 
       // Auto-generate summary and title if we have transcript
       if (transcriptToUse.length > 0) {
-        setActiveTab("note");
+        setActiveTab("summary");
         setIsGeneratingSummaryTitle(true);
         try {
           // Generate overview summary first
@@ -674,7 +676,7 @@ function App() {
   const handleSelectNote = async (note: Note) => {
     setSelectedNoteId(note.id);
     setCurrentView("notes"); // Exit graph view when selecting a note
-    setActiveTab("note");
+    setActiveTab("summary");
     // #3: index the note's inline action items so the Tasks view reflects them
     // (covers notes created before their last edit synced).
     tasksApi
@@ -1338,7 +1340,7 @@ function App() {
           const note = notes.find(n => n.id === noteId);
           if (note) {
             setSelectedNoteId(noteId);
-            setActiveTab("note");
+            setActiveTab("summary");
           }
         }}
       />
@@ -1557,7 +1559,7 @@ interface NoteViewProps {
   isPaused: boolean;
   audioLevel: number;
   recordingMode: import("./hooks/useRecording").RecordingMode;
-  activeTab: "note" | "transcript";
+  activeTab: "note" | "transcript" | "summary";
   editingTitle: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
@@ -1567,7 +1569,7 @@ interface NoteViewProps {
   isAutoRetranscribing: boolean;
   summariesRefreshKey: number;
   loadedModel: string | null;
-  onTabChange: (tab: "note" | "transcript") => void;
+  onTabChange: (tab: "note" | "transcript" | "summary") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
@@ -1758,18 +1760,8 @@ function NoteView({
     [playingAudioPath]
   );
 
-  const { summaries, isGenerating, streamingContent } =
+  const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
-
-  // #4: the "Note" surface shows either the user's own notes or the AI-enhanced
-  // version (the merged notes + transcript). The enhanced doc is the newest
-  // overview summary; the user's raw notes are never overwritten.
-  const [noteMode, setNoteMode] = useState<"my" | "enhanced">("enhanced");
-  const enhancedSummary =
-    summaries.find((s) => s.summary_type === "overview") ?? summaries[0] ?? null;
-  const hasEnhanced = !!enhancedSummary;
-  const generatingEnhanced = isGenerating || isRegenerating;
-  const showEnhanced = noteMode === "enhanced" && (hasEnhanced || generatingEnhanced);
 
   // #3: extract action items and splice them into a delimited "## Action Items"
   // section of the note — never a wholesale replace of the user's notes.
@@ -1785,8 +1777,7 @@ function NoteView({
         onUpdateDescription(merged);
         await tasksApi.syncActionItems(note.id, parseActionItems(merged, note.id));
         onTasksChanged?.();
-        // Reveal the inserted checkboxes in the editable note.
-        setNoteMode("my");
+        // Reveal the inserted checkboxes in the note.
         onTabChange("note");
       }
     } catch (e) {
@@ -2303,7 +2294,7 @@ function NoteView({
         className="px-6 border-b flex gap-6"
         style={{ borderColor: "var(--color-border)" }}
       >
-        {(["note", "transcript"] as const).map((tab) => (
+        {(["note", "transcript", "summary"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -2329,6 +2320,14 @@ function NoteView({
                 ({transcript.length})
               </span>
             )}
+            {tab === "summary" && summaries.length > 0 && (
+              <span
+                className="ml-1.5 text-sm"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                ({summaries.length})
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -2337,85 +2336,15 @@ function NoteView({
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {activeTab === "note" && (
           <div className="h-full flex flex-col">
-            {/* My notes | Enhanced toggle — appears once there's an enhanced doc */}
-            {(hasEnhanced || generatingEnhanced) && (
-              <div
-                className="mb-3 inline-flex self-start items-center gap-0.5 p-0.5 rounded-lg"
-                style={{ backgroundColor: "var(--color-bg-subtle)" }}
-              >
-                <button
-                  onClick={() => setNoteMode("my")}
-                  className="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                  style={{
-                    backgroundColor: !showEnhanced ? "var(--color-bg-elevated)" : "transparent",
-                    color: !showEnhanced ? "var(--color-text)" : "var(--color-text-secondary)",
-                    boxShadow: !showEnhanced ? "var(--shadow-sm)" : "none",
-                  }}
-                >
-                  My notes
-                </button>
-                <button
-                  onClick={() => setNoteMode("enhanced")}
-                  className="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                  style={{
-                    backgroundColor: showEnhanced ? "var(--color-bg-elevated)" : "transparent",
-                    color: showEnhanced ? "var(--color-text)" : "var(--color-text-secondary)",
-                    boxShadow: showEnhanced ? "var(--shadow-sm)" : "none",
-                  }}
-                >
-                  ✦ Enhanced
-                </button>
-              </div>
-            )}
-
-            {/* Body: enhanced doc (read-only) or the user's own notes (editable) */}
-            <div className="flex-1 min-h-0">
-              {showEnhanced ? (
-                streamingContent ? (
-                  <MarkdownContent content={streamingContent} />
-                ) : generatingEnhanced ? (
-                  <div
-                    className="flex items-center gap-2 text-sm py-10 justify-center"
-                    style={{ color: "var(--color-text-secondary)" }}
-                  >
-                    <span
-                      className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                      style={{ borderColor: "var(--color-accent)", borderTopColor: "transparent" }}
-                    />
-                    Writing enhanced notes…
-                  </div>
-                ) : enhancedSummary ? (
-                  <div>
-                    <div className="flex justify-end mb-1">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await exportApi.copyToClipboard(enhancedSummary.content);
-                          } catch (error) {
-                            console.error("Copy failed:", error);
-                          }
-                        }}
-                        className="text-xs px-2 py-1 rounded-md transition-colors hover:bg-black/5"
-                        style={{ color: "var(--color-text-tertiary)" }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                    <MarkdownContent content={enhancedSummary.content} />
-                  </div>
-                ) : null
-              ) : (
-                <MarkdownEditor
-                  value={descValue}
-                  onChange={setDescValue}
-                  onBlur={() => onUpdateDescription(descValue)}
-                  placeholder="Take notes or press / for commands..."
-                  noteId={note.id}
-                  onWikiLinkClick={onWikiLinkClick}
-                  onNavigateToNote={onNavigateToNote}
-                />
-              )}
-            </div>
+            <MarkdownEditor
+              value={descValue}
+              onChange={setDescValue}
+              onBlur={() => onUpdateDescription(descValue)}
+              placeholder="Take notes or press / for commands..."
+              noteId={note.id}
+              onWikiLinkClick={onWikiLinkClick}
+              onNavigateToNote={onNavigateToNote}
+            />
           </div>
         )}
 
@@ -2474,6 +2403,21 @@ function NoteView({
           </>
         )}
 
+        {activeTab === "summary" && (
+          <SummaryPanel
+            summaries={summaries}
+            isGenerating={isGenerating}
+            streamingContent={streamingContent}
+            onDelete={deleteSummary}
+            onCopy={async (content) => {
+              try {
+                await exportApi.copyToClipboard(content);
+              } catch (error) {
+                console.error("Copy failed:", error);
+              }
+            }}
+          />
+        )}
       </div>
 
       {/* Backlinks Panel - show linked references */}

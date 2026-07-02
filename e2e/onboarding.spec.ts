@@ -50,22 +50,20 @@ test.describe("ready state", () => {
     // Note appears in the sidebar and opens.
     await page.getByRole("button", { name: /weekly sync/i }).first().click();
 
-    // #4: the note view collapses to two surfaces — Note (the document) and
-    // Transcript (source reference). Scope to the tab bar to disambiguate the
-    // "note" tab from the sidebar "Notes" toggle.
+    // Three surfaces: Note (your notes), Transcript (source), Summary (AI).
+    // Scope to the tab bar to disambiguate the "note" tab from the sidebar
+    // "Notes" toggle.
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
-    for (const tab of ["note", "transcript"]) {
+    for (const tab of ["note", "transcript", "summary"]) {
       await expect(tabBar.getByRole("button", { name: tab, exact: true })).toBeVisible();
     }
-    // There is no longer a separate "summary" tab.
-    await expect(tabBar.getByRole("button", { name: "summary", exact: true })).toHaveCount(0);
 
     await page.screenshot({ path: "e2e/__screenshots__/note-view.png", fullPage: true });
   });
 
-  test("shows the enhanced note with a My notes / Enhanced toggle (#4)", async ({ page }) => {
+  test("shows the AI summary in its own tab (#4)", async ({ page }) => {
     const note = makeNote({ title: "Q3 Planning", description: "- pricing\n- hiring" });
     await installTauriMock(page, {
       list_notes: [note],
@@ -83,13 +81,14 @@ test.describe("ready state", () => {
     await page.goto("/");
     await page.getByRole("button", { name: /q3 planning/i }).first().click();
 
-    // The enhanced doc renders by default, with a toggle back to the raw notes.
-    await expect(page.getByRole("button", { name: /my notes/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /enhanced/i })).toBeVisible();
+    // Opening a note lands on the Summary tab, which renders the AI summary.
     await expect(page.getByText(/Sofia owns the deck/i)).toBeVisible();
 
-    // Switching to "My notes" shows the user's own editable notes.
-    await page.getByRole("button", { name: /my notes/i }).click();
+    // The Note tab holds the user's own editable notes (no summary content).
+    const tabBar = page.locator("div.flex.gap-6", {
+      has: page.getByRole("button", { name: "transcript", exact: true }),
+    });
+    await tabBar.getByRole("button", { name: "note", exact: true }).click();
     await expect(page.getByText(/Sofia owns the deck/i)).toBeHidden();
   });
 
