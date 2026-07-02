@@ -24,6 +24,8 @@ interface TranscriptionUpdateEvent {
 interface UseModelsReturn {
   models: ModelInfo[];
   loadedModel: ModelSize | null;
+  /** True once models have been refreshed at least once (i.e. loadedModel is known). */
+  initialized: boolean;
   isDownloading: boolean;
   downloadingModel: ModelSize | null;
   downloadProgress: number;
@@ -38,6 +40,7 @@ export function useModels(): UseModelsReturn {
   // Subscribe to specific state values for proper reactivity
   const models = useWhisperStore((state) => state.models);
   const loadedModel = useWhisperStore((state) => state.loadedModel);
+  const initialized = useWhisperStore((state) => state.initialized);
   const isDownloading = useWhisperStore((state) => state.isDownloading);
   const downloadingModel = useWhisperStore((state) => state.downloadingModel);
   const downloadProgress = useWhisperStore((state) => state.downloadProgress);
@@ -56,6 +59,7 @@ export function useModels(): UseModelsReturn {
   return {
     models,
     loadedModel,
+    initialized,
     isDownloading,
     downloadingModel,
     downloadProgress,

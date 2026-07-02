@@ -62,7 +62,7 @@ function App() {
     resumeRecording,
     continueRecording,
   } = useRecording();
-  const { loadedModel } = useModels();
+  const { loadedModel, initialized: whisperChecked } = useModels();
   const { loadTranscript } = useTranscription();
   const {
     isLiveTranscribing,
@@ -70,7 +70,11 @@ function App() {
     startLiveTranscription,
     stopLiveTranscription,
   } = useLiveTranscription();
-  const { isRunning: ollamaRunning, selectedModel: ollamaModel } = useOllama();
+  const {
+    isRunning: ollamaRunning,
+    selectedModel: ollamaModel,
+    status: ollamaStatus,
+  } = useOllama();
   const { available: updateAvailable } = useUpdater();
   const {
     micAvailable,
@@ -97,8 +101,12 @@ function App() {
     !ollamaModel ||
     (micAvailable && !micPermission) ||
     (systemAudioSupported && !systemAudioPermission);
+  // Only evaluate setup once every source has actually reported, so a
+  // fully-configured user never sees the wizard flash while status loads:
+  // Whisper models refreshed, Ollama status fetched, permissions checked.
+  const setupChecked = whisperChecked && ollamaStatus !== null && !systemLoading;
   const showOnboarding =
-    onboardingDismissed === false && !systemLoading && setupIncomplete;
+    onboardingDismissed === false && setupChecked && setupIncomplete;
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
