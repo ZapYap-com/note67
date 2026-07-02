@@ -23,6 +23,18 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.24",
+      date: "July 2026",
+      changes: [
+        "Tasks - turn a meeting's action items into a real to-do list, or add standalone tasks; each task has a due date, description, and subtasks",
+        "Central Tasks page - open tasks from every meeting in one place, grouped by date (Overdue / Today / Tomorrow / Future) with quick filters",
+        "AI 'Generate' pulls action items straight from a meeting into your task list; click a task to jump back to its note",
+        "Smarter summaries - when you take your own notes, the AI summary now expands them with detail from the transcript instead of ignoring them",
+        "First-run setup wizard - guided setup for the transcription model, AI assistant, and microphone/screen permissions",
+        "Export to Markdown folder - save every note (with its summary and tasks) as plain .md files in a folder you choose",
+      ],
+    },
+    {
       version: "0.1.23",
       date: "June 2026",
       changes: [
