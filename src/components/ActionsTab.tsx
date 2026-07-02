@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { tasksApi } from "../api";
 import type { ActionItem } from "../types";
+import { useTaskMutations } from "./tasks/useTaskMutations";
+import { TaskDetailPane } from "./tasks/TaskDetailPane";
+import { TaskCheckbox } from "./tasks/TaskCheckbox";
 
 interface ActionsTabProps {
   noteId: string;
@@ -14,23 +17,20 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   const [items, setItems] = useState<ActionItem[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState("");
-  const [subDraft, setSubDraft] = useState("");
-  // Seed the selection from focusTaskId so opening from the global Tasks view
-  // lands on that task (not just the first one).
+  // Seed from focusTaskId so opening from the central page lands on that task.
   const [selectedId, setSelectedId] = useState<number | null>(focusTaskId ?? null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const loading = noteId !== loadedNoteId;
+  const m = useTaskMutations(items, setItems, onChanged);
 
-  // Re-focus when focusTaskId changes within the same mount (e.g. navigating to
-  // another task in the already-open note). Adjust during render, guarded.
+  // Re-focus when focusTaskId changes within the same mount.
   const [prevFocus, setPrevFocus] = useState(focusTaskId);
   if (focusTaskId !== prevFocus) {
     setPrevFocus(focusTaskId);
     if (focusTaskId != null) setSelectedId(focusTaskId);
   }
 
-  // Close the right-click menu on any click or Escape.
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -67,48 +67,9 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   }, [noteId]);
 
   const topLevel = items.filter((i) => i.parent_id == null);
-  // Selection falls back to the first task so the detail pane is never empty.
   const selected =
     items.find((i) => i.id === selectedId && i.parent_id == null) ?? topLevel[0] ?? null;
   const subtasks = selected ? items.filter((i) => i.parent_id === selected.id) : [];
-
-  const patchLocal = (id: number, patch: Partial<ActionItem>) =>
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-
-  const persist = async (item: ActionItem) => {
-    try {
-      await tasksApi.updateActionItem(
-        item.id,
-        item.text,
-        item.description,
-        item.due_date,
-        item.done
-      );
-      onChanged?.();
-    } catch (e) {
-      console.error("Failed to update task:", e);
-    }
-  };
-  const persistById = (id: number) => {
-    const item = items.find((i) => i.id === id);
-    if (item) persist(item);
-  };
-
-  const toggleDone = async (item: ActionItem) => {
-    patchLocal(item.id, { done: !item.done });
-    await persist({ ...item, done: !item.done });
-  };
-
-  const remove = async (id: number) => {
-    // Remove the item and any of its subtasks locally.
-    setItems((prev) => prev.filter((i) => i.id !== id && i.parent_id !== id));
-    try {
-      await tasksApi.deleteActionItem(id);
-      onChanged?.();
-    } catch (e) {
-      console.error("Failed to delete task:", e);
-    }
-  };
 
   const addTask = async (text: string) => {
     const trimmed = text.trim();
@@ -121,19 +82,6 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
       onChanged?.();
     } catch (e) {
       console.error("Failed to create task:", e);
-    }
-  };
-
-  const addSubtask = async (parentId: number, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    try {
-      const created = await tasksApi.createActionItem(noteId, trimmed, null, parentId);
-      setItems((prev) => [...prev, created]);
-      setSubDraft("");
-      onChanged?.();
-    } catch (e) {
-      console.error("Failed to create subtask:", e);
     }
   };
 
@@ -201,27 +149,15 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
             const subs = items.filter((i) => i.parent_id === item.id);
             const isSel = selected?.id === item.id;
             return (
-              <button
+              <div
                 key={item.id}
                 data-task-context
                 onClick={() => setSelectedId(item.id)}
                 onContextMenu={(e) => openMenu(e, item.id)}
-                className="w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors"
+                className="w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors cursor-pointer"
                 style={{ backgroundColor: isSel ? "var(--color-sidebar-selected)" : "transparent" }}
               >
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleDone(item);
-                  }}
-                  className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 flex items-center justify-center"
-                  style={{
-                    backgroundColor: item.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                    border: item.done ? "none" : "1.5px solid var(--color-accent)",
-                  }}
-                >
-                  {item.done && <span className="text-white text-[10px] leading-none">✓</span>}
-                </span>
+                <TaskCheckbox done={item.done} onToggle={() => m.toggleDone(item)} className="mt-0.5" />
                 <span className="flex-1 min-w-0">
                   <span
                     className="text-sm block"
@@ -245,11 +181,10 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
                     )}
                   </span>
                 </span>
-              </button>
+              </div>
             );
           })}
 
-          {/* Add task */}
           <div className="flex items-center gap-2.5 p-2">
             <span
               className="w-4 h-4 rounded-[5px] shrink-0"
@@ -278,138 +213,16 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
             Select a task to see its details.
           </div>
         ) : (
-          <div className="px-6 py-4">
-            {/* Title */}
-            <div className="flex items-start gap-3">
-              <span
-                onClick={() => toggleDone(selected)}
-                className="w-5 h-5 mt-0.5 rounded-md shrink-0 flex items-center justify-center cursor-pointer"
-                style={{
-                  backgroundColor: selected.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                  border: selected.done ? "none" : "1.5px solid var(--color-accent)",
-                }}
-              >
-                {selected.done && <span className="text-white text-xs leading-none">✓</span>}
-              </span>
-              <input
-                value={selected.text}
-                onChange={(e) => patchLocal(selected.id, { text: e.target.value })}
-                onBlur={() => persistById(selected.id)}
-                className="flex-1 min-w-0 bg-transparent outline-none text-base font-medium"
-                style={{
-                  color: "var(--color-text)",
-                  textDecoration: selected.done ? "line-through" : "none",
-                }}
-              />
-            </div>
-
-            {/* Due date */}
-            <div className="flex items-center gap-2 mt-4">
-              <span className="text-xs font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>
-                Due
-              </span>
-              <input
-                type="date"
-                value={selected.due_date ?? ""}
-                onChange={(e) => patchLocal(selected.id, { due_date: e.target.value || null })}
-                onBlur={() => persistById(selected.id)}
-                className="bg-transparent outline-none text-sm"
-                style={{ color: "var(--color-text)" }}
-              />
-            </div>
-
-            {/* Description */}
-            <div className="mt-4">
-              <span className="text-xs font-medium block mb-1" style={{ color: "var(--color-text-secondary)" }}>
-                Description
-              </span>
-              <textarea
-                value={selected.description ?? ""}
-                onChange={(e) => patchLocal(selected.id, { description: e.target.value || null })}
-                onBlur={() => persistById(selected.id)}
-                rows={4}
-                placeholder="Add more detail…"
-                className="w-full px-3 py-2 text-sm rounded-lg outline-none resize-none"
-                style={{
-                  backgroundColor: "var(--color-bg-subtle)",
-                  color: "var(--color-text)",
-                  border: "1px solid var(--color-border)",
-                }}
-              />
-            </div>
-
-            {/* Subtasks */}
-            <div className="mt-5">
-              <span className="text-xs font-medium block mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
-                Subtasks
-                {subtasks.length > 0 && (
-                  <span className="ml-1.5 font-normal" style={{ color: "var(--color-text-tertiary)" }}>
-                    {subtasks.filter((s) => s.done).length}/{subtasks.length}
-                  </span>
-                )}
-              </span>
-              <div className="space-y-0.5">
-                {subtasks.map((sub) => (
-                  <div
-                    key={sub.id}
-                    data-task-context
-                    onContextMenu={(e) => openMenu(e, sub.id)}
-                    className="flex items-center gap-2.5 p-1.5 rounded-lg group"
-                  >
-                    <span
-                      onClick={() => toggleDone(sub)}
-                      className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center cursor-pointer"
-                      style={{
-                        backgroundColor: sub.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
-                        border: sub.done ? "none" : "1.5px solid var(--color-accent)",
-                      }}
-                    >
-                      {sub.done && <span className="text-white text-[10px] leading-none">✓</span>}
-                    </span>
-                    <input
-                      value={sub.text}
-                      onChange={(e) => patchLocal(sub.id, { text: e.target.value })}
-                      onBlur={() => persistById(sub.id)}
-                      className="flex-1 min-w-0 bg-transparent outline-none text-sm"
-                      style={{
-                        color: sub.done ? "var(--color-text-tertiary)" : "var(--color-text)",
-                        textDecoration: sub.done ? "line-through" : "none",
-                      }}
-                    />
-                    <button
-                      onClick={() => remove(sub.id)}
-                      className="p-1 rounded shrink-0 opacity-0 group-hover:opacity-100 hover:bg-black/5"
-                      style={{ color: "var(--color-text-tertiary)" }}
-                      title="Delete subtask"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                <div className="flex items-center gap-2.5 p-1.5">
-                  <span
-                    className="w-4 h-4 rounded-[5px] shrink-0"
-                    style={{ border: "2px dashed var(--color-border)" }}
-                  />
-                  <input
-                    value={subDraft}
-                    onChange={(e) => setSubDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addSubtask(selected.id, subDraft)}
-                    onBlur={() => addSubtask(selected.id, subDraft)}
-                    placeholder="Add a subtask…"
-                    className="flex-1 bg-transparent outline-none text-sm"
-                    style={{ color: "var(--color-text)" }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <TaskDetailPane
+            key={selected.id}
+            item={selected}
+            subtasks={subtasks}
+            m={m}
+            onSubtaskContextMenu={openMenu}
+          />
         )}
       </div>
 
-      {/* Right-click delete menu */}
       {menu && (
         <div
           className="fixed z-[100] min-w-[140px] py-1 rounded-lg"
@@ -422,7 +235,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
         >
           <button
             onClick={() => {
-              remove(menu.id);
+              m.remove(menu.id);
               setMenu(null);
             }}
             className="w-full px-3 py-1.5 flex items-center gap-2.5 text-sm transition-colors hover:bg-black/5"

@@ -7,6 +7,11 @@ export const tasksApi = {
     return invoke("get_action_items", { noteId });
   },
 
+  /** Get every action item across all notes (central Tasks page). */
+  getAllActionItems: (): Promise<ActionItem[]> => {
+    return invoke("get_all_action_items");
+  },
+
   /** AI-extract action items from a note's transcript + notes into structured rows. */
   extractActionItems: (noteId: string): Promise<ActionItem[]> => {
     return invoke("extract_action_items", { noteId });

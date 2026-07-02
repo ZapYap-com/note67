@@ -203,6 +203,11 @@ function App() {
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId) || null;
   const recordingNote = notes.find((n) => n.id === recordingNoteId) || null;
+  // note_id -> title, for the central Tasks page.
+  const noteTitles = useMemo(
+    () => Object.fromEntries(notes.map((n) => [n.id, n.title])),
+    [notes]
+  );
 
   // Filter notes by search query and tag
   const displayNotes = useMemo(() => {
@@ -1052,7 +1057,8 @@ function App() {
         {currentView === "tasks" && (
           <TasksView
             refreshKey={tasksRefreshKey}
-            onSelectTask={(noteId, taskId) => {
+            noteTitles={noteTitles}
+            onOpenInNote={(noteId, taskId) => {
               const target = notes.find((n) => n.id === noteId);
               if (target) {
                 setSelectedNoteId(target.id);

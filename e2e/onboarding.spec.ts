@@ -153,18 +153,19 @@ test.describe("ready state", () => {
       list_notes: [note],
       get_note: note,
       get_action_items: [task],
-      list_all_open_action_items: [{ ...task, note_title: "Weekly Sync" }],
+      get_all_action_items: [task],
     });
     await page.goto("/");
 
-    // Open the Tasks view from the sidebar.
+    // Open the central Tasks page from the sidebar (split view: list + detail).
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
     await expect(page.getByText("Send the pricing deck")).toBeVisible();
+    // First task auto-selected → its detail (subtask adder) is shown.
+    await expect(page.getByPlaceholder("Add a subtask…")).toBeVisible();
 
-    // Clicking a task opens its note's Tasks tab with that task selected — the
-    // detail pane (subtask adder) is only shown when a task is selected.
-    await page.getByText("Send the pricing deck").click();
+    // The link button opens the task in its note's Tasks tab.
+    await page.getByTitle("Open in note").first().click();
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });

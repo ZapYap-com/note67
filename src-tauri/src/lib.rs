@@ -420,6 +420,7 @@ pub fn run() {
             commands::ai_write_stream,
             commands::extract_action_items,
             commands::get_action_items,
+            commands::get_all_action_items,
             commands::create_action_item,
             commands::update_action_item,
             commands::set_action_item_done,

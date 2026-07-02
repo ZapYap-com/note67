@@ -699,6 +699,12 @@ pub fn get_action_items(
     db.get_action_items(&note_id).map_err(|e| e.to_string())
 }
 
+/// #3: Get every action item across all notes (central Tasks page).
+#[tauri::command]
+pub fn get_all_action_items(db: State<'_, Database>) -> Result<Vec<ActionItem>, String> {
+    db.get_all_action_items().map_err(|e| e.to_string())
+}
+
 /// #3: Create an action item (top-level, or a subtask when `parent_id` is set).
 #[tauri::command]
 pub fn create_action_item(

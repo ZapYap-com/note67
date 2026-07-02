@@ -259,6 +259,19 @@ impl Database {
         Ok(items)
     }
 
+    /// Get every action item across all notes (for the central Tasks page).
+    pub fn get_all_action_items(&self) -> anyhow::Result<Vec<ActionItem>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {ACTION_ITEM_COLS} FROM action_items ORDER BY sort_order ASC, created_at ASC",
+        ))?;
+        let items = stmt
+            .query_map([], Self::map_action_item)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(items)
+    }
+
     /// Create an action item (top-level, or a subtask when `parent_id` is set).
     pub fn create_action_item(
         &self,
