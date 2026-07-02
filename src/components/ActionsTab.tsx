@@ -35,16 +35,26 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenu(null);
-    };
     window.addEventListener("click", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("click", close);
   }, [menu]);
+
+  // Escape closes the menu, else deselects the task. Capture phase + stop so the
+  // app's global Escape (which would close the note) doesn't also fire.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (menu) {
+        setMenu(null);
+        e.stopPropagation();
+      } else if (selectedId != null) {
+        setSelectedId(null);
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [menu, selectedId]);
 
   const openMenu = (e: React.MouseEvent, id: number) => {
     e.preventDefault();
@@ -69,7 +79,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
 
   const topLevel = items.filter((i) => i.parent_id == null);
   const selected =
-    items.find((i) => i.id === selectedId && i.parent_id == null) ?? topLevel[0] ?? null;
+    items.find((i) => i.id === selectedId && i.parent_id == null) ?? null;
   const subtasks = selected ? items.filter((i) => i.parent_id === selected.id) : [];
 
   const addTask = async (text: string) => {

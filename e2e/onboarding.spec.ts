@@ -91,10 +91,11 @@ test.describe("ready state", () => {
     });
     await tabBar.getByRole("button", { name: "tasks", exact: true }).click();
 
-    // Split view: the task shows in the left list; the first task is auto-selected
-    // so the detail pane (with a subtask adder) is shown.
+    // Split view: the task shows in the left list (nothing auto-selected).
     await expect(page.getByText("Send the pricing deck")).toBeVisible();
     await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
+    // Clicking a task selects it → detail pane (subtask adder) appears.
+    await page.getByText("Send the pricing deck").click();
     await expect(page.getByPlaceholder("Add a subtask…")).toBeVisible();
   });
 
@@ -161,7 +162,8 @@ test.describe("ready state", () => {
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
     await expect(page.getByText("Send the pricing deck")).toBeVisible();
-    // First task auto-selected → its detail (subtask adder) is shown.
+    // Nothing auto-selected; clicking a task shows its detail (subtask adder).
+    await page.getByText("Send the pricing deck").click();
     await expect(page.getByPlaceholder("Add a subtask…")).toBeVisible();
 
     // The link button opens the task in its note's Tasks tab.
