@@ -1765,7 +1765,6 @@ function NoteView({
   // version (the merged notes + transcript). The enhanced doc is the newest
   // overview summary; the user's raw notes are never overwritten.
   const [noteMode, setNoteMode] = useState<"my" | "enhanced">("enhanced");
-  const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
   const enhancedSummary =
     summaries.find((s) => s.summary_type === "overview") ?? summaries[0] ?? null;
   const hasEnhanced = !!enhancedSummary;
@@ -2417,41 +2416,6 @@ function NoteView({
                 />
               )}
             </div>
-
-            {/* Collapsible transcript drawer — the source stays one click away */}
-            {transcript.length > 0 && (
-              <div
-                className="mt-4 pt-3 border-t"
-                style={{ borderColor: "var(--color-border)" }}
-              >
-                <button
-                  onClick={() => setShowTranscriptDrawer((v) => !v)}
-                  className="flex items-center gap-2 text-sm font-medium"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  <svg
-                    className="w-4 h-4 transition-transform"
-                    style={{ transform: showTranscriptDrawer ? "rotate(90deg)" : "rotate(0deg)" }}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  Full transcript ({transcript.length})
-                </button>
-                {showTranscriptDrawer && (
-                  <div className="mt-3">
-                    <TranscriptSearch
-                      segments={transcript}
-                      audioSegments={audioSegments}
-                      uploads={uploads}
-                      isLive={isRecording}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
