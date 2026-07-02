@@ -435,6 +435,9 @@ function App() {
           refreshSystemStatus();
         } else if (currentView === "graph") {
           setCurrentView("notes");
+        } else if (currentView === "tasks") {
+          // Central Tasks page (with no task selected) → back home.
+          setCurrentView("notes");
         } else if (selectedNoteId) {
           setSelectedNoteId(null);
         }
