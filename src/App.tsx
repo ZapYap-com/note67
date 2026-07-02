@@ -19,10 +19,10 @@ import {
   GraphView,
   OnboardingWizard,
   TasksView,
+  ActionsTab,
 } from "./components";
-import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi, tasksApi } from "./api";
+import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
-import { parseActionItems, upsertActionItemsSection } from "./utils/parseActionItems";
 import { useTagsStore } from "./stores/tagsStore";
 import {
   useNotes,
@@ -169,7 +169,7 @@ function App() {
     Record<string, TranscriptSegment[]>
   >({});
   const [activeTab, setActiveTab] = useState<
-    "note" | "transcript" | "summary"
+    "note" | "transcript" | "summary" | "actions"
   >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
   const [, setEditingDescription] = useState(false);
@@ -677,12 +677,6 @@ function App() {
     setSelectedNoteId(note.id);
     setCurrentView("notes"); // Exit graph view when selecting a note
     setActiveTab("summary");
-    // #3: index the note's inline action items so the Tasks view reflects them
-    // (covers notes created before their last edit synced).
-    tasksApi
-      .syncActionItems(note.id, parseActionItems(note.description || "", note.id))
-      .then(handleTasksChanged)
-      .catch(() => {});
     if (!noteTranscripts[note.id]) {
       const segments = await loadTranscript(note.id);
       if (segments.length > 0) {
@@ -1559,7 +1553,7 @@ interface NoteViewProps {
   isPaused: boolean;
   audioLevel: number;
   recordingMode: import("./hooks/useRecording").RecordingMode;
-  activeTab: "note" | "transcript" | "summary";
+  activeTab: "note" | "transcript" | "summary" | "actions";
   editingTitle: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
@@ -1569,7 +1563,7 @@ interface NoteViewProps {
   isAutoRetranscribing: boolean;
   summariesRefreshKey: number;
   loadedModel: string | null;
-  onTabChange: (tab: "note" | "transcript" | "summary") => void;
+  onTabChange: (tab: "note" | "transcript" | "summary" | "actions") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
@@ -1733,17 +1727,11 @@ function NoteView({
     if (descValue === (note.description || "")) return;
 
     const timeoutId = setTimeout(() => {
-      const latest = descValueRef.current;
-      onUpdateDescription(latest);
-      // #3: keep the action-items index in sync with the note's inline checkboxes.
-      tasksApi
-        .syncActionItems(note.id, parseActionItems(latest, note.id))
-        .then(() => onTasksChanged?.())
-        .catch((e) => console.error("Failed to sync action items:", e));
+      onUpdateDescription(descValueRef.current);
     }, 1500);
 
     return () => clearTimeout(timeoutId);
-  }, [descValue, note.description, note.id, onUpdateDescription, onTasksChanged]);
+  }, [descValue, note.description, onUpdateDescription]);
 
   // Handle play request from audio files list
   const handlePlayAudio = useCallback(
@@ -1762,30 +1750,6 @@ function NoteView({
 
   const { summaries, isGenerating, streamingContent, deleteSummary } =
     useSummaries(note.id, summariesRefreshKey);
-
-  // #3: extract action items and splice them into a delimited "## Action Items"
-  // section of the note — never a wholesale replace of the user's notes.
-  const [isFindingActions, setIsFindingActions] = useState(false);
-  const handleFindActionItems = useCallback(async () => {
-    if (isFindingActions) return;
-    setIsFindingActions(true);
-    try {
-      const checklist = await tasksApi.extractActionItems(note.id);
-      if (checklist && checklist.trim()) {
-        const merged = upsertActionItemsSection(descValueRef.current, checklist);
-        setDescValue(merged);
-        onUpdateDescription(merged);
-        await tasksApi.syncActionItems(note.id, parseActionItems(merged, note.id));
-        onTasksChanged?.();
-        // Reveal the inserted checkboxes in the note.
-        onTabChange("note");
-      }
-    } catch (e) {
-      console.error("Find action items failed:", e);
-    } finally {
-      setIsFindingActions(false);
-    }
-  }, [note.id, isFindingActions, onUpdateDescription, onTasksChanged, onTabChange]);
 
   const {
     uploads,
@@ -2154,32 +2118,6 @@ function NoteView({
                     )}
                     Upload Audio
                   </button>
-                  {ollamaRunning && hasOllamaModel && (
-                    <button
-                      onClick={() => {
-                        handleFindActionItems();
-                        setShowMoreMenu(false);
-                      }}
-                      disabled={isFindingActions}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2 disabled:opacity-50"
-                      style={{ color: "var(--color-text)" }}
-                    >
-                      {isFindingActions ? (
-                        <div
-                          className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                          style={{
-                            borderColor: "var(--color-text-secondary)",
-                            borderTopColor: "transparent",
-                          }}
-                        />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                        </svg>
-                      )}
-                      Find action items
-                    </button>
-                  )}
                   <button
                     onClick={() => {
                       onExport();
@@ -2294,7 +2232,7 @@ function NoteView({
         className="px-6 border-b flex gap-6"
         style={{ borderColor: "var(--color-border)" }}
       >
-        {(["note", "transcript", "summary"] as const).map((tab) => (
+        {(["note", "transcript", "summary", "actions"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -2416,6 +2354,14 @@ function NoteView({
                 console.error("Copy failed:", error);
               }
             }}
+          />
+        )}
+
+        {activeTab === "actions" && (
+          <ActionsTab
+            noteId={note.id}
+            canUseAI={ollamaRunning && hasOllamaModel}
+            onChanged={onTasksChanged}
           />
         )}
       </div>

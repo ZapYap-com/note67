@@ -51,16 +51,6 @@ pub struct ActionItem {
     pub updated_at: DateTime<Utc>,
 }
 
-/// A parsed action item from the note body, sent from the frontend to sync.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionItemInput {
-    pub stable_id: String,
-    pub text: String,
-    pub assignee: Option<String>,
-    pub due_date: Option<String>,
-    pub done: bool,
-}
-
 /// An open action item joined with its source note, for the global Tasks view.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionItemWithNote {

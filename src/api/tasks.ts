@@ -1,15 +1,38 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ActionItemInput, ActionItemWithNote } from "../types";
+import type { ActionItem, ActionItemWithNote } from "../types";
 
 export const tasksApi = {
-  /** Ask the AI for an inline GFM checklist of action items for a note. */
-  extractActionItems: (noteId: string): Promise<string> => {
+  /** Get a note's action items. */
+  getActionItems: (noteId: string): Promise<ActionItem[]> => {
+    return invoke("get_action_items", { noteId });
+  },
+
+  /** AI-extract action items from a note's transcript + notes into structured rows. */
+  extractActionItems: (noteId: string): Promise<ActionItem[]> => {
     return invoke("extract_action_items", { noteId });
   },
 
-  /** Sync a note's parsed inline action items into the queryable index. */
-  syncActionItems: (noteId: string, items: ActionItemInput[]): Promise<void> => {
-    return invoke("sync_action_items", { noteId, items });
+  createActionItem: (
+    noteId: string,
+    text: string,
+    assignee: string | null,
+    dueDate: string | null
+  ): Promise<ActionItem> => {
+    return invoke("create_action_item", { noteId, text, assignee, dueDate });
+  },
+
+  updateActionItem: (
+    id: number,
+    text: string,
+    assignee: string | null,
+    dueDate: string | null,
+    done: boolean
+  ): Promise<ActionItem> => {
+    return invoke("update_action_item", { id, text, assignee, dueDate, done });
+  },
+
+  deleteActionItem: (id: number): Promise<void> => {
+    return invoke("delete_action_item", { id });
   },
 
   /** All open action items across every note, for the global Tasks view. */

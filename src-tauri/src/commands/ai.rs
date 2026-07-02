@@ -4,11 +4,12 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use crate::ai::prompts::MAX_CONTENT_LENGTH;
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts, WritingPrompts};
 use crate::commands::links::update_incoming_links_internal;
-use crate::db::models::{ActionItemInput, ActionItemWithNote, Summary, SummaryType};
+use crate::db::models::{ActionItem, ActionItemWithNote, Summary, SummaryType};
 use crate::db::Database;
 
 /// Split text into chunks of approximately max_size characters
@@ -584,15 +585,64 @@ pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), St
     db.delete_summary(summary_id).map_err(|e| e.to_string())
 }
 
-/// #3: Extract action items from a note's transcript + notes as an inline GFM
-/// checklist. The frontend splices the result into the note body (never a
-/// wholesale replace). Returns an empty string when there's nothing to extract.
+/// Parse one AI checklist line ("- [ ] task @assignee 📅2026-07-11") into
+/// (text, assignee, due_date). Returns None for non-task lines.
+fn parse_checklist_line(line: &str) -> Option<(String, Option<String>, Option<String>)> {
+    let trimmed = line.trim_start();
+    let rest = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] "]
+        .iter()
+        .find_map(|p| trimmed.strip_prefix(p))?;
+    let mut text = rest.trim().to_string();
+
+    // 📅YYYY-MM-DD → due date
+    let mut due: Option<String> = None;
+    if let Some(pos) = text.find('📅') {
+        let after = &text[pos + '📅'.len_utf8()..];
+        let date: String = after
+            .trim_start()
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '-')
+            .collect();
+        if date.len() == 10 {
+            due = Some(date.clone());
+        }
+        // Remove the whole "📅 <date>" token.
+        let tail = &text[pos..];
+        let token: String = tail
+            .chars()
+            .take_while(|c| *c == '📅' || c.is_whitespace() || c.is_ascii_digit() || *c == '-')
+            .collect();
+        text = text.replacen(&token, "", 1).trim().to_string();
+    }
+
+    // @assignee
+    let mut assignee: Option<String> = None;
+    if let Some(pos) = text.find('@') {
+        let name: String = text[pos + 1..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.')
+            .collect();
+        if !name.is_empty() {
+            assignee = Some(name.clone());
+            text = text.replacen(&format!("@{name}"), "", 1).trim().to_string();
+        }
+    }
+
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        return None;
+    }
+    Some((text, assignee, due))
+}
+
+/// #3: Extract action items from a note's transcript + notes and store them as
+/// structured rows. Returns the created items.
 #[tauri::command]
 pub async fn extract_action_items(
     note_id: String,
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
-) -> Result<String, String> {
+) -> Result<Vec<ActionItem>, String> {
     let model = ai_state
         .selected_model
         .lock()
@@ -615,7 +665,7 @@ pub async fn extract_action_items(
 
     let has_notes = notes.as_ref().is_some_and(|n| !n.trim().is_empty());
     if transcript.trim().is_empty() && !has_notes {
-        return Ok(String::new());
+        return Ok(vec![]);
     }
 
     let prompt = SummaryPrompts::action_items_checkboxes(&transcript, notes.as_deref());
@@ -625,19 +675,71 @@ pub async fn extract_action_items(
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(strip_thinking_tags(&response).trim().to_string())
+    let mut created = Vec::new();
+    for line in strip_thinking_tags(&response).lines() {
+        if let Some((text, assignee, due)) = parse_checklist_line(line) {
+            let stable_id = Uuid::new_v4().to_string();
+            if let Ok(item) = db.create_action_item(
+                &note_id,
+                &stable_id,
+                &text,
+                assignee.as_deref(),
+                due.as_deref(),
+            ) {
+                created.push(item);
+            }
+        }
+    }
+    Ok(created)
 }
 
-/// #3: Sync a note's parsed inline action items into the queryable index that
-/// powers the global Tasks view.
+/// #3: Get a note's action items.
 #[tauri::command]
-pub fn sync_action_items(
+pub fn get_action_items(
     note_id: String,
-    items: Vec<ActionItemInput>,
     db: State<'_, Database>,
-) -> Result<(), String> {
-    db.sync_action_items(&note_id, &items)
+) -> Result<Vec<ActionItem>, String> {
+    db.get_action_items(&note_id).map_err(|e| e.to_string())
+}
+
+/// #3: Create an action item on a note.
+#[tauri::command]
+pub fn create_action_item(
+    note_id: String,
+    text: String,
+    assignee: Option<String>,
+    due_date: Option<String>,
+    db: State<'_, Database>,
+) -> Result<ActionItem, String> {
+    let stable_id = Uuid::new_v4().to_string();
+    db.create_action_item(
+        &note_id,
+        &stable_id,
+        &text,
+        assignee.as_deref(),
+        due_date.as_deref(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// #3: Update an action item.
+#[tauri::command]
+pub fn update_action_item(
+    id: i64,
+    text: String,
+    assignee: Option<String>,
+    due_date: Option<String>,
+    done: bool,
+    db: State<'_, Database>,
+) -> Result<ActionItem, String> {
+    db.update_action_item(id, &text, assignee.as_deref(), due_date.as_deref(), done)
         .map_err(|e| e.to_string())
+}
+
+/// #3: Delete an action item.
+#[tauri::command]
+pub fn delete_action_item(id: i64, db: State<'_, Database>) -> Result<(), String> {
+    db.delete_action_item(id).map_err(|e| e.to_string())
 }
 
 /// #3: All open action items across every note, for the global Tasks view.

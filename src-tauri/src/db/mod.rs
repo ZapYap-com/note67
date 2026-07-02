@@ -9,7 +9,7 @@ use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
 use crate::db::models::{
-    ActionItemInput, ActionItemWithNote, AudioSegment, Summary, SummaryType, TranscriptSegment,
+    ActionItem, ActionItemWithNote, AudioSegment, Summary, SummaryType, TranscriptSegment,
     UploadedAudio,
 };
 use crate::db::schema::run_migrations;
@@ -239,64 +239,98 @@ impl Database {
         Ok(())
     }
 
-    /// Sync a note's action items from its parsed inline checkboxes. Upserts by
-    /// (note_id, stable_id) so checked state and creation time survive re-syncs,
-    /// and removes rows whose checkbox was deleted from the note body.
-    pub fn sync_action_items(
+    /// Get a note's action items (structured; the table is the source of truth).
+    pub fn get_action_items(&self, note_id: &str) -> anyhow::Result<Vec<ActionItem>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let mut stmt = conn.prepare(
+            "SELECT id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at
+             FROM action_items
+             WHERE note_id = ?1
+             ORDER BY done ASC, sort_order ASC, created_at ASC",
+        )?;
+        let items = stmt
+            .query_map([note_id], Self::map_action_item)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(items)
+    }
+
+    /// Create an action item. `stable_id` is a caller-generated unique id.
+    pub fn create_action_item(
         &self,
         note_id: &str,
-        items: &[ActionItemInput],
-    ) -> anyhow::Result<()> {
-        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        stable_id: &str,
+        text: &str,
+        assignee: Option<&str>,
+        due_date: Option<&str>,
+    ) -> anyhow::Result<ActionItem> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now().to_rfc3339();
-        let tx = conn.transaction()?;
+        let next_order: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items WHERE note_id = ?1",
+            [note_id],
+            |r| r.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO action_items
+                 (note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, ?7)",
+            params![note_id, stable_id, text, assignee, due_date, next_order, now],
+        )?;
+        let id = conn.last_insert_rowid();
+        Self::action_item_by_id(&conn, id)
+    }
 
-        // Remove items no longer present in the note body.
-        let existing: Vec<String> = {
-            let mut stmt = tx.prepare("SELECT stable_id FROM action_items WHERE note_id = ?1")?;
-            let rows: Vec<String> = stmt
-                .query_map([note_id], |r| r.get::<_, String>(0))?
-                .filter_map(|r| r.ok())
-                .collect();
-            rows
-        };
-        for sid in &existing {
-            if !items.iter().any(|i| &i.stable_id == sid) {
-                tx.execute(
-                    "DELETE FROM action_items WHERE note_id = ?1 AND stable_id = ?2",
-                    params![note_id, sid],
-                )?;
-            }
-        }
+    /// Update an action item's fields (text / assignee / due date / done).
+    pub fn update_action_item(
+        &self,
+        id: i64,
+        text: &str,
+        assignee: Option<&str>,
+        due_date: Option<&str>,
+        done: bool,
+    ) -> anyhow::Result<ActionItem> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE action_items
+                SET text = ?2, assignee = ?3, due_date = ?4, done = ?5, updated_at = ?6
+              WHERE id = ?1",
+            params![id, text, assignee, due_date, done as i32, now],
+        )?;
+        Self::action_item_by_id(&conn, id)
+    }
 
-        // Upsert current items.
-        for (idx, item) in items.iter().enumerate() {
-            tx.execute(
-                "INSERT INTO action_items
-                     (note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
-                 ON CONFLICT(note_id, stable_id) DO UPDATE SET
-                     text = excluded.text,
-                     assignee = excluded.assignee,
-                     due_date = excluded.due_date,
-                     done = excluded.done,
-                     sort_order = excluded.sort_order,
-                     updated_at = excluded.updated_at",
-                params![
-                    note_id,
-                    item.stable_id,
-                    item.text,
-                    item.assignee,
-                    item.due_date,
-                    item.done as i32,
-                    idx as i64,
-                    now,
-                ],
-            )?;
-        }
-
-        tx.commit()?;
+    /// Delete an action item.
+    pub fn delete_action_item(&self, id: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute("DELETE FROM action_items WHERE id = ?1", [id])?;
         Ok(())
+    }
+
+    fn map_action_item(row: &rusqlite::Row) -> rusqlite::Result<ActionItem> {
+        Ok(ActionItem {
+            id: row.get(0)?,
+            note_id: row.get(1)?,
+            stable_id: row.get(2)?,
+            text: row.get(3)?,
+            assignee: row.get(4)?,
+            due_date: row.get(5)?,
+            done: row.get::<_, i32>(6)? != 0,
+            sort_order: row.get(7)?,
+            created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
+            updated_at: row.get::<_, String>(9)?.parse().unwrap_or_else(|_| Utc::now()),
+        })
+    }
+
+    fn action_item_by_id(conn: &Connection, id: i64) -> anyhow::Result<ActionItem> {
+        let item = conn.query_row(
+            "SELECT id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at
+             FROM action_items WHERE id = ?1",
+            [id],
+            Self::map_action_item,
+        )?;
+        Ok(item)
     }
 
     /// List all open (unchecked) action items across every note, joined with the

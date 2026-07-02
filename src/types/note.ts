@@ -48,14 +48,19 @@ export type SummaryType =
   | "key_decisions"
   | "custom";
 
-// #3: Action items — inline GFM checkboxes in the note body are the source of
-// truth; these mirror the derived `action_items` table that powers the Tasks view.
-export interface ActionItemInput {
+// #3: Action items — structured rows (the action_items table is the source of
+// truth), edited in the note's Actions tab and surfaced in the global Tasks view.
+export interface ActionItem {
+  id: number;
+  note_id: string;
   stable_id: string;
   text: string;
   assignee: string | null;
   due_date: string | null;
   done: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ActionItemWithNote {

@@ -56,11 +56,46 @@ test.describe("ready state", () => {
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
-    for (const tab of ["note", "transcript", "summary"]) {
+    for (const tab of ["note", "transcript", "summary", "actions"]) {
       await expect(tabBar.getByRole("button", { name: tab, exact: true })).toBeVisible();
     }
 
     await page.screenshot({ path: "e2e/__screenshots__/note-view.png", fullPage: true });
+  });
+
+  test("Actions tab shows a note's action items (#3)", async ({ page }) => {
+    const note = makeNote({ title: "Weekly Sync" });
+    await installTauriMock(page, {
+      list_notes: [note],
+      get_note: note,
+      get_action_items: [
+        {
+          id: 1,
+          note_id: note.id,
+          stable_id: "a1",
+          text: "Send the pricing deck",
+          assignee: "sofia",
+          due_date: "2026-07-11",
+          done: false,
+          sort_order: 0,
+          created_at: "2026-07-02T09:31:00.000Z",
+          updated_at: "2026-07-02T09:31:00.000Z",
+        },
+      ],
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: /weekly sync/i }).first().click();
+
+    const tabBar = page.locator("div.flex.gap-6", {
+      has: page.getByRole("button", { name: "transcript", exact: true }),
+    });
+    await tabBar.getByRole("button", { name: "actions", exact: true }).click();
+
+    await expect(page.getByText("Send the pricing deck")).toBeVisible();
+    await expect(page.getByText("@sofia")).toBeVisible();
+    // Enter edit mode.
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Done", exact: true })).toBeVisible();
   });
 
   test("shows the AI summary in its own tab (#4)", async ({ page }) => {

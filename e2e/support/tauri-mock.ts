@@ -76,8 +76,22 @@ export const defaultCommands: CommandMap = {
   get_audio_level: 0,
 
   // action items (#3)
-  extract_action_items: "",
-  sync_action_items: null,
+  get_action_items: [],
+  extract_action_items: [],
+  create_action_item: {
+    id: 999,
+    note_id: "note-1",
+    stable_id: "x",
+    text: "New action item",
+    assignee: null,
+    due_date: null,
+    done: false,
+    sort_order: 0,
+    created_at: "2026-07-02T09:31:00.000Z",
+    updated_at: "2026-07-02T09:31:00.000Z",
+  },
+  update_action_item: null,
+  delete_action_item: null,
   list_all_open_action_items: [],
 
   // note detail surfaces

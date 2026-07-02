@@ -25,3 +25,4 @@ export { SearchModal } from "./SearchModal";
 export { GraphView } from "./graph";
 export { OnboardingWizard } from "./onboarding";
 export { TasksView } from "./TasksView";
+export { ActionsTab } from "./ActionsTab";
