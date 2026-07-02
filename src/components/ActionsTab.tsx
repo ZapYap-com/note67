@@ -75,7 +75,9 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
     const trimmed = text.trim();
     if (!trimmed) return;
     try {
-      const created = await tasksApi.createActionItem(noteId, trimmed);
+      // Autofill today's date on manual task entry (local YYYY-MM-DD).
+      const today = new Date().toLocaleDateString("en-CA");
+      const created = await tasksApi.createActionItem(noteId, trimmed, today);
       setItems((prev) => [...prev, created]);
       setDraft("");
       setSelectedId(created.id);

@@ -26,11 +26,32 @@ function bucketFor(due: string | null): Bucket {
   return "Future";
 }
 
+function formatDue(due: string) {
+  return new Date(due + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+type DateFilter = "all" | "past" | "today" | "upcoming" | "none";
+const FILTERS: { key: DateFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "past", label: "Overdue" },
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "none", label: "No date" },
+];
+function bucketMatches(b: Bucket, f: DateFilter): boolean {
+  if (f === "all") return true;
+  if (f === "past") return b === "Past";
+  if (f === "today") return b === "Today";
+  if (f === "upcoming") return b === "Tomorrow" || b === "Future";
+  return b === "No date";
+}
+
 export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksViewProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const m = useTaskMutations(items, setItems);
 
@@ -69,7 +90,12 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
     setMenu({ x: e.clientX, y: e.clientY, id });
   };
 
-  const topLevel = items.filter((i) => i.parent_id == null && (showCompleted || !i.done));
+  const topLevel = items.filter(
+    (i) =>
+      i.parent_id == null &&
+      (showCompleted || !i.done) &&
+      bucketMatches(bucketFor(i.due_date), dateFilter)
+  );
   const selected =
     items.find((i) => i.id === selectedId && i.parent_id == null) ?? topLevel[0] ?? null;
   const subtasks = selected ? items.filter((i) => i.parent_id === selected.id) : [];
@@ -94,20 +120,39 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
         className="w-1/2 flex flex-col border-r overflow-y-auto"
         style={{ borderColor: "var(--color-border)" }}
       >
-        <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h1 className="text-xl font-semibold" style={{ color: "var(--color-text)" }}>
-            Tasks
-          </h1>
-          <button
-            onClick={() => setShowCompleted((v) => !v)}
-            className="text-xs px-2.5 py-1 rounded-full transition-colors"
-            style={{
-              backgroundColor: showCompleted ? "var(--color-accent)" : "var(--color-bg-subtle)",
-              color: showCompleted ? "white" : "var(--color-text-secondary)",
-            }}
-          >
-            {showCompleted ? "Hide completed" : "Show completed"}
-          </button>
+        <div className="px-6 pt-5 pb-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <h1 className="text-xl font-semibold" style={{ color: "var(--color-text)" }}>
+              Tasks
+            </h1>
+            <button
+              onClick={() => setShowCompleted((v) => !v)}
+              className="text-xs px-2.5 py-1 rounded-full transition-colors"
+              style={{
+                backgroundColor: showCompleted ? "var(--color-accent)" : "var(--color-bg-subtle)",
+                color: showCompleted ? "white" : "var(--color-text-secondary)",
+              }}
+            >
+              {showCompleted ? "Hide completed" : "Show completed"}
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setDateFilter(f.key)}
+                className="text-xs px-2 py-0.5 rounded-full transition-colors"
+                style={{
+                  backgroundColor:
+                    dateFilter === f.key ? "var(--color-accent-light)" : "transparent",
+                  color:
+                    dateFilter === f.key ? "var(--color-accent)" : "var(--color-text-tertiary)",
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="px-4 pb-4">
@@ -156,6 +201,19 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                           {task.text}
                         </span>
                         <span className="flex items-center gap-2 mt-0.5">
+                          {task.due_date && (
+                            <span
+                              className="text-xs"
+                              style={{
+                                color:
+                                  bucketFor(task.due_date) === "Past"
+                                    ? "var(--color-accent)"
+                                    : "var(--color-text-tertiary)",
+                              }}
+                            >
+                              📅 {formatDue(task.due_date)}
+                            </span>
+                          )}
                           <span className="text-xs truncate" style={{ color: "var(--color-text-tertiary)" }}>
                             {noteTitles[task.note_id] ?? "Note"}
                           </span>
