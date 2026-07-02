@@ -496,10 +496,10 @@ function App() {
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      // Check if clicking on a note item (handled separately)
+      // Check if clicking on a note item or task row (handled separately)
       const target = e.target as HTMLElement;
-      if (target.closest("[data-note-id]")) {
-        return; // Let the note-specific handler deal with it
+      if (target.closest("[data-note-id]") || target.closest("[data-task-context]")) {
+        return; // Let the item-specific handler deal with it
       }
       // Show general context menu
       setContextMenu({

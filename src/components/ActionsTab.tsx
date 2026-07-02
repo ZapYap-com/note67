@@ -15,7 +15,29 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
   const [subDraft, setSubDraft] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const loading = noteId !== loadedNoteId;
+
+  // Close the right-click menu on any click or Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  const openMenu = (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, id });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -169,7 +191,9 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
             return (
               <button
                 key={item.id}
+                data-task-context
                 onClick={() => setSelectedId(item.id)}
+                onContextMenu={(e) => openMenu(e, item.id)}
                 className="w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors"
                 style={{ backgroundColor: isSel ? "var(--color-sidebar-selected)" : "transparent" }}
               >
@@ -180,7 +204,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                   }}
                   className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 flex items-center justify-center"
                   style={{
-                    backgroundColor: item.done ? "var(--color-accent)" : "transparent",
+                    backgroundColor: item.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
                     border: item.done ? "none" : "2px solid var(--color-border)",
                   }}
                 >
@@ -249,7 +273,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                 onClick={() => toggleDone(selected)}
                 className="w-5 h-5 mt-0.5 rounded-md shrink-0 flex items-center justify-center cursor-pointer"
                 style={{
-                  backgroundColor: selected.done ? "var(--color-accent)" : "transparent",
+                  backgroundColor: selected.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
                   border: selected.done ? "none" : "2px solid var(--color-border)",
                 }}
               >
@@ -265,16 +289,6 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
                   textDecoration: selected.done ? "line-through" : "none",
                 }}
               />
-              <button
-                onClick={() => remove(selected.id)}
-                className="p-1 rounded shrink-0 hover:bg-black/5"
-                style={{ color: "var(--color-text-tertiary)" }}
-                title="Delete task"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
             </div>
 
             {/* Due date */}
@@ -324,12 +338,17 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
               </span>
               <div className="space-y-0.5">
                 {subtasks.map((sub) => (
-                  <div key={sub.id} className="flex items-center gap-2.5 p-1.5 rounded-lg group">
+                  <div
+                    key={sub.id}
+                    data-task-context
+                    onContextMenu={(e) => openMenu(e, sub.id)}
+                    className="flex items-center gap-2.5 p-1.5 rounded-lg group"
+                  >
                     <span
                       onClick={() => toggleDone(sub)}
                       className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center cursor-pointer"
                       style={{
-                        backgroundColor: sub.done ? "var(--color-accent)" : "transparent",
+                        backgroundColor: sub.done ? "var(--color-accent)" : "var(--color-bg-elevated)",
                         border: sub.done ? "none" : "2px solid var(--color-border)",
                       }}
                     >
@@ -377,6 +396,33 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
           </div>
         )}
       </div>
+
+      {/* Right-click delete menu */}
+      {menu && (
+        <div
+          className="fixed z-[100] min-w-[140px] py-1 rounded-lg"
+          style={{
+            left: menu.x,
+            top: menu.y,
+            backgroundColor: "var(--color-bg-elevated)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
+          }}
+        >
+          <button
+            onClick={() => {
+              remove(menu.id);
+              setMenu(null);
+            }}
+            className="w-full px-3 py-1.5 flex items-center gap-2.5 text-sm transition-colors hover:bg-black/5"
+            style={{ color: "#ef4444" }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }
