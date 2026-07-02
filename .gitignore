@@ -141,6 +141,13 @@ vite.config.ts.timestamp-*
 # Tauri
 src-tauri/target/
 
+# Playwright (commit config/specs/mocks; ignore generated output)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+e2e/__screenshots__/
+
 # Plan
 plan/
 plans/
