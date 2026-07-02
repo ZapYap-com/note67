@@ -43,6 +43,8 @@ pub struct ActionItem {
     pub note_id: String,
     pub stable_id: String,
     pub text: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i64>,
     pub assignee: Option<String>,
     pub due_date: Option<String>,
     pub done: bool,

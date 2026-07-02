@@ -55,6 +55,8 @@ export interface ActionItem {
   note_id: string;
   stable_id: string;
   text: string;
+  description: string | null;
+  parent_id: number | null;
   assignee: string | null;
   due_date: string | null;
   done: boolean;

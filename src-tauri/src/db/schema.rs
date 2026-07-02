@@ -39,6 +39,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     if version < 11 {
         migrate_v11(conn)?;
     }
+    if version < 12 {
+        migrate_v12(conn)?;
+    }
 
     Ok(())
 }
@@ -445,6 +448,20 @@ fn migrate_v11(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 11)?;
+
+    Ok(())
+}
+
+fn migrate_v12(conn: &Connection) -> rusqlite::Result<()> {
+    // Action items gain a description and can nest as subtasks (parent_id points
+    // at another action item; deleting a parent deletes its children in code).
+    conn.execute_batch(
+        "ALTER TABLE action_items ADD COLUMN description TEXT;
+         ALTER TABLE action_items ADD COLUMN parent_id INTEGER;
+         CREATE INDEX IF NOT EXISTS idx_action_items_parent ON action_items(parent_id);",
+    )?;
+
+    set_schema_version(conn, 12)?;
 
     Ok(())
 }

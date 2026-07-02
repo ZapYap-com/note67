@@ -91,11 +91,11 @@ test.describe("ready state", () => {
     });
     await tabBar.getByRole("button", { name: "tasks", exact: true }).click();
 
-    // The Tasks tab is always editable — items render as inline fields.
-    await expect(page.locator("main").getByRole("textbox").first()).toHaveValue(
-      "Send the pricing deck"
-    );
+    // Split view: the task shows in the left list; the first task is auto-selected
+    // so the detail pane (with a subtask adder) is shown.
+    await expect(page.getByText("Send the pricing deck")).toBeVisible();
     await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
+    await expect(page.getByPlaceholder("Add a subtask…")).toBeVisible();
   });
 
   test("shows the AI summary in its own tab (#4)", async ({ page }) => {

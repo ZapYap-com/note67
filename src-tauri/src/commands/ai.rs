@@ -678,14 +678,11 @@ pub async fn extract_action_items(
     let mut created = Vec::new();
     for line in strip_thinking_tags(&response).lines() {
         if let Some((text, assignee, due)) = parse_checklist_line(line) {
+            let _ = assignee;
             let stable_id = Uuid::new_v4().to_string();
-            if let Ok(item) = db.create_action_item(
-                &note_id,
-                &stable_id,
-                &text,
-                assignee.as_deref(),
-                due.as_deref(),
-            ) {
+            if let Ok(item) =
+                db.create_action_item(&note_id, &stable_id, &text, due.as_deref(), None, None)
+            {
                 created.push(item);
             }
         }
@@ -702,13 +699,14 @@ pub fn get_action_items(
     db.get_action_items(&note_id).map_err(|e| e.to_string())
 }
 
-/// #3: Create an action item on a note.
+/// #3: Create an action item (top-level, or a subtask when `parent_id` is set).
 #[tauri::command]
 pub fn create_action_item(
     note_id: String,
     text: String,
-    assignee: Option<String>,
     due_date: Option<String>,
+    parent_id: Option<i64>,
+    description: Option<String>,
     db: State<'_, Database>,
 ) -> Result<ActionItem, String> {
     let stable_id = Uuid::new_v4().to_string();
@@ -716,8 +714,9 @@ pub fn create_action_item(
         &note_id,
         &stable_id,
         &text,
-        assignee.as_deref(),
         due_date.as_deref(),
+        parent_id,
+        description.as_deref(),
     )
     .map_err(|e| e.to_string())
 }
@@ -727,12 +726,12 @@ pub fn create_action_item(
 pub fn update_action_item(
     id: i64,
     text: String,
-    assignee: Option<String>,
+    description: Option<String>,
     due_date: Option<String>,
     done: bool,
     db: State<'_, Database>,
 ) -> Result<ActionItem, String> {
-    db.update_action_item(id, &text, assignee.as_deref(), due_date.as_deref(), done)
+    db.update_action_item(id, &text, description.as_deref(), due_date.as_deref(), done)
         .map_err(|e| e.to_string())
 }
 

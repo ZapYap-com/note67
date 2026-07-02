@@ -15,20 +15,21 @@ export const tasksApi = {
   createActionItem: (
     noteId: string,
     text: string,
-    assignee: string | null,
-    dueDate: string | null
+    dueDate: string | null = null,
+    parentId: number | null = null,
+    description: string | null = null
   ): Promise<ActionItem> => {
-    return invoke("create_action_item", { noteId, text, assignee, dueDate });
+    return invoke("create_action_item", { noteId, text, dueDate, parentId, description });
   },
 
   updateActionItem: (
     id: number,
     text: string,
-    assignee: string | null,
+    description: string | null,
     dueDate: string | null,
     done: boolean
   ): Promise<ActionItem> => {
-    return invoke("update_action_item", { id, text, assignee, dueDate, done });
+    return invoke("update_action_item", { id, text, description, dueDate, done });
   },
 
   deleteActionItem: (id: number): Promise<void> => {

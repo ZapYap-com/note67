@@ -12,12 +12,11 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState("");
-  // Derive loading from which note's items are loaded, so the effect doesn't
-  // set a loading flag synchronously.
+  const [subDraft, setSubDraft] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const loading = noteId !== loadedNoteId;
 
-  // Load on note change. Inlined so setState only runs post-await.
   useEffect(() => {
     let cancelled = false;
     tasksApi
@@ -27,11 +26,17 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
         setItems(data);
         setLoadedNoteId(noteId);
       })
-      .catch((e) => console.error("Failed to load action items:", e));
+      .catch((e) => console.error("Failed to load tasks:", e));
     return () => {
       cancelled = true;
     };
   }, [noteId]);
+
+  const topLevel = items.filter((i) => i.parent_id == null);
+  // Selection falls back to the first task so the detail pane is never empty.
+  const selected =
+    items.find((i) => i.id === selectedId && i.parent_id == null) ?? topLevel[0] ?? null;
+  const subtasks = selected ? items.filter((i) => i.parent_id === selected.id) : [];
 
   const patchLocal = (id: number, patch: Partial<ActionItem>) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
@@ -41,42 +46,60 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
       await tasksApi.updateActionItem(
         item.id,
         item.text,
-        item.assignee,
+        item.description,
         item.due_date,
         item.done
       );
       onChanged?.();
     } catch (e) {
-      console.error("Failed to update action item:", e);
+      console.error("Failed to update task:", e);
     }
+  };
+  const persistById = (id: number) => {
+    const item = items.find((i) => i.id === id);
+    if (item) persist(item);
   };
 
   const toggleDone = async (item: ActionItem) => {
-    const next = { ...item, done: !item.done };
-    patchLocal(item.id, { done: next.done });
-    await persist(next);
+    patchLocal(item.id, { done: !item.done });
+    await persist({ ...item, done: !item.done });
   };
 
   const remove = async (id: number) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    // Remove the item and any of its subtasks locally.
+    setItems((prev) => prev.filter((i) => i.id !== id && i.parent_id !== id));
     try {
       await tasksApi.deleteActionItem(id);
       onChanged?.();
     } catch (e) {
-      console.error("Failed to delete action item:", e);
+      console.error("Failed to delete task:", e);
     }
   };
 
-  const addItem = async (text: string) => {
+  const addTask = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     try {
-      const created = await tasksApi.createActionItem(noteId, trimmed, null, null);
+      const created = await tasksApi.createActionItem(noteId, trimmed);
       setItems((prev) => [...prev, created]);
       setDraft("");
+      setSelectedId(created.id);
       onChanged?.();
     } catch (e) {
-      console.error("Failed to create action item:", e);
+      console.error("Failed to create task:", e);
+    }
+  };
+
+  const addSubtask = async (parentId: number, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    try {
+      const created = await tasksApi.createActionItem(noteId, trimmed, null, parentId);
+      setItems((prev) => [...prev, created]);
+      setSubDraft("");
+      onChanged?.();
+    } catch (e) {
+      console.error("Failed to create subtask:", e);
     }
   };
 
@@ -89,25 +112,36 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
       setItems(data);
       onChanged?.();
     } catch (e) {
-      console.error("Find action items failed:", e);
+      console.error("Find tasks failed:", e);
     } finally {
       setExtracting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
+        Loading…
+      </p>
+    );
+  }
+
   return (
-    <div className="max-w-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
-          Tasks
-          {items.length > 0 && (
-            <span className="ml-1.5 font-normal" style={{ color: "var(--color-text-tertiary)" }}>
-              {items.filter((i) => !i.done).length} open
-            </span>
-          )}
-        </h2>
-        <div className="flex items-center gap-2">
+    <div className="flex h-full -mx-6 -my-4" style={{ minHeight: "60vh" }}>
+      {/* Left: task list */}
+      <div
+        className="w-1/2 flex flex-col border-r overflow-y-auto"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
+            Tasks
+            {topLevel.length > 0 && (
+              <span className="ml-1.5 font-normal" style={{ color: "var(--color-text-tertiary)" }}>
+                {topLevel.filter((i) => !i.done).length} open
+              </span>
+            )}
+          </h2>
           {canUseAI && (
             <button
               onClick={generate}
@@ -127,32 +161,59 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
             </button>
           )}
         </div>
-      </div>
 
-      {loading ? (
-        <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
-          Loading…
-        </p>
-      ) : (
-        <div className="space-y-0.5">
-          {items.length === 0 && (
-            <p className="text-sm mb-1 px-2" style={{ color: "var(--color-text-tertiary)" }}>
-              No tasks yet — add one below
-              {canUseAI ? " or Generate them from the meeting" : ""}.
-            </p>
-          )}
-          {items.map((item) => (
-            <EditRow
-              key={item.id}
-              item={item}
-              onToggle={() => toggleDone(item)}
-              onPatchLocal={(patch) => patchLocal(item.id, patch)}
-              onPersist={() => persist(items.find((i) => i.id === item.id) ?? item)}
-              onDelete={() => remove(item.id)}
-            />
-          ))}
+        <div className="px-3 pb-3">
+          {topLevel.map((item) => {
+            const subs = items.filter((i) => i.parent_id === item.id);
+            const isSel = selected?.id === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setSelectedId(item.id)}
+                className="w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors"
+                style={{ backgroundColor: isSel ? "var(--color-sidebar-selected)" : "transparent" }}
+              >
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDone(item);
+                  }}
+                  className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 flex items-center justify-center"
+                  style={{
+                    backgroundColor: item.done ? "var(--color-accent)" : "transparent",
+                    border: item.done ? "none" : "2px solid var(--color-border)",
+                  }}
+                >
+                  {item.done && <span className="text-white text-[10px] leading-none">✓</span>}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span
+                    className="text-sm block"
+                    style={{
+                      color: item.done ? "var(--color-text-tertiary)" : "var(--color-text)",
+                      textDecoration: item.done ? "line-through" : "none",
+                    }}
+                  >
+                    {item.text}
+                  </span>
+                  <span className="flex items-center gap-2 mt-0.5">
+                    {item.due_date && (
+                      <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        📅 {item.due_date}
+                      </span>
+                    )}
+                    {subs.length > 0 && (
+                      <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        ☑ {subs.filter((s) => s.done).length}/{subs.length}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
 
-          {/* Always-available add row */}
+          {/* Add task */}
           <div className="flex items-center gap-2.5 p-2">
             <span
               className="w-4 h-4 rounded-[5px] shrink-0"
@@ -161,77 +222,161 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addItem(draft);
-              }}
-              onBlur={() => addItem(draft)}
+              onKeyDown={(e) => e.key === "Enter" && addTask(draft)}
+              onBlur={() => addTask(draft)}
               placeholder="Add a task…"
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: "var(--color-text)" }}
             />
           </div>
         </div>
-      )}
-    </div>
-  );
-}
+      </div>
 
-function EditRow({
-  item,
-  onToggle,
-  onPatchLocal,
-  onPersist,
-  onDelete,
-}: {
-  item: ActionItem;
-  onToggle: () => void;
-  onPatchLocal: (patch: Partial<ActionItem>) => void;
-  onPersist: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-2.5 p-2 rounded-lg"
-      style={{ backgroundColor: "var(--color-bg-subtle)" }}
-    >
-      <button
-        onClick={onToggle}
-        className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center"
-        style={{
-          backgroundColor: item.done ? "var(--color-accent)" : "transparent",
-          border: item.done ? "none" : "2px solid var(--color-border)",
-        }}
-      >
-        {item.done && <span className="text-white text-[10px] leading-none">✓</span>}
-      </button>
-      <input
-        value={item.text}
-        onChange={(e) => onPatchLocal({ text: e.target.value })}
-        onBlur={onPersist}
-        className="flex-1 min-w-0 bg-transparent outline-none text-sm"
-        style={{
-          color: item.done ? "var(--color-text-tertiary)" : "var(--color-text)",
-          textDecoration: item.done ? "line-through" : "none",
-        }}
-      />
-      <input
-        type="date"
-        value={item.due_date ?? ""}
-        onChange={(e) => onPatchLocal({ due_date: e.target.value || null })}
-        onBlur={onPersist}
-        className="bg-transparent outline-none text-xs"
-        style={{ color: "var(--color-text-secondary)" }}
-      />
-      <button
-        onClick={onDelete}
-        className="p-1 rounded shrink-0 hover:bg-black/5"
-        style={{ color: "var(--color-text-tertiary)" }}
-        title="Delete"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {/* Right: task detail */}
+      <div className="w-1/2 overflow-y-auto">
+        {!selected ? (
+          <div
+            className="h-full flex items-center justify-center text-sm"
+            style={{ color: "var(--color-text-tertiary)" }}
+          >
+            Select a task to see its details.
+          </div>
+        ) : (
+          <div className="px-6 py-4">
+            {/* Title */}
+            <div className="flex items-start gap-3">
+              <span
+                onClick={() => toggleDone(selected)}
+                className="w-5 h-5 mt-0.5 rounded-md shrink-0 flex items-center justify-center cursor-pointer"
+                style={{
+                  backgroundColor: selected.done ? "var(--color-accent)" : "transparent",
+                  border: selected.done ? "none" : "2px solid var(--color-border)",
+                }}
+              >
+                {selected.done && <span className="text-white text-xs leading-none">✓</span>}
+              </span>
+              <input
+                value={selected.text}
+                onChange={(e) => patchLocal(selected.id, { text: e.target.value })}
+                onBlur={() => persistById(selected.id)}
+                className="flex-1 min-w-0 bg-transparent outline-none text-base font-medium"
+                style={{
+                  color: "var(--color-text)",
+                  textDecoration: selected.done ? "line-through" : "none",
+                }}
+              />
+              <button
+                onClick={() => remove(selected.id)}
+                className="p-1 rounded shrink-0 hover:bg-black/5"
+                style={{ color: "var(--color-text-tertiary)" }}
+                title="Delete task"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Due date */}
+            <div className="flex items-center gap-2 mt-4">
+              <span className="text-xs font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>
+                Due
+              </span>
+              <input
+                type="date"
+                value={selected.due_date ?? ""}
+                onChange={(e) => patchLocal(selected.id, { due_date: e.target.value || null })}
+                onBlur={() => persistById(selected.id)}
+                className="bg-transparent outline-none text-sm"
+                style={{ color: "var(--color-text)" }}
+              />
+            </div>
+
+            {/* Description */}
+            <div className="mt-4">
+              <span className="text-xs font-medium block mb-1" style={{ color: "var(--color-text-secondary)" }}>
+                Description
+              </span>
+              <textarea
+                value={selected.description ?? ""}
+                onChange={(e) => patchLocal(selected.id, { description: e.target.value || null })}
+                onBlur={() => persistById(selected.id)}
+                rows={4}
+                placeholder="Add more detail…"
+                className="w-full px-3 py-2 text-sm rounded-lg outline-none resize-none"
+                style={{
+                  backgroundColor: "var(--color-bg-subtle)",
+                  color: "var(--color-text)",
+                  border: "1px solid var(--color-border)",
+                }}
+              />
+            </div>
+
+            {/* Subtasks */}
+            <div className="mt-5">
+              <span className="text-xs font-medium block mb-1.5" style={{ color: "var(--color-text-secondary)" }}>
+                Subtasks
+                {subtasks.length > 0 && (
+                  <span className="ml-1.5 font-normal" style={{ color: "var(--color-text-tertiary)" }}>
+                    {subtasks.filter((s) => s.done).length}/{subtasks.length}
+                  </span>
+                )}
+              </span>
+              <div className="space-y-0.5">
+                {subtasks.map((sub) => (
+                  <div key={sub.id} className="flex items-center gap-2.5 p-1.5 rounded-lg group">
+                    <span
+                      onClick={() => toggleDone(sub)}
+                      className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center cursor-pointer"
+                      style={{
+                        backgroundColor: sub.done ? "var(--color-accent)" : "transparent",
+                        border: sub.done ? "none" : "2px solid var(--color-border)",
+                      }}
+                    >
+                      {sub.done && <span className="text-white text-[10px] leading-none">✓</span>}
+                    </span>
+                    <input
+                      value={sub.text}
+                      onChange={(e) => patchLocal(sub.id, { text: e.target.value })}
+                      onBlur={() => persistById(sub.id)}
+                      className="flex-1 min-w-0 bg-transparent outline-none text-sm"
+                      style={{
+                        color: sub.done ? "var(--color-text-tertiary)" : "var(--color-text)",
+                        textDecoration: sub.done ? "line-through" : "none",
+                      }}
+                    />
+                    <button
+                      onClick={() => remove(sub.id)}
+                      className="p-1 rounded shrink-0 opacity-0 group-hover:opacity-100 hover:bg-black/5"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                      title="Delete subtask"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2.5 p-1.5">
+                  <span
+                    className="w-4 h-4 rounded-[5px] shrink-0"
+                    style={{ border: "2px dashed var(--color-border)" }}
+                  />
+                  <input
+                    value={subDraft}
+                    onChange={(e) => setSubDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addSubtask(selected.id, subDraft)}
+                    onBlur={() => addSubtask(selected.id, subDraft)}
+                    placeholder="Add a subtask…"
+                    className="flex-1 bg-transparent outline-none text-sm"
+                    style={{ color: "var(--color-text)" }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

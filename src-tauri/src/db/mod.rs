@@ -14,6 +14,10 @@ use crate::db::models::{
 };
 use crate::db::schema::run_migrations;
 
+/// Column order for reading an `ActionItem` row (see `map_action_item`).
+const ACTION_ITEM_COLS: &str =
+    "id, note_id, stable_id, text, description, parent_id, assignee, due_date, done, sort_order, created_at, updated_at";
+
 pub struct Database {
     pub conn: Mutex<Connection>,
 }
@@ -239,15 +243,15 @@ impl Database {
         Ok(())
     }
 
-    /// Get a note's action items (structured; the table is the source of truth).
+    /// Get a note's action items (all, including subtasks; the frontend nests
+    /// them by parent_id). The table is the source of truth.
     pub fn get_action_items(&self, note_id: &str) -> anyhow::Result<Vec<ActionItem>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        let mut stmt = conn.prepare(
-            "SELECT id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at
-             FROM action_items
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {ACTION_ITEM_COLS} FROM action_items
              WHERE note_id = ?1
-             ORDER BY done ASC, sort_order ASC, created_at ASC",
-        )?;
+             ORDER BY sort_order ASC, created_at ASC",
+        ))?;
         let items = stmt
             .query_map([note_id], Self::map_action_item)?
             .filter_map(|r| r.ok())
@@ -255,14 +259,15 @@ impl Database {
         Ok(items)
     }
 
-    /// Create an action item. `stable_id` is a caller-generated unique id.
+    /// Create an action item (top-level, or a subtask when `parent_id` is set).
     pub fn create_action_item(
         &self,
         note_id: &str,
         stable_id: &str,
         text: &str,
-        assignee: Option<&str>,
         due_date: Option<&str>,
+        parent_id: Option<i64>,
+        description: Option<&str>,
     ) -> anyhow::Result<ActionItem> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now().to_rfc3339();
@@ -273,20 +278,20 @@ impl Database {
         )?;
         conn.execute(
             "INSERT INTO action_items
-                 (note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, ?7)",
-            params![note_id, stable_id, text, assignee, due_date, next_order, now],
+                 (note_id, stable_id, text, description, parent_id, due_date, done, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?8)",
+            params![note_id, stable_id, text, description, parent_id, due_date, next_order, now],
         )?;
         let id = conn.last_insert_rowid();
         Self::action_item_by_id(&conn, id)
     }
 
-    /// Update an action item's fields (text / assignee / due date / done).
+    /// Update an action item's fields (text / description / due date / done).
     pub fn update_action_item(
         &self,
         id: i64,
         text: &str,
-        assignee: Option<&str>,
+        description: Option<&str>,
         due_date: Option<&str>,
         done: bool,
     ) -> anyhow::Result<ActionItem> {
@@ -294,17 +299,17 @@ impl Database {
         let now = Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE action_items
-                SET text = ?2, assignee = ?3, due_date = ?4, done = ?5, updated_at = ?6
+                SET text = ?2, description = ?3, due_date = ?4, done = ?5, updated_at = ?6
               WHERE id = ?1",
-            params![id, text, assignee, due_date, done as i32, now],
+            params![id, text, description, due_date, done as i32, now],
         )?;
         Self::action_item_by_id(&conn, id)
     }
 
-    /// Delete an action item.
+    /// Delete an action item and any subtasks under it.
     pub fn delete_action_item(&self, id: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute("DELETE FROM action_items WHERE id = ?1", [id])?;
+        conn.execute("DELETE FROM action_items WHERE id = ?1 OR parent_id = ?1", [id])?;
         Ok(())
     }
 
@@ -314,19 +319,20 @@ impl Database {
             note_id: row.get(1)?,
             stable_id: row.get(2)?,
             text: row.get(3)?,
-            assignee: row.get(4)?,
-            due_date: row.get(5)?,
-            done: row.get::<_, i32>(6)? != 0,
-            sort_order: row.get(7)?,
-            created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
-            updated_at: row.get::<_, String>(9)?.parse().unwrap_or_else(|_| Utc::now()),
+            description: row.get(4)?,
+            parent_id: row.get(5)?,
+            assignee: row.get(6)?,
+            due_date: row.get(7)?,
+            done: row.get::<_, i32>(8)? != 0,
+            sort_order: row.get(9)?,
+            created_at: row.get::<_, String>(10)?.parse().unwrap_or_else(|_| Utc::now()),
+            updated_at: row.get::<_, String>(11)?.parse().unwrap_or_else(|_| Utc::now()),
         })
     }
 
     fn action_item_by_id(conn: &Connection, id: i64) -> anyhow::Result<ActionItem> {
         let item = conn.query_row(
-            "SELECT id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at
-             FROM action_items WHERE id = ?1",
+            &format!("SELECT {ACTION_ITEM_COLS} FROM action_items WHERE id = ?1"),
             [id],
             Self::map_action_item,
         )?;
@@ -341,7 +347,7 @@ impl Database {
             "SELECT a.id, a.note_id, n.title, a.text, a.assignee, a.due_date, a.done, a.created_at
              FROM action_items a
              JOIN notes n ON n.id = a.note_id
-             WHERE a.done = 0
+             WHERE a.done = 0 AND a.parent_id IS NULL
              ORDER BY (a.due_date IS NULL), a.due_date ASC, a.created_at DESC",
         )?;
         let items = stmt
