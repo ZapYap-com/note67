@@ -50,19 +50,47 @@ test.describe("ready state", () => {
     // Note appears in the sidebar and opens.
     await page.getByRole("button", { name: /weekly sync/i }).first().click();
 
-    // The note view's tab bar. "transcript"/"summary" are unique; the note's
-    // "notes" tab collides with the sidebar "Notes" toggle, so scope to the tab
-    // bar for that one.
-    // TODO(#4): once tabs collapse to "Note | Transcript", assert the
-    // 2-surface layout + the "My notes | Enhanced" toggle instead.
+    // #4: the note view collapses to two surfaces — Note (the document) and
+    // Transcript (source reference). Scope to the tab bar to disambiguate the
+    // "note" tab from the sidebar "Notes" toggle.
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
-    for (const tab of ["notes", "transcript", "summary"]) {
+    for (const tab of ["note", "transcript"]) {
       await expect(tabBar.getByRole("button", { name: tab, exact: true })).toBeVisible();
     }
+    // There is no longer a separate "summary" tab.
+    await expect(tabBar.getByRole("button", { name: "summary", exact: true })).toHaveCount(0);
 
     await page.screenshot({ path: "e2e/__screenshots__/note-view.png", fullPage: true });
+  });
+
+  test("shows the enhanced note with a My notes / Enhanced toggle (#4)", async ({ page }) => {
+    const note = makeNote({ title: "Q3 Planning", description: "- pricing\n- hiring" });
+    await installTauriMock(page, {
+      list_notes: [note],
+      get_note: note,
+      get_note_summaries: [
+        {
+          id: 1,
+          note_id: note.id,
+          summary_type: "overview",
+          content: "## Summary\nTeam aligned on tiered pricing; Sofia owns the deck.",
+          created_at: "2026-07-02T09:31:00.000Z",
+        },
+      ],
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: /q3 planning/i }).first().click();
+
+    // The enhanced doc renders by default, with a toggle back to the raw notes.
+    await expect(page.getByRole("button", { name: /my notes/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /enhanced/i })).toBeVisible();
+    await expect(page.getByText(/Sofia owns the deck/i)).toBeVisible();
+
+    // Switching to "My notes" shows the user's own editable notes.
+    await page.getByRole("button", { name: /my notes/i }).click();
+    await expect(page.getByText(/Sofia owns the deck/i)).toBeHidden();
   });
 
   test("Start listening is enabled when setup is complete", async ({ page }) => {

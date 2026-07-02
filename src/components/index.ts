@@ -6,6 +6,7 @@ export { ModelManager } from "./ModelManager";
 export { Settings, useProfile } from "./settings";
 export type { UserProfile } from "./settings";
 export { SummaryPanel } from "./SummaryPanel";
+export { MarkdownContent } from "./MarkdownContent";
 export { TranscriptViewer } from "./TranscriptViewer";
 export { TranscriptSearch } from "./TranscriptSearch";
 export { AudioPlayer } from "./AudioPlayer";

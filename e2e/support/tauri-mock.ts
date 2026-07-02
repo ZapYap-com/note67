@@ -137,6 +137,25 @@ export async function installTauriMock(
     let cbId = 0;
     const w = window as unknown as Record<string, unknown>;
 
+    // A tiny note store so write commands (update_note, create_note, …) echo a
+    // valid Note instead of null — matching real backend behaviour. Seeded from
+    // whatever list_notes / get_note return.
+    const noteStore: Record<string, Record<string, unknown>> = {};
+    const NOTE_DEFAULTS = {
+      title: "Untitled",
+      description: "",
+      started_at: "2026-07-02T09:00:00.000Z",
+      ended_at: null,
+      audio_path: null,
+    };
+    const rememberNote = (n: unknown) => {
+      if (n && typeof n === "object" && "id" in (n as Record<string, unknown>)) {
+        const note = n as Record<string, unknown>;
+        noteStore[String(note.id)] = { ...NOTE_DEFAULTS, ...note };
+      }
+    };
+    let createdCount = 0;
+
     w.__TAURI_INTERNALS__ = {
       metadata: {
         currentWindow: { label: "main" },
@@ -158,8 +177,39 @@ export async function installTauriMock(
         if (cmd === "plugin:event|unlisten" || cmd === "plugin:event|emit") {
           return Promise.resolve(null);
         }
+
+        // Note write commands must echo a valid Note so React state never gets
+        // a null. Backed by the note store seeded from reads below.
+        if (cmd === "update_note") {
+          const id = String(args.id);
+          const updated = {
+            ...NOTE_DEFAULTS,
+            ...(noteStore[id] || { id }),
+            ...((args.update as Record<string, unknown>) || {}),
+            id,
+          };
+          noteStore[id] = updated;
+          return Promise.resolve(updated);
+        }
+        if (cmd === "create_note") {
+          const input = (args.input as Record<string, unknown>) || {};
+          const note = { ...NOTE_DEFAULTS, id: `created-${++createdCount}`, ...input };
+          noteStore[String(note.id)] = note;
+          return Promise.resolve(note);
+        }
+        if (cmd === "reopen_note") {
+          const id = String(args.id);
+          const note = { ...NOTE_DEFAULTS, ...(noteStore[id] || {}), id };
+          noteStore[id] = note;
+          return Promise.resolve(note);
+        }
+
         if (Object.prototype.hasOwnProperty.call(commands, cmd)) {
-          return Promise.resolve(commands[cmd]);
+          const result = commands[cmd];
+          // Seed the note store from reads so subsequent writes can echo.
+          if (cmd === "list_notes" && Array.isArray(result)) result.forEach(rememberNote);
+          if (cmd === "get_note") rememberNote(result);
+          return Promise.resolve(result);
         }
         // Unknown app command: warn so gaps are visible. Plugin calls stay quiet.
         if (!cmd.startsWith("plugin:")) {
@@ -168,6 +218,11 @@ export async function installTauriMock(
         }
         return Promise.resolve(null);
       },
+    };
+
+    // The event plugin (>= recent @tauri-apps/api) unlistens via this global.
+    w.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener: () => {},
     };
 
     // Test helper: fire a Tauri event to all registered listeners.

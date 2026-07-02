@@ -115,17 +115,35 @@ RESPONSE:"#
         )
     }
 
-    /// Generate a note overview summary
+    /// Generate a note overview summary.
+    ///
+    /// When the user took their own notes, treat those as the authoritative
+    /// outline and expand them with accurate detail from the transcript (the
+    /// "enhanced notes" experience). With no notes, fall back to a plain
+    /// transcript summary.
     pub fn overview(transcript: &str, notes: Option<&str>) -> String {
+        let has_notes = notes.map(|n| !n.trim().is_empty()).unwrap_or(false);
         let notes_section = Self::format_notes_section(notes);
-        format!(
-            r#"Summarize this transcript in markdown. Only include what was actually said. If brief, keep summary brief.
+        if has_notes {
+            format!(
+                r#"You are turning a meeting into clean, enhanced notes. The user's own notes below are the authoritative outline: keep their points and structure, and expand each one with accurate detail from the transcript. Do not contradict or drop the user's points, and do not invent anything the transcript does not support. Write in clear markdown. If the transcript is brief, keep it brief.
+{}TRANSCRIPT:
+{}
+
+Enhanced notes:"#,
+                notes_section,
+                transcript
+            )
+        } else {
+            format!(
+                r#"Summarize this transcript in markdown. Only include what was actually said. If brief, keep summary brief.
 {}{}
 
 Summary:"#,
-            notes_section,
-            transcript
-        )
+                notes_section,
+                transcript
+            )
+        }
     }
 
     /// Extract action items from the transcript
