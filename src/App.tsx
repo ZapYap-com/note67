@@ -18,9 +18,11 @@ import {
   GraphView,
   OnboardingWizard,
   MarkdownContent,
+  TasksView,
 } from "./components";
-import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
+import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi, tasksApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
+import { parseActionItems, upsertActionItemsSection } from "./utils/parseActionItems";
 import { useTagsStore } from "./stores/tagsStore";
 import {
   useNotes,
@@ -135,7 +137,11 @@ function App() {
   }, [theme]);
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<"notes" | "graph">("notes");
+  const [currentView, setCurrentView] = useState<"notes" | "graph" | "tasks">(
+    "notes"
+  );
+  // Bumped after note edits so the global Tasks view reloads.
+  const [tasksRefreshKey, setTasksRefreshKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<
@@ -651,10 +657,22 @@ function App() {
     }
   };
 
+  // Stable so NoteView's debounced effects don't reset on every App render.
+  const handleTasksChanged = useCallback(
+    () => setTasksRefreshKey((k) => k + 1),
+    []
+  );
+
   const handleSelectNote = async (note: Note) => {
     setSelectedNoteId(note.id);
     setCurrentView("notes"); // Exit graph view when selecting a note
     setActiveTab("note");
+    // #3: index the note's inline action items so the Tasks view reflects them
+    // (covers notes created before their last edit synced).
+    tasksApi
+      .syncActionItems(note.id, parseActionItems(note.description || "", note.id))
+      .then(handleTasksChanged)
+      .catch(() => {});
     if (!noteTranscripts[note.id]) {
       const segments = await loadTranscript(note.id);
       if (segments.length > 0) {
@@ -714,6 +732,16 @@ function App() {
               }`}
             >
               Notes
+            </button>
+            <button
+              onClick={() => setCurrentView("tasks")}
+              className={`px-2 py-1 text-sm font-medium rounded transition-colors ${
+                currentView === "tasks"
+                  ? "text-[var(--color-text)]"
+                  : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+              }`}
+            >
+              Tasks
             </button>
             <button
               onClick={() => setCurrentView("graph")}
@@ -1014,6 +1042,17 @@ function App() {
             }}
           />
         )}
+        {currentView === "tasks" && (
+          <TasksView
+            refreshKey={tasksRefreshKey}
+            onSelectNote={(noteId) => {
+              const target = notes.find((n) => n.id === noteId);
+              if (target) {
+                handleSelectNote(target);
+              }
+            }}
+          />
+        )}
         {currentView === "notes" && selectedNote ? (
           <NoteView
             key={selectedNote.id}
@@ -1144,6 +1183,7 @@ function App() {
               setSettingsTab("guide");
               setShowSettings(true);
             }}
+            onTasksChanged={handleTasksChanged}
           />
         ) : currentView === "notes" ? (
           <EmptyState
@@ -1157,7 +1197,7 @@ function App() {
 
         {/* Start Listening Button, Recording Indicator, or Generating Indicator */}
         {/* Hide when viewing a note (unless recording or generating) or in graph view */}
-        {currentView !== "graph" && !(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
+        {currentView === "notes" && !(selectedNote && !isRecording && !isGeneratingSummaryTitle) && (
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
             {isGeneratingSummaryTitle ? (
               <div
@@ -1541,6 +1581,8 @@ interface NoteViewProps {
   onWikiLinkClick?: (noteTitle: string) => void;
   // Help
   onOpenGuide?: () => void;
+  // #3: notify the parent to refresh the global Tasks view after edits.
+  onTasksChanged?: () => void;
 }
 
 function NoteView({
@@ -1577,6 +1619,7 @@ function NoteView({
   onNavigateToNote,
   onWikiLinkClick,
   onOpenGuide,
+  onTasksChanged,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
@@ -1680,11 +1723,17 @@ function NoteView({
     if (descValue === (note.description || "")) return;
 
     const timeoutId = setTimeout(() => {
-      onUpdateDescription(descValueRef.current);
+      const latest = descValueRef.current;
+      onUpdateDescription(latest);
+      // #3: keep the action-items index in sync with the note's inline checkboxes.
+      tasksApi
+        .syncActionItems(note.id, parseActionItems(latest, note.id))
+        .then(() => onTasksChanged?.())
+        .catch((e) => console.error("Failed to sync action items:", e));
     }, 1500);
 
     return () => clearTimeout(timeoutId);
-  }, [descValue, note.description, onUpdateDescription]);
+  }, [descValue, note.description, note.id, onUpdateDescription, onTasksChanged]);
 
   // Handle play request from audio files list
   const handlePlayAudio = useCallback(
@@ -1714,6 +1763,31 @@ function NoteView({
   const hasEnhanced = !!enhancedSummary;
   const generatingEnhanced = isGenerating || isRegenerating;
   const showEnhanced = noteMode === "enhanced" && (hasEnhanced || generatingEnhanced);
+
+  // #3: extract action items and splice them into a delimited "## Action Items"
+  // section of the note — never a wholesale replace of the user's notes.
+  const [isFindingActions, setIsFindingActions] = useState(false);
+  const handleFindActionItems = useCallback(async () => {
+    if (isFindingActions) return;
+    setIsFindingActions(true);
+    try {
+      const checklist = await tasksApi.extractActionItems(note.id);
+      if (checklist && checklist.trim()) {
+        const merged = upsertActionItemsSection(descValueRef.current, checklist);
+        setDescValue(merged);
+        onUpdateDescription(merged);
+        await tasksApi.syncActionItems(note.id, parseActionItems(merged, note.id));
+        onTasksChanged?.();
+        // Reveal the inserted checkboxes in the editable note.
+        setNoteMode("my");
+        onTabChange("note");
+      }
+    } catch (e) {
+      console.error("Find action items failed:", e);
+    } finally {
+      setIsFindingActions(false);
+    }
+  }, [note.id, isFindingActions, onUpdateDescription, onTasksChanged, onTabChange]);
 
   const {
     uploads,
@@ -2082,6 +2156,32 @@ function NoteView({
                     )}
                     Upload Audio
                   </button>
+                  {ollamaRunning && hasOllamaModel && (
+                    <button
+                      onClick={() => {
+                        handleFindActionItems();
+                        setShowMoreMenu(false);
+                      }}
+                      disabled={isFindingActions}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2 disabled:opacity-50"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {isFindingActions ? (
+                        <div
+                          className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                          style={{
+                            borderColor: "var(--color-text-secondary)",
+                            borderTopColor: "transparent",
+                          }}
+                        />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                      )}
+                      Find action items
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       onExport();

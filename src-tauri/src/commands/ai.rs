@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use crate::ai::prompts::MAX_CONTENT_LENGTH;
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts, WritingPrompts};
 use crate::commands::links::update_incoming_links_internal;
-use crate::db::models::{Summary, SummaryType};
+use crate::db::models::{ActionItemInput, ActionItemWithNote, Summary, SummaryType};
 use crate::db::Database;
 
 /// Split text into chunks of approximately max_size characters
@@ -582,6 +582,70 @@ pub fn get_note_summaries(
 #[tauri::command]
 pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), String> {
     db.delete_summary(summary_id).map_err(|e| e.to_string())
+}
+
+/// #3: Extract action items from a note's transcript + notes as an inline GFM
+/// checklist. The frontend splices the result into the note body (never a
+/// wholesale replace). Returns an empty string when there's nothing to extract.
+#[tauri::command]
+pub async fn extract_action_items(
+    note_id: String,
+    ai_state: State<'_, AiState>,
+    db: State<'_, Database>,
+) -> Result<String, String> {
+    let model = ai_state
+        .selected_model
+        .lock()
+        .await
+        .clone()
+        .ok_or("No model selected. Please select a model first.")?;
+
+    let segments = db
+        .get_transcript_segments(&note_id)
+        .map_err(|e| e.to_string())?;
+    let notes = db
+        .get_note_description(&note_id)
+        .map_err(|e| e.to_string())?;
+    let transcript = segments
+        .iter()
+        .map(|s| s.text.clone())
+        .filter(|text| !text.contains("[BLANK_AUDIO]"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let has_notes = notes.as_ref().is_some_and(|n| !n.trim().is_empty());
+    if transcript.trim().is_empty() && !has_notes {
+        return Ok(String::new());
+    }
+
+    let prompt = SummaryPrompts::action_items_checkboxes(&transcript, notes.as_deref());
+    let response = ai_state
+        .client
+        .generate(&model, &prompt, 0.3, Some(2048))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(strip_thinking_tags(&response).trim().to_string())
+}
+
+/// #3: Sync a note's parsed inline action items into the queryable index that
+/// powers the global Tasks view.
+#[tauri::command]
+pub fn sync_action_items(
+    note_id: String,
+    items: Vec<ActionItemInput>,
+    db: State<'_, Database>,
+) -> Result<(), String> {
+    db.sync_action_items(&note_id, &items)
+        .map_err(|e| e.to_string())
+}
+
+/// #3: All open action items across every note, for the global Tasks view.
+#[tauri::command]
+pub fn list_all_open_action_items(
+    db: State<'_, Database>,
+) -> Result<Vec<ActionItemWithNote>, String> {
+    db.list_all_open_action_items().map_err(|e| e.to_string())
 }
 
 /// Generate a title for a note based on its transcript

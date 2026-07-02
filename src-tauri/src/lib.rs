@@ -418,6 +418,9 @@ pub fn run() {
             commands::generate_title,
             commands::generate_title_from_summary,
             commands::ai_write_stream,
+            commands::extract_action_items,
+            commands::sync_action_items,
+            commands::list_all_open_action_items,
             // Export commands
             commands::export_note_markdown,
             commands::save_export_to_file,

@@ -48,6 +48,27 @@ export type SummaryType =
   | "key_decisions"
   | "custom";
 
+// #3: Action items — inline GFM checkboxes in the note body are the source of
+// truth; these mirror the derived `action_items` table that powers the Tasks view.
+export interface ActionItemInput {
+  stable_id: string;
+  text: string;
+  assignee: string | null;
+  due_date: string | null;
+  done: boolean;
+}
+
+export interface ActionItemWithNote {
+  id: number;
+  note_id: string;
+  note_title: string;
+  text: string;
+  assignee: string | null;
+  due_date: string | null;
+  done: boolean;
+  created_at: string;
+}
+
 // Model types for transcription
 export type ModelSize =
   | "tiny"

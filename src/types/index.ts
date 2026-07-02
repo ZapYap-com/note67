@@ -5,6 +5,8 @@ export type {
   TranscriptSegment,
   Summary,
   SummaryType,
+  ActionItemInput,
+  ActionItemWithNote,
   ModelSize,
   ModelInfo,
   TranscriptionSegment,

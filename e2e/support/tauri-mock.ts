@@ -75,6 +75,11 @@ export const defaultCommands: CommandMap = {
   is_transcribing: false,
   get_audio_level: 0,
 
+  // action items (#3)
+  extract_action_items: "",
+  sync_action_items: null,
+  list_all_open_action_items: [],
+
   // note detail surfaces
   get_transcript: [],
   get_note_summaries: [],

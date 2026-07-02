@@ -8,7 +8,10 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 
-use crate::db::models::{AudioSegment, Summary, SummaryType, TranscriptSegment, UploadedAudio};
+use crate::db::models::{
+    ActionItemInput, ActionItemWithNote, AudioSegment, Summary, SummaryType, TranscriptSegment,
+    UploadedAudio,
+};
 use crate::db::schema::run_migrations;
 
 pub struct Database {
@@ -234,6 +237,98 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute("DELETE FROM summaries WHERE note_id = ?1", [note_id])?;
         Ok(())
+    }
+
+    /// Sync a note's action items from its parsed inline checkboxes. Upserts by
+    /// (note_id, stable_id) so checked state and creation time survive re-syncs,
+    /// and removes rows whose checkbox was deleted from the note body.
+    pub fn sync_action_items(
+        &self,
+        note_id: &str,
+        items: &[ActionItemInput],
+    ) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now().to_rfc3339();
+        let tx = conn.transaction()?;
+
+        // Remove items no longer present in the note body.
+        let existing: Vec<String> = {
+            let mut stmt = tx.prepare("SELECT stable_id FROM action_items WHERE note_id = ?1")?;
+            let rows: Vec<String> = stmt
+                .query_map([note_id], |r| r.get::<_, String>(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            rows
+        };
+        for sid in &existing {
+            if !items.iter().any(|i| &i.stable_id == sid) {
+                tx.execute(
+                    "DELETE FROM action_items WHERE note_id = ?1 AND stable_id = ?2",
+                    params![note_id, sid],
+                )?;
+            }
+        }
+
+        // Upsert current items.
+        for (idx, item) in items.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO action_items
+                     (note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+                 ON CONFLICT(note_id, stable_id) DO UPDATE SET
+                     text = excluded.text,
+                     assignee = excluded.assignee,
+                     due_date = excluded.due_date,
+                     done = excluded.done,
+                     sort_order = excluded.sort_order,
+                     updated_at = excluded.updated_at",
+                params![
+                    note_id,
+                    item.stable_id,
+                    item.text,
+                    item.assignee,
+                    item.due_date,
+                    item.done as i32,
+                    idx as i64,
+                    now,
+                ],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// List all open (unchecked) action items across every note, joined with the
+    /// source note title, for the global Tasks view.
+    pub fn list_all_open_action_items(&self) -> anyhow::Result<Vec<ActionItemWithNote>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let mut stmt = conn.prepare(
+            "SELECT a.id, a.note_id, n.title, a.text, a.assignee, a.due_date, a.done, a.created_at
+             FROM action_items a
+             JOIN notes n ON n.id = a.note_id
+             WHERE a.done = 0
+             ORDER BY (a.due_date IS NULL), a.due_date ASC, a.created_at DESC",
+        )?;
+        let items = stmt
+            .query_map([], |row| {
+                Ok(ActionItemWithNote {
+                    id: row.get(0)?,
+                    note_id: row.get(1)?,
+                    note_title: row.get(2)?,
+                    text: row.get(3)?,
+                    assignee: row.get(4)?,
+                    due_date: row.get(5)?,
+                    done: row.get::<_, i32>(6)? != 0,
+                    created_at: row
+                        .get::<_, String>(7)?
+                        .parse()
+                        .unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(items)
     }
 
     /// Get the description (user notes) for a note

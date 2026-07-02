@@ -36,6 +36,44 @@ pub struct Summary {
     pub created_at: DateTime<Utc>,
 }
 
+/// An action item derived from a note's inline GFM checkboxes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionItem {
+    pub id: i64,
+    pub note_id: String,
+    pub stable_id: String,
+    pub text: String,
+    pub assignee: Option<String>,
+    pub due_date: Option<String>,
+    pub done: bool,
+    pub sort_order: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// A parsed action item from the note body, sent from the frontend to sync.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionItemInput {
+    pub stable_id: String,
+    pub text: String,
+    pub assignee: Option<String>,
+    pub due_date: Option<String>,
+    pub done: bool,
+}
+
+/// An open action item joined with its source note, for the global Tasks view.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionItemWithNote {
+    pub id: i64,
+    pub note_id: String,
+    pub note_title: String,
+    pub text: String,
+    pub assignee: Option<String>,
+    pub due_date: Option<String>,
+    pub done: bool,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SummaryType {

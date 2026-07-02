@@ -5,5 +5,6 @@ export { linksApi } from "./links";
 export { notesApi } from "./notes";
 export { settingsApi } from "./settings";
 export { tagsApi } from "./tags";
+export { tasksApi } from "./tasks";
 export { transcriptionApi } from "./transcription";
 export { uploadApi } from "./upload";

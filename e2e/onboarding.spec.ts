@@ -98,4 +98,38 @@ test.describe("ready state", () => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: /start listening/i })).toBeEnabled();
   });
+
+  test("global Tasks view lists open action items (#3)", async ({ page }) => {
+    const note = makeNote({ title: "Weekly Sync" });
+    await installTauriMock(page, {
+      list_notes: [note],
+      get_note: note,
+      list_all_open_action_items: [
+        {
+          id: 1,
+          note_id: note.id,
+          note_title: "Weekly Sync",
+          text: "Send the pricing deck",
+          assignee: "sofia",
+          due_date: null,
+          done: false,
+          created_at: "2026-07-02T09:31:00.000Z",
+        },
+      ],
+    });
+    await page.goto("/");
+
+    // Open the Tasks view from the sidebar.
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+    await expect(page.getByText("Send the pricing deck")).toBeVisible();
+    await expect(page.getByText("@sofia")).toBeVisible();
+
+    // Clicking a task opens its source note.
+    await page.getByText("Send the pricing deck").click();
+    const tabBar = page.locator("div.flex.gap-6", {
+      has: page.getByRole("button", { name: "transcript", exact: true }),
+    });
+    await expect(tabBar.getByRole("button", { name: "note", exact: true })).toBeVisible();
+  });
 });

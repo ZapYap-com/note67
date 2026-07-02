@@ -146,6 +146,29 @@ Summary:"#,
         }
     }
 
+    /// Extract action items as an inline GitHub-style markdown checklist that
+    /// gets spliced into the note body (the source of truth for #3).
+    pub fn action_items_checkboxes(transcript: &str, notes: Option<&str>) -> String {
+        let notes_section = Self::format_notes_section(notes);
+        format!(
+            r#"Extract the action items from this meeting as a GitHub-style markdown checklist.
+{}TRANSCRIPT:
+{}
+
+Output ONLY checkbox lines, one per action item, in exactly this format:
+- [ ] <clear, specific task> @<assignee if a person is named> 📅<YYYY-MM-DD if a date is mentioned>
+
+Rules:
+- Only include tasks explicitly stated. Do not invent or infer tasks.
+- Omit "@assignee" if no owner is named. Omit "📅date" if no date is mentioned.
+- No headings, no numbering, no extra prose, no emojis other than 📅.
+- If there are no action items, output nothing at all.
+
+Checklist:"#,
+            notes_section, transcript
+        )
+    }
+
     /// Extract action items from the transcript
     pub fn action_items(transcript: &str, notes: Option<&str>) -> String {
         let notes_section = Self::format_notes_section(notes);

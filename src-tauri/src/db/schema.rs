@@ -36,6 +36,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     if version < 10 {
         migrate_v10(conn)?;
     }
+    if version < 11 {
+        migrate_v11(conn)?;
+    }
 
     Ok(())
 }
@@ -413,6 +416,35 @@ fn migrate_v10(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 10)?;
+
+    Ok(())
+}
+
+fn migrate_v11(conn: &Connection) -> rusqlite::Result<()> {
+    // Action items derived from note bodies (inline GFM checkboxes are the
+    // source of truth; this table is a queryable index for the global Tasks
+    // view). `stable_id` is a hash of note_id + normalized text so a note can
+    // be re-synced idempotently without losing checked state.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS action_items (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             note_id TEXT NOT NULL,
+             stable_id TEXT NOT NULL,
+             text TEXT NOT NULL,
+             assignee TEXT,
+             due_date TEXT,
+             done INTEGER NOT NULL DEFAULT 0,
+             sort_order INTEGER NOT NULL DEFAULT 0,
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL,
+             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+             UNIQUE (note_id, stable_id)
+         );
+         CREATE INDEX IF NOT EXISTS idx_action_items_note ON action_items(note_id);
+         CREATE INDEX IF NOT EXISTS idx_action_items_open ON action_items(done, due_date);",
+    )?;
+
+    set_schema_version(conn, 11)?;
 
     Ok(())
 }
