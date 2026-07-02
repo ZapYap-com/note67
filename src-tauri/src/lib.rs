@@ -426,6 +426,7 @@ pub fn run() {
             commands::list_all_open_action_items,
             // Export commands
             commands::export_note_markdown,
+            commands::export_notes_to_folder,
             commands::save_export_to_file,
             commands::get_export_directory,
             // Upload commands

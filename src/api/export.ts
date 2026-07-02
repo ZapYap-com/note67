@@ -217,6 +217,11 @@ export const exportApi = {
     return invoke("export_note_markdown", { noteId });
   },
 
+  /** Export every note as a markdown file into `folder`. Returns the count. */
+  exportNotesToFolder: (folder: string): Promise<number> => {
+    return invoke("export_notes_to_folder", { folder });
+  },
+
   saveToFileWithDialog: async (content: string, defaultFilename: string): Promise<string | null> => {
     const filePath = await save({
       defaultPath: defaultFilename,

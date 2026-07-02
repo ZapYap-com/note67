@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { exportApi, settingsApi } from "../../api";
 
 interface SystemTabProps {
   onPermissionChange?: () => void;
@@ -18,6 +20,10 @@ export function SystemTab({ onPermissionChange }: SystemTabProps) {
   const [micAuthStatus, setMicAuthStatus] = useState<number>(0); // 0=NotDetermined, 1=Restricted, 2=Denied, 3=Authorized
   const [micLoading, setMicLoading] = useState(true);
   const [refreshingMic, setRefreshingMic] = useState(false);
+  // Markdown export
+  const [notesFolder, setNotesFolder] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<boolean>("get_autostart_enabled")
@@ -65,6 +71,38 @@ export function SystemTab({ onPermissionChange }: SystemTabProps) {
         setMicLoading(false);
       });
   }, []);
+
+  // Load the saved notes-export folder for display.
+  useEffect(() => {
+    let cancelled = false;
+    settingsApi
+      .get("notes_folder")
+      .then((value) => {
+        if (!cancelled) setNotesFolder(value);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleExportMarkdown = async () => {
+    const dir = await open({ directory: true, defaultPath: notesFolder ?? undefined });
+    if (!dir || typeof dir !== "string") return;
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const count = await exportApi.exportNotesToFolder(dir);
+      await settingsApi.set("notes_folder", dir).catch(() => {});
+      setNotesFolder(dir);
+      setExportMessage(`Exported ${count} note${count === 1 ? "" : "s"}.`);
+    } catch (err) {
+      console.error("Markdown export failed:", err);
+      setExportMessage("Export failed. Check the folder and try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleAutostartChange = async (enabled: boolean) => {
     try {
@@ -159,6 +197,54 @@ export function SystemTab({ onPermissionChange }: SystemTabProps) {
 
   return (
     <div className="space-y-6">
+      {/* Markdown Export Section */}
+      <div>
+        <h3
+          className="text-sm font-semibold mb-3"
+          style={{ color: "var(--color-text)" }}
+        >
+          Markdown Export
+        </h3>
+        <p
+          className="text-sm mb-4"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          Save all your notes — body, summary, and action items — as plain
+          markdown files in a folder you choose. Your data, in a portable format.
+        </p>
+      </div>
+
+      <div
+        className="p-4 rounded-xl"
+        style={{ backgroundColor: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium" style={{ color: "var(--color-text)" }}>
+              Export notes to folder
+            </p>
+            <p
+              className="text-xs mt-0.5 truncate"
+              style={{ color: "var(--color-text-tertiary)" }}
+            >
+              {exportMessage
+                ? exportMessage
+                : notesFolder
+                  ? `Last folder: ${notesFolder}`
+                  : "One markdown file per note (frontmatter + summary + action items)."}
+            </p>
+          </div>
+          <button
+            onClick={handleExportMarkdown}
+            disabled={exporting}
+            className="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
+            style={{ backgroundColor: "var(--color-accent)", color: "white" }}
+          >
+            {exporting ? "Exporting…" : "Choose folder…"}
+          </button>
+        </div>
+      </div>
+
       {/* Startup Section */}
       <div>
         <h3
