@@ -290,10 +290,8 @@ fn build_vault_markdown(
     if !actions.is_empty() {
         md.push_str("## Action Items\n\n");
         for (text, assignee, due, done) in actions {
+            let _ = assignee;
             let mut line = format!("- [{}] {}", if *done != 0 { "x" } else { " " }, text.trim());
-            if let Some(a) = assignee.as_ref().filter(|s| !s.trim().is_empty()) {
-                line.push_str(&format!(" @{a}"));
-            }
             if let Some(d) = due.as_ref().filter(|s| !s.trim().is_empty()) {
                 line.push_str(&format!(" 📅{d}"));
             }

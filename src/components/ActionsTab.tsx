@@ -10,7 +10,6 @@ interface ActionsTabProps {
 
 export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
-  const [editMode, setEditMode] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState("");
   // Derive loading from which note's items are loaded, so the effect doesn't
@@ -101,7 +100,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
-          Action items
+          Tasks
           {items.length > 0 && (
             <span className="ml-1.5 font-normal" style={{ color: "var(--color-text-tertiary)" }}>
               {items.filter((i) => !i.done).length} open
@@ -127,16 +126,6 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
               {extracting ? "Finding…" : "Generate"}
             </button>
           )}
-          <button
-            onClick={() => setEditMode((v) => !v)}
-            className="px-2.5 py-1 text-xs font-medium rounded-full transition-colors"
-            style={{
-              backgroundColor: editMode ? "var(--color-accent)" : "var(--color-bg-subtle)",
-              color: editMode ? "white" : "var(--color-text)",
-            }}
-          >
-            {editMode ? "Done" : "Edit"}
-          </button>
         </div>
       </div>
 
@@ -144,108 +133,45 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
         <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
           Loading…
         </p>
-      ) : items.length === 0 && !editMode ? (
-        <div
-          className="rounded-xl px-6 py-10 text-center"
-          style={{ backgroundColor: "var(--color-bg-subtle)" }}
-        >
-          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            No action items yet.
-          </p>
-          <p className="text-xs mt-1.5" style={{ color: "var(--color-text-tertiary)" }}>
-            {canUseAI ? "Generate them from the meeting, or " : ""}
-            <button onClick={() => setEditMode(true)} className="underline" style={{ color: "var(--color-accent)" }}>
-              add one
-            </button>
-            .
-          </p>
-        </div>
       ) : (
-        <div className="space-y-1">
-          {items.map((item) =>
-            editMode ? (
-              <EditRow
-                key={item.id}
-                item={item}
-                onToggle={() => toggleDone(item)}
-                onPatchLocal={(patch) => patchLocal(item.id, patch)}
-                onPersist={() => persist(items.find((i) => i.id === item.id) ?? item)}
-                onDelete={() => remove(item.id)}
-              />
-            ) : (
-              <ViewRow key={item.id} item={item} onToggle={() => toggleDone(item)} />
-            )
+        <div className="space-y-0.5">
+          {items.length === 0 && (
+            <p className="text-sm mb-1 px-2" style={{ color: "var(--color-text-tertiary)" }}>
+              No tasks yet — add one below
+              {canUseAI ? " or Generate them from the meeting" : ""}.
+            </p>
           )}
+          {items.map((item) => (
+            <EditRow
+              key={item.id}
+              item={item}
+              onToggle={() => toggleDone(item)}
+              onPatchLocal={(patch) => patchLocal(item.id, patch)}
+              onPersist={() => persist(items.find((i) => i.id === item.id) ?? item)}
+              onDelete={() => remove(item.id)}
+            />
+          ))}
 
-          {editMode && (
-            <div className="flex items-center gap-2.5 p-2 pt-3">
-              <span
-                className="w-4 h-4 rounded-[5px] shrink-0"
-                style={{ border: "2px dashed var(--color-border)" }}
-              />
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") addItem(draft);
-                }}
-                onBlur={() => addItem(draft)}
-                placeholder="Add an action item…"
-                className="flex-1 bg-transparent outline-none text-sm"
-                style={{ color: "var(--color-text)" }}
-              />
-            </div>
-          )}
+          {/* Always-available add row */}
+          <div className="flex items-center gap-2.5 p-2">
+            <span
+              className="w-4 h-4 rounded-[5px] shrink-0"
+              style={{ border: "2px dashed var(--color-border)" }}
+            />
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addItem(draft);
+              }}
+              onBlur={() => addItem(draft)}
+              placeholder="Add a task…"
+              className="flex-1 bg-transparent outline-none text-sm"
+              style={{ color: "var(--color-text)" }}
+            />
+          </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ViewRow({ item, onToggle }: { item: ActionItem; onToggle: () => void }) {
-  return (
-    <div className="flex items-start gap-3 p-2 rounded-lg">
-      <button
-        onClick={onToggle}
-        className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: item.done ? "var(--color-accent)" : "transparent",
-          border: item.done ? "none" : "2px solid var(--color-border)",
-        }}
-      >
-        {item.done && <span className="text-white text-[10px] leading-none">✓</span>}
-      </button>
-      <div className="flex-1 min-w-0">
-        <span
-          className="text-sm"
-          style={{
-            color: item.done ? "var(--color-text-tertiary)" : "var(--color-text)",
-            textDecoration: item.done ? "line-through" : "none",
-          }}
-        >
-          {item.text}
-        </span>
-        {(item.assignee || item.due_date) && (
-          <div className="flex items-center gap-2 mt-1">
-            {item.assignee && (
-              <span
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-accent-light)", color: "var(--color-accent)" }}
-              >
-                @{item.assignee}
-              </span>
-            )}
-            {item.due_date && (
-              <span
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-bg-subtle)", color: "var(--color-text-secondary)" }}
-              >
-                📅 {item.due_date}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -283,15 +209,10 @@ function EditRow({
         onChange={(e) => onPatchLocal({ text: e.target.value })}
         onBlur={onPersist}
         className="flex-1 min-w-0 bg-transparent outline-none text-sm"
-        style={{ color: "var(--color-text)" }}
-      />
-      <input
-        value={item.assignee ?? ""}
-        onChange={(e) => onPatchLocal({ assignee: e.target.value || null })}
-        onBlur={onPersist}
-        placeholder="@who"
-        className="w-20 bg-transparent outline-none text-xs text-right"
-        style={{ color: "var(--color-text-secondary)" }}
+        style={{
+          color: item.done ? "var(--color-text-tertiary)" : "var(--color-text)",
+          textDecoration: item.done ? "line-through" : "none",
+        }}
       />
       <input
         type="date"

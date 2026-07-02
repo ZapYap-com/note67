@@ -156,11 +156,11 @@ Summary:"#,
 {}
 
 Output ONLY checkbox lines, one per action item, in exactly this format:
-- [ ] <clear, specific task> @<assignee if a person is named> 📅<YYYY-MM-DD if a date is mentioned>
+- [ ] <clear, specific task> 📅<YYYY-MM-DD if a date is mentioned>
 
 Rules:
 - Only include tasks explicitly stated. Do not invent or infer tasks.
-- Omit "@assignee" if no owner is named. Omit "📅date" if no date is mentioned.
+- Omit "📅date" if no date is mentioned.
 - No headings, no numbering, no extra prose, no emojis other than 📅.
 - If there are no action items, output nothing at all.
 

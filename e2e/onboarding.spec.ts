@@ -56,14 +56,14 @@ test.describe("ready state", () => {
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
-    for (const tab of ["note", "transcript", "summary", "actions"]) {
+    for (const tab of ["note", "transcript", "summary", "tasks"]) {
       await expect(tabBar.getByRole("button", { name: tab, exact: true })).toBeVisible();
     }
 
     await page.screenshot({ path: "e2e/__screenshots__/note-view.png", fullPage: true });
   });
 
-  test("Actions tab shows a note's action items (#3)", async ({ page }) => {
+  test("Tasks tab shows a note's action items (#3)", async ({ page }) => {
     const note = makeNote({ title: "Weekly Sync" });
     await installTauriMock(page, {
       list_notes: [note],
@@ -89,13 +89,13 @@ test.describe("ready state", () => {
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
-    await tabBar.getByRole("button", { name: "actions", exact: true }).click();
+    await tabBar.getByRole("button", { name: "tasks", exact: true }).click();
 
-    await expect(page.getByText("Send the pricing deck")).toBeVisible();
-    await expect(page.getByText("@sofia")).toBeVisible();
-    // Enter edit mode.
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+    // The Tasks tab is always editable — items render as inline fields.
+    await expect(page.locator("main").getByRole("textbox").first()).toHaveValue(
+      "Send the pricing deck"
+    );
+    await expect(page.getByPlaceholder("Add a task…")).toBeVisible();
   });
 
   test("shows the AI summary in its own tab (#4)", async ({ page }) => {
@@ -157,7 +157,6 @@ test.describe("ready state", () => {
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
     await expect(page.getByText("Send the pricing deck")).toBeVisible();
-    await expect(page.getByText("@sofia")).toBeVisible();
 
     // Clicking a task opens its source note.
     await page.getByText("Send the pricing deck").click();

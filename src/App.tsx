@@ -169,7 +169,7 @@ function App() {
     Record<string, TranscriptSegment[]>
   >({});
   const [activeTab, setActiveTab] = useState<
-    "note" | "transcript" | "summary" | "actions"
+    "note" | "transcript" | "summary" | "tasks"
   >("summary");
   const [editingTitle, setEditingTitle] = useState(false);
   const [, setEditingDescription] = useState(false);
@@ -1553,7 +1553,7 @@ interface NoteViewProps {
   isPaused: boolean;
   audioLevel: number;
   recordingMode: import("./hooks/useRecording").RecordingMode;
-  activeTab: "note" | "transcript" | "summary" | "actions";
+  activeTab: "note" | "transcript" | "summary" | "tasks";
   editingTitle: boolean;
   ollamaRunning: boolean;
   hasOllamaModel: boolean;
@@ -1563,7 +1563,7 @@ interface NoteViewProps {
   isAutoRetranscribing: boolean;
   summariesRefreshKey: number;
   loadedModel: string | null;
-  onTabChange: (tab: "note" | "transcript" | "summary" | "actions") => void;
+  onTabChange: (tab: "note" | "transcript" | "summary" | "tasks") => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
   onUpdateDescription: (desc: string) => void;
@@ -2232,7 +2232,7 @@ function NoteView({
         className="px-6 border-b flex gap-6"
         style={{ borderColor: "var(--color-border)" }}
       >
-        {(["note", "transcript", "summary", "actions"] as const).map((tab) => (
+        {(["note", "transcript", "summary", "tasks"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -2357,7 +2357,7 @@ function NoteView({
           />
         )}
 
-        {activeTab === "actions" && (
+        {activeTab === "tasks" && (
           <ActionsTab
             noteId={note.id}
             canUseAI={ollamaRunning && hasOllamaModel}

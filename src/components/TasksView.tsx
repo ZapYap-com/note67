@@ -111,17 +111,6 @@ export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
                           >
                             {task.note_title}
                           </span>
-                          {task.assignee && (
-                            <span
-                              className="text-xs px-1.5 py-0.5 rounded"
-                              style={{
-                                backgroundColor: "var(--color-accent-light)",
-                                color: "var(--color-accent)",
-                              }}
-                            >
-                              @{task.assignee}
-                            </span>
-                          )}
                           {task.due_date && (
                             <span
                               className="text-xs px-1.5 py-0.5 rounded"
