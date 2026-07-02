@@ -6,9 +6,11 @@ interface ActionsTabProps {
   noteId: string;
   canUseAI: boolean;
   onChanged?: () => void;
+  /** When opened from the global Tasks view, the task to auto-select. */
+  focusTaskId?: number | null;
 }
 
-export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
+export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: ActionsTabProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState("");
@@ -17,6 +19,14 @@ export function ActionsTab({ noteId, canUseAI, onChanged }: ActionsTabProps) {
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const loading = noteId !== loadedNoteId;
+
+  // Focus a specific task when navigated from the global Tasks view. Adjust
+  // during render (guarded) so it wins over the default first-task selection.
+  const [prevFocus, setPrevFocus] = useState(focusTaskId);
+  if (focusTaskId !== prevFocus) {
+    setPrevFocus(focusTaskId);
+    if (focusTaskId != null) setSelectedId(focusTaskId);
+  }
 
   // Close the right-click menu on any click or Escape.
   useEffect(() => {

@@ -32,6 +32,10 @@ export const tasksApi = {
     return invoke("update_action_item", { id, text, description, dueDate, done });
   },
 
+  setActionItemDone: (id: number, done: boolean): Promise<void> => {
+    return invoke("set_action_item_done", { id, done });
+  },
+
   deleteActionItem: (id: number): Promise<void> => {
     return invoke("delete_action_item", { id });
   },

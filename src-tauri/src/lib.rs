@@ -422,6 +422,7 @@ pub fn run() {
             commands::get_action_items,
             commands::create_action_item,
             commands::update_action_item,
+            commands::set_action_item_done,
             commands::delete_action_item,
             commands::list_all_open_action_items,
             // Export commands

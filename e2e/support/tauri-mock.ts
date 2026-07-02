@@ -91,6 +91,7 @@ export const defaultCommands: CommandMap = {
     updated_at: "2026-07-02T09:31:00.000Z",
   },
   update_action_item: null,
+  set_action_item_done: null,
   delete_action_item: null,
   list_all_open_action_items: [],
 

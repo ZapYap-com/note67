@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useOpenTasks } from "../hooks";
+import { tasksApi } from "../api";
 import type { ActionItemWithNote } from "../types";
 
 interface TasksViewProps {
-  onSelectNote: (noteId: string) => void;
+  onSelectTask: (noteId: string, taskId: number) => void;
   refreshKey?: number;
 }
 
@@ -27,12 +28,29 @@ function formatDue(dueDate: string) {
   });
 }
 
-export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
+export function TasksView({ onSelectTask, refreshKey = 0 }: TasksViewProps) {
   const { tasks, loading } = useOpenTasks(refreshKey);
+  // Checking a task off hides it immediately (it drops out of the open list).
+  const [completed, setCompleted] = useState<Set<number>>(new Set());
+  const visibleTasks = tasks.filter((t) => !completed.has(t.id));
+
+  const completeTask = async (id: number) => {
+    setCompleted((prev) => new Set(prev).add(id));
+    try {
+      await tasksApi.setActionItemDone(id, true);
+    } catch (e) {
+      console.error("Failed to complete task:", e);
+      setCompleted((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   const groups = useMemo(() => {
     const map = new Map<Bucket, ActionItemWithNote[]>();
-    for (const task of tasks) {
+    for (const task of visibleTasks) {
       const b = bucketFor(task.due_date);
       if (!map.has(b)) map.set(b, []);
       map.get(b)!.push(task);
@@ -41,7 +59,7 @@ export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
       label: b,
       tasks: map.get(b)!,
     }));
-  }, [tasks]);
+  }, [visibleTasks]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -59,17 +77,16 @@ export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
           <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>
             Loading…
           </p>
-        ) : tasks.length === 0 ? (
+        ) : visibleTasks.length === 0 ? (
           <div
             className="rounded-xl px-6 py-12 text-center"
             style={{ backgroundColor: "var(--color-bg-subtle)" }}
           >
             <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              No open action items yet.
+              No open tasks. Nice.
             </p>
             <p className="text-xs mt-1.5" style={{ color: "var(--color-text-tertiary)" }}>
-              Add <code>- [ ] a task</code> to a note, or use “Find action items”
-              after a meeting.
+              Add tasks in a note's Tasks tab, or Generate them after a meeting.
             </p>
           </div>
         ) : (
@@ -90,15 +107,23 @@ export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
                 </div>
                 <div className="space-y-1">
                   {group.tasks.map((task) => (
-                    <button
+                    <div
                       key={task.id}
-                      onClick={() => onSelectNote(task.note_id)}
-                      className="w-full flex items-start gap-3 p-3 rounded-lg text-left transition-colors hover:bg-black/5"
+                      onClick={() => onSelectTask(task.note_id, task.id)}
+                      className="w-full flex items-start gap-3 p-3 rounded-lg text-left transition-colors hover:bg-black/5 cursor-pointer"
                       style={{ backgroundColor: "var(--color-bg-subtle)" }}
                     >
                       <span
-                        className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0"
-                        style={{ border: "2px solid var(--color-border)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          completeTask(task.id);
+                        }}
+                        className="w-4 h-4 mt-0.5 rounded-[5px] shrink-0 cursor-pointer"
+                        style={{
+                          backgroundColor: "var(--color-bg-elevated)",
+                          border: "1.5px solid var(--color-accent)",
+                        }}
+                        title="Mark done"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm" style={{ color: "var(--color-text)" }}>
@@ -130,7 +155,7 @@ export function TasksView({ onSelectNote, refreshKey = 0 }: TasksViewProps) {
                           )}
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>

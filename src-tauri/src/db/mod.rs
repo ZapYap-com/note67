@@ -306,6 +306,18 @@ impl Database {
         Self::action_item_by_id(&conn, id)
     }
 
+    /// Toggle just the done flag (used by the global Tasks view, which doesn't
+    /// carry the full item).
+    pub fn set_action_item_done(&self, id: i64, done: bool) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE action_items SET done = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, done as i32, now],
+        )?;
+        Ok(())
+    }
+
     /// Delete an action item and any subtasks under it.
     pub fn delete_action_item(&self, id: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;

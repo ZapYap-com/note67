@@ -150,6 +150,8 @@ function App() {
   );
   // Bumped after note edits so the global Tasks view reloads.
   const [tasksRefreshKey, setTasksRefreshKey] = useState(0);
+  // When navigating from the global Tasks view, the task to focus in the note.
+  const [focusTaskId, setFocusTaskId] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<
@@ -677,6 +679,7 @@ function App() {
     setSelectedNoteId(note.id);
     setCurrentView("notes"); // Exit graph view when selecting a note
     setActiveTab("summary");
+    setFocusTaskId(null);
     if (!noteTranscripts[note.id]) {
       const segments = await loadTranscript(note.id);
       if (segments.length > 0) {
@@ -1049,10 +1052,20 @@ function App() {
         {currentView === "tasks" && (
           <TasksView
             refreshKey={tasksRefreshKey}
-            onSelectNote={(noteId) => {
+            onSelectTask={(noteId, taskId) => {
               const target = notes.find((n) => n.id === noteId);
               if (target) {
-                handleSelectNote(target);
+                setSelectedNoteId(target.id);
+                setCurrentView("notes");
+                setActiveTab("tasks");
+                setFocusTaskId(taskId);
+                if (!noteTranscripts[target.id]) {
+                  loadTranscript(target.id).then((segs) => {
+                    if (segs.length > 0) {
+                      setNoteTranscripts((prev) => ({ ...prev, [target.id]: segs }));
+                    }
+                  });
+                }
               }
             }}
           />
@@ -1188,6 +1201,7 @@ function App() {
               setShowSettings(true);
             }}
             onTasksChanged={handleTasksChanged}
+            focusTaskId={focusTaskId}
           />
         ) : currentView === "notes" ? (
           <EmptyState
@@ -1587,6 +1601,8 @@ interface NoteViewProps {
   onOpenGuide?: () => void;
   // #3: notify the parent to refresh the global Tasks view after edits.
   onTasksChanged?: () => void;
+  // Task to focus when opened from the global Tasks view.
+  focusTaskId?: number | null;
 }
 
 function NoteView({
@@ -1624,6 +1640,7 @@ function NoteView({
   onWikiLinkClick,
   onOpenGuide,
   onTasksChanged,
+  focusTaskId,
 }: NoteViewProps) {
   const [titleValue, setTitleValue] = useState(note.title);
   const [descValue, setDescValue] = useState(note.description || "");
@@ -2232,7 +2249,7 @@ function NoteView({
         className="px-6 border-b flex gap-6"
         style={{ borderColor: "var(--color-border)" }}
       >
-        {(["note", "transcript", "summary", "tasks"] as const).map((tab) => (
+        {(["note", "tasks", "transcript", "summary"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -2362,6 +2379,7 @@ function NoteView({
             noteId={note.id}
             canUseAI={ollamaRunning && hasOllamaModel}
             onChanged={onTasksChanged}
+            focusTaskId={focusTaskId}
           />
         )}
       </div>

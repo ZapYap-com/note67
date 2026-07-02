@@ -735,6 +735,12 @@ pub fn update_action_item(
         .map_err(|e| e.to_string())
 }
 
+/// #3: Toggle an action item's done flag (used by the global Tasks view).
+#[tauri::command]
+pub fn set_action_item_done(id: i64, done: bool, db: State<'_, Database>) -> Result<(), String> {
+    db.set_action_item_done(id, done).map_err(|e| e.to_string())
+}
+
 /// #3: Delete an action item.
 #[tauri::command]
 pub fn delete_action_item(id: i64, db: State<'_, Database>) -> Result<(), String> {
