@@ -6,7 +6,8 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 
-pdfMake.vfs = pdfFonts.vfs;
+// pdfmake's vfs_fonts module exports the font map directly (no `.vfs` wrapper).
+pdfMake.vfs = pdfFonts;
 
 export interface ExportData {
   markdown: string;
