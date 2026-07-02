@@ -31,7 +31,6 @@ export function UpdatesTab() {
         "AI 'Generate' pulls action items straight from a meeting into your task list; click a task to jump back to its note",
         "Smarter summaries - when you take your own notes, the AI summary now expands them with detail from the transcript instead of ignoring them",
         "First-run setup wizard - guided setup for the transcription model, AI assistant, and microphone/screen permissions",
-        "Export to Markdown folder - save every note (with its summary and tasks) as plain .md files in a folder you choose",
       ],
     },
     {
