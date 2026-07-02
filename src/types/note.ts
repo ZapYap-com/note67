@@ -52,7 +52,7 @@ export type SummaryType =
 // truth), edited in the note's Actions tab and surfaced in the global Tasks view.
 export interface ActionItem {
   id: number;
-  note_id: string;
+  note_id: string | null;
   stable_id: string;
   text: string;
   description: string | null;

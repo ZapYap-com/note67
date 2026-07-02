@@ -40,7 +40,7 @@ pub struct Summary {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionItem {
     pub id: i64,
-    pub note_id: String,
+    pub note_id: Option<String>,
     pub stable_id: String,
     pub text: String,
     pub description: Option<String>,

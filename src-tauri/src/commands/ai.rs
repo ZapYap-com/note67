@@ -681,7 +681,7 @@ pub async fn extract_action_items(
             let _ = assignee;
             let stable_id = Uuid::new_v4().to_string();
             if let Ok(item) =
-                db.create_action_item(&note_id, &stable_id, &text, due.as_deref(), None, None)
+                db.create_action_item(Some(&note_id), &stable_id, &text, due.as_deref(), None, None)
             {
                 created.push(item);
             }
@@ -708,7 +708,7 @@ pub fn get_all_action_items(db: State<'_, Database>) -> Result<Vec<ActionItem>, 
 /// #3: Create an action item (top-level, or a subtask when `parent_id` is set).
 #[tauri::command]
 pub fn create_action_item(
-    note_id: String,
+    note_id: Option<String>,
     text: String,
     due_date: Option<String>,
     parent_id: Option<i64>,
@@ -717,7 +717,7 @@ pub fn create_action_item(
 ) -> Result<ActionItem, String> {
     let stable_id = Uuid::new_v4().to_string();
     db.create_action_item(
-        &note_id,
+        note_id.as_deref(),
         &stable_id,
         &text,
         due_date.as_deref(),

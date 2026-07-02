@@ -42,6 +42,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     if version < 12 {
         migrate_v12(conn)?;
     }
+    if version < 13 {
+        migrate_v13(conn)?;
+    }
 
     Ok(())
 }
@@ -462,6 +465,43 @@ fn migrate_v12(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     set_schema_version(conn, 12)?;
+
+    Ok(())
+}
+
+fn migrate_v13(conn: &Connection) -> rusqlite::Result<()> {
+    // Allow standalone tasks (note_id NULL) so the central Tasks page can add
+    // tasks not tied to any note. SQLite can't drop NOT NULL in place; recreate.
+    conn.execute_batch(
+        "BEGIN;
+         CREATE TABLE action_items_new (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             note_id TEXT,
+             stable_id TEXT NOT NULL,
+             text TEXT NOT NULL,
+             assignee TEXT,
+             due_date TEXT,
+             done INTEGER NOT NULL DEFAULT 0,
+             sort_order INTEGER NOT NULL DEFAULT 0,
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL,
+             description TEXT,
+             parent_id INTEGER,
+             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+         );
+         INSERT INTO action_items_new
+             (id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at, description, parent_id)
+         SELECT id, note_id, stable_id, text, assignee, due_date, done, sort_order, created_at, updated_at, description, parent_id
+         FROM action_items;
+         DROP TABLE action_items;
+         ALTER TABLE action_items_new RENAME TO action_items;
+         CREATE INDEX IF NOT EXISTS idx_action_items_note ON action_items(note_id);
+         CREATE INDEX IF NOT EXISTS idx_action_items_open ON action_items(done, due_date);
+         CREATE INDEX IF NOT EXISTS idx_action_items_parent ON action_items(parent_id);
+         COMMIT;",
+    )?;
+
+    set_schema_version(conn, 13)?;
 
     Ok(())
 }

@@ -18,7 +18,7 @@ export const tasksApi = {
   },
 
   createActionItem: (
-    noteId: string,
+    noteId: string | null,
     text: string,
     dueDate: string | null = null,
     parentId: number | null = null,

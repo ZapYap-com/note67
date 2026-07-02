@@ -273,9 +273,10 @@ impl Database {
     }
 
     /// Create an action item (top-level, or a subtask when `parent_id` is set).
+    /// `note_id` is None for a standalone task (central Tasks page).
     pub fn create_action_item(
         &self,
-        note_id: &str,
+        note_id: Option<&str>,
         stable_id: &str,
         text: &str,
         due_date: Option<&str>,
@@ -285,7 +286,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now().to_rfc3339();
         let next_order: i64 = conn.query_row(
-            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items WHERE note_id = ?1",
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM action_items WHERE note_id IS ?1",
             [note_id],
             |r| r.get(0),
         )?;

@@ -49,7 +49,7 @@ export function useTaskMutations(
     }
   };
 
-  const addSubtask = async (noteId: string, parentId: number, text: string) => {
+  const addSubtask = async (noteId: string | null, parentId: number, text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     try {

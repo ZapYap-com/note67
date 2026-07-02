@@ -7,7 +7,7 @@ export interface TaskMutations {
   persistById: (id: number) => void;
   toggleDone: (item: ActionItem) => void;
   remove: (id: number) => void;
-  addSubtask: (noteId: string, parentId: number, text: string) => void;
+  addSubtask: (noteId: string | null, parentId: number, text: string) => void;
 }
 
 interface TaskDetailPaneProps {

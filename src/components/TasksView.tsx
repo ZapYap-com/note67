@@ -52,8 +52,24 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const m = useTaskMutations(items, setItems);
+
+  // Add a standalone task (not tied to any note) with today's date.
+  const addStandaloneTask = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    try {
+      const today = new Date().toLocaleDateString("en-CA");
+      const created = await tasksApi.createActionItem(null, trimmed, today);
+      setItems((prev) => [...prev, created]);
+      setDraft("");
+      setSelectedId(created.id);
+    } catch (e) {
+      console.error("Failed to create task:", e);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +231,7 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                             </span>
                           )}
                           <span className="text-xs truncate" style={{ color: "var(--color-text-tertiary)" }}>
-                            {noteTitles[task.note_id] ?? "Note"}
+                            {task.note_id ? noteTitles[task.note_id] ?? "Note" : "No note"}
                           </span>
                           {subs.length > 0 && (
                             <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
@@ -224,24 +240,45 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                           )}
                         </span>
                       </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenInNote(task.note_id, task.id);
-                        }}
-                        className="p-1 rounded shrink-0 opacity-0 group-hover:opacity-100 hover:bg-black/5"
-                        style={{ color: "var(--color-text-tertiary)" }}
-                        title="Open in note"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </button>
+                      {task.note_id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenInNote(task.note_id!, task.id);
+                          }}
+                          className="p-1 rounded shrink-0 opacity-0 group-hover:opacity-100 hover:bg-black/5"
+                          style={{ color: "var(--color-text-tertiary)" }}
+                          title="Open in note"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ))
+          )}
+
+          {/* Add a standalone task (no note) */}
+          {loaded && (
+            <div className="flex items-center gap-2.5 p-2">
+              <span
+                className="w-4 h-4 rounded-[5px] shrink-0"
+                style={{ border: "2px dashed var(--color-border)" }}
+              />
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addStandaloneTask(draft)}
+                onBlur={() => addStandaloneTask(draft)}
+                placeholder="Add a task…"
+                className="flex-1 bg-transparent outline-none text-sm"
+                style={{ color: "var(--color-text)" }}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -263,16 +300,22 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
             m={m}
             onSubtaskContextMenu={openMenu}
             header={
-              <button
-                onClick={() => onOpenInNote(selected.note_id, selected.id)}
-                className="flex items-center gap-1.5 text-xs mb-3 transition-colors hover:underline"
-                style={{ color: "var(--color-accent)" }}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                {noteTitles[selected.note_id] ?? "Open in note"}
-              </button>
+              selected.note_id ? (
+                <button
+                  onClick={() => onOpenInNote(selected.note_id!, selected.id)}
+                  className="flex items-center gap-1.5 text-xs mb-3 transition-colors hover:underline"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  {noteTitles[selected.note_id] ?? "Open in note"}
+                </button>
+              ) : (
+                <p className="text-xs mb-3" style={{ color: "var(--color-text-tertiary)" }}>
+                  Standalone task
+                </p>
+              )
             }
           />
         )}
