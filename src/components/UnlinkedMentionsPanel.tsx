@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { linksApi } from "../api/links";
 import type { UnlinkedMention } from "../types";
 
@@ -16,26 +16,33 @@ export function UnlinkedMentionsPanel({
   onLinkMention,
 }: UnlinkedMentionsPanelProps) {
   const [mentions, setMentions] = useState<UnlinkedMention[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
+  // Derive loading from which note's mentions are loaded, so the fetch effect
+  // doesn't need to set a loading flag synchronously.
+  const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
+  const loading = noteId !== loadedNoteId;
 
-  // Fetch unlinked mentions when note changes
-  const fetchMentions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const results = await linksApi.getUnlinkedMentions(noteId);
-      setMentions(results);
-    } catch (error) {
-      console.error("Failed to fetch unlinked mentions:", error);
-      setMentions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [noteId]);
-
+  // Fetch unlinked mentions when the note changes. Inlined so setState only
+  // runs in the async continuation.
   useEffect(() => {
-    fetchMentions();
-  }, [fetchMentions]);
+    let cancelled = false;
+    linksApi
+      .getUnlinkedMentions(noteId)
+      .then((results) => {
+        if (cancelled) return;
+        setMentions(results);
+        setLoadedNoteId(noteId);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to fetch unlinked mentions:", error);
+        setMentions([]);
+        setLoadedNoteId(noteId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [noteId]);
 
   // Don't render if no mentions and not loading
   if (!loading && mentions.length === 0) {

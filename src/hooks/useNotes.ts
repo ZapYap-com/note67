@@ -98,9 +98,25 @@ export function useNotes(): UseNotesReturn {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
+  // Initial load. Inlined (rather than calling refresh) so setState only runs
+  // in the async continuation, not synchronously in the effect body.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    notesApi
+      .list()
+      .then((data) => {
+        if (!cancelled) setNotes(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return {
     notes,

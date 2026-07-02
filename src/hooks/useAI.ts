@@ -22,7 +22,7 @@ export function useOllama() {
   // Initialize on first mount - load settings first, then checkStatus will auto-restore saved model
   useEffect(() => {
     loadSettings().then(() => checkStatus());
-  }, []);
+  }, [loadSettings, checkStatus]);
 
   return {
     status,
@@ -86,10 +86,23 @@ export function useSummaries(noteId: string | null, refreshKey: number = 0) {
     }
   }, [noteId]);
 
-  // Reload summaries when noteId or refreshKey changes
+  // Reload summaries when noteId or refreshKey changes. Inlined so setState
+  // only runs in the async continuation, not synchronously in the effect.
   useEffect(() => {
-    loadSummaries();
-  }, [loadSummaries, refreshKey]);
+    if (!noteId) return;
+    let cancelled = false;
+    aiApi
+      .getNoteSummaries(noteId)
+      .then((data) => {
+        if (!cancelled) setSummaries(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [noteId, refreshKey]);
 
   const generateSummary = useCallback(
     async (summaryType: SummaryType, customPrompt?: string) => {

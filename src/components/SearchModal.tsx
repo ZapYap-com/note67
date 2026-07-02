@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { notesApi } from "../api/notes";
 import type { Note } from "../types";
 
@@ -10,38 +10,52 @@ interface SearchModalProps {
 
 export function SearchModal({ isOpen, onClose, onSelectNote }: SearchModalProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Note[]>([]);
+  const [searchResults, setSearchResults] = useState<Note[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Focus input when modal opens
-  useEffect(() => {
+  // Results are empty whenever the query is blank — derive rather than clearing
+  // via setState so the search effect never sets state synchronously.
+  const results = useMemo(
+    () => (query.trim() ? searchResults : []),
+    [query, searchResults]
+  );
+
+  // Reset search state when the modal opens. Done during render (not an effect)
+  // to avoid an extra render pass.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setQuery("");
-      setResults([]);
+      setSearchResults([]);
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
     }
+  }
+
+  // Focus the input when the modal opens (DOM side effect only).
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(id);
   }, [isOpen]);
 
-  // Debounced search
+  // Debounced search. All state updates happen inside the timer callback, so
+  // nothing is set synchronously in the effect body.
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
+    if (!query.trim()) return;
 
     const timeoutId = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const searchResults = await notesApi.search(query);
-        setResults(searchResults);
+        const found = await notesApi.search(query);
+        setSearchResults(found);
         setSelectedIndex(0);
       } catch (error) {
         console.error("Search failed:", error);
-        setResults([]);
+        setSearchResults([]);
       } finally {
         setIsSearching(false);
       }

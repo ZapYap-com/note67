@@ -4,31 +4,44 @@ import type { UploadedAudio } from "../types";
 
 export function useUploadedAudio(noteId: string | null) {
   const [uploads, setUploads] = useState<UploadedAudio[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track which note's uploads are loaded so `isLoading` can be derived rather
+  // than set synchronously inside the load effect (avoids cascading renders).
+  const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
+  const isLoading = noteId != null && noteId !== loadedNoteId;
 
   const loadUploads = useCallback(async () => {
-    if (!noteId) {
-      setUploads([]);
-      return;
-    }
+    if (!noteId) return;
     try {
-      setIsLoading(true);
       const data = await uploadApi.getUploads(noteId);
       setUploads(data);
+      setLoadedNoteId(noteId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoading(false);
     }
   }, [noteId]);
 
-  // Reload uploads when noteId changes
+  // Reload uploads when noteId changes. The fetch is inlined (rather than
+  // calling loadUploads) so setState only happens in the async continuation.
   useEffect(() => {
-    loadUploads();
-  }, [loadUploads]);
+    if (!noteId) return;
+    let cancelled = false;
+    uploadApi
+      .getUploads(noteId)
+      .then((data) => {
+        if (cancelled) return;
+        setUploads(data);
+        setLoadedNoteId(noteId);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [noteId]);
 
   const uploadAudio = useCallback(
     async (speakerLabel?: string) => {

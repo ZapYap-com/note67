@@ -272,12 +272,12 @@ function App() {
     setActiveTab("transcript");
     await startRecording(note.id);
     // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
-    await startLiveTranscription(note.id, profile?.name || "Me");
+    await startLiveTranscription(note.id, profile.name || "Me");
   }, [
     createNote,
     startRecording,
     startLiveTranscription,
-    profile?.name,
+    profile.name,
     refreshSystemStatus,
   ]);
 
@@ -598,20 +598,24 @@ function App() {
     }
   };
 
-  // Keyboard shortcut: Cmd/Ctrl + S to stop recording
+  // Keyboard shortcut: Cmd/Ctrl + S to stop recording.
+  // Keep a ref to the latest handler so the listener can be bound once (the
+  // handler itself no-ops when nothing is recording).
+  const handleStopRecordingRef = useRef(handleStopRecording);
+  useEffect(() => {
+    handleStopRecordingRef.current = handleStopRecording;
+  });
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        if (isRecording) {
-          handleStopRecording();
-        }
+        handleStopRecordingRef.current();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isRecording]);
+  }, []);
 
   // Regenerate summary and title for the selected note
   const handleRegenerateSummaryTitle = async () => {
@@ -1633,15 +1637,22 @@ function NoteView({
     }
   }, [showMoreMenu]);
 
-  // Update playingAudioPath when note changes (don't auto-play)
-  useEffect(() => {
+  // Reset the playing audio path when the note's audio changes (don't auto-play).
+  // Done during render (not an effect) to avoid a synchronous setState in an
+  // effect; only runs when note.audio_path actually changes.
+  const [prevAudioPath, setPrevAudioPath] = useState(note.audio_path);
+  if (note.audio_path !== prevAudioPath) {
+    setPrevAudioPath(note.audio_path);
     setPlayingAudioPath(note.audio_path || null);
     setShouldAutoPlay(false);
-  }, [note.id, note.audio_path]);
+  }
 
-  // Debounced auto-save for description
+  // Debounced auto-save for description. Keep the latest value in a ref (updated
+  // in an effect, not during render) so the timeout below saves the newest text.
   const descValueRef = useRef(descValue);
-  descValueRef.current = descValue;
+  useEffect(() => {
+    descValueRef.current = descValue;
+  }, [descValue]);
 
   useEffect(() => {
     // Skip initial render and when description matches note
@@ -1698,9 +1709,11 @@ function NoteView({
       // Listen-only segments have mic_path === null, so fall back to system_path.
       if (migrated) {
         setPlayingAudioPath(migrated.mic_path ?? migrated.system_path);
-      } else if (segments.length > 0 && !playingAudioPath) {
+      } else if (segments.length > 0) {
+        // Only pick a default when nothing is playing yet — done via the
+        // functional updater so we don't need playingAudioPath as a dependency.
         const first = segments[0];
-        setPlayingAudioPath(first.mic_path ?? first.system_path);
+        setPlayingAudioPath((current) => current ?? (first.mic_path ?? first.system_path));
       }
     };
     loadSegments().catch(console.error);

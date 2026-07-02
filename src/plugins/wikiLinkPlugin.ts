@@ -1,13 +1,30 @@
 import { $node, $inputRule, $remark } from '@milkdown/kit/utils';
 import { InputRule } from '@milkdown/kit/prose/inputrules';
-import type { Node } from '@milkdown/kit/prose/model';
+import type { Node, NodeType } from '@milkdown/kit/prose/model';
+import type {
+  MarkdownNode,
+  ParserState,
+  Root,
+  SerializerState,
+} from '@milkdown/kit/transformer';
+
+// Minimal mdast node shape for the remark tree transform below.
+interface MdastNode {
+  type: string;
+  value?: string;
+  children?: MdastNode[];
+  data?: { hName?: string; hProperties?: Record<string, string> };
+  target?: string;
+  alias?: string | null;
+  [key: string]: unknown;
+}
 
 // Remark plugin to parse [[wiki links]] in markdown AST
 function remarkWikiLink() {
   const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
-  return (tree: any) => {
-    const visit = (node: any, parent?: any, index?: number) => {
+  return (tree: Root) => {
+    const visit = (node: MdastNode, parent?: MdastNode, index?: number) => {
       if (node.type === 'text' && parent) {
         const value = node.value as string;
         const matches: Array<{ match: RegExpExecArray; start: number; end: number }> = [];
@@ -24,7 +41,7 @@ function remarkWikiLink() {
         if (matches.length === 0) return;
 
         // Build new children array with wiki link nodes
-        const newChildren: any[] = [];
+        const newChildren: MdastNode[] = [];
         let lastEnd = 0;
 
         for (const { match, start, end } of matches) {
@@ -66,7 +83,7 @@ function remarkWikiLink() {
         }
 
         // Replace the text node with our new children
-        if (typeof index === 'number') {
+        if (typeof index === 'number' && parent.children) {
           parent.children.splice(index, 1, ...newChildren);
         }
       }
@@ -80,7 +97,7 @@ function remarkWikiLink() {
       }
     };
 
-    visit(tree);
+    visit(tree as unknown as MdastNode);
   };
 }
 
@@ -127,16 +144,16 @@ export const wikiLinkNode = $node('wikiLink', () => ({
     ];
   },
   parseMarkdown: {
-    match: (node: any) => node.type === 'wikiLink',
-    runner: (state: any, node: any, type: any) => {
-      const target = node.target || '';
-      const alias = node.alias || null;
+    match: (node: MarkdownNode) => node.type === 'wikiLink',
+    runner: (state: ParserState, node: MarkdownNode, type: NodeType) => {
+      const target = typeof node.target === 'string' ? node.target : '';
+      const alias = typeof node.alias === 'string' ? node.alias : null;
       state.addNode(type, { target, alias, isBroken: false });
     },
   },
   toMarkdown: {
     match: (node: Node) => node.type.name === 'wikiLink',
-    runner: (state: any, node: Node) => {
+    runner: (state: SerializerState, node: Node) => {
       const { target, alias } = node.attrs;
       if (alias) {
         state.addNode('text', undefined, `[[${target}|${alias}]]`);

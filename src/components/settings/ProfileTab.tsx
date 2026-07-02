@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useProfile } from "./useProfile";
 
 export function ProfileTab() {
@@ -8,11 +8,16 @@ export function ProfileTab() {
   const [avatar, setAvatar] = useState(profile.avatar);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
+  // Re-sync fields when the stored profile changes (e.g. loaded from DB).
+  // Done during render rather than in an effect; `profile` has a stable
+  // identity (Zustand), so this only runs on an actual change.
+  const [prevProfile, setPrevProfile] = useState(profile);
+  if (profile !== prevProfile) {
+    setPrevProfile(profile);
     setName(profile.name);
     setEmail(profile.email);
     setAvatar(profile.avatar);
-  }, [profile]);
+  }
 
   const hasChanges =
     name !== profile.name ||

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Note, UpdateNote } from "../types";
 
 interface NoteEditorProps {
@@ -14,11 +14,16 @@ export function NoteEditor({ note, onSave, onClose }: NoteEditorProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Re-sync the form when a different note is passed in. Adjusting state during
+  // render (instead of in an effect) avoids an extra render pass. `note` has a
+  // stable identity between renders, so this only runs when it actually changes.
+  const [prevNote, setPrevNote] = useState(note);
+  if (note !== prevNote) {
+    setPrevNote(note);
     setTitle(note.title);
     setDescription(note.description || "");
     setParticipants(note.participants || "");
-  }, [note]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

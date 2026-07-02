@@ -391,8 +391,6 @@ export function GraphView({ onSelectNote }: GraphViewProps) {
   }, [
     filteredData,
     highlightedNodeIds,
-    viewMode,
-    localCenterNoteId,
     onSelectNote,
     setHoveredNode,
     settings,

@@ -13,6 +13,29 @@ interface SystemStatus extends SystemStatusData {
   refresh: () => Promise<SystemStatusData>;
 }
 
+// Query the current system status. Module-level (no React state) so both the
+// mount effect and the manual `refresh` can share it without duplicating logic.
+async function fetchSystemStatus(): Promise<SystemStatusData> {
+  const [micAvailable, micPermission, systemAudioSupported] = await Promise.all([
+    invoke<boolean>("has_microphone_available"),
+    invoke<boolean>("has_microphone_permission"),
+    invoke<boolean>("is_system_audio_supported"),
+  ]);
+
+  let systemAudioPermission = true;
+  if (systemAudioSupported) {
+    systemAudioPermission = await invoke<boolean>("has_system_audio_permission");
+  }
+
+  return {
+    micAvailable,
+    micPermission,
+    systemAudioSupported,
+    systemAudioPermission,
+    loading: false,
+  };
+}
+
 export function useSystemStatus(): SystemStatus {
   const [status, setStatus] = useState<SystemStatusData>({
     micAvailable: true,
@@ -24,25 +47,7 @@ export function useSystemStatus(): SystemStatus {
 
   const checkStatus = useCallback(async (): Promise<SystemStatusData> => {
     try {
-      const [micAvailable, micPermission, systemAudioSupported] = await Promise.all([
-        invoke<boolean>("has_microphone_available"),
-        invoke<boolean>("has_microphone_permission"),
-        invoke<boolean>("is_system_audio_supported"),
-      ]);
-
-      let systemAudioPermission = true;
-      if (systemAudioSupported) {
-        systemAudioPermission = await invoke<boolean>("has_system_audio_permission");
-      }
-
-      const newStatus = {
-        micAvailable,
-        micPermission,
-        systemAudioSupported,
-        systemAudioPermission,
-        loading: false,
-      };
-
+      const newStatus = await fetchSystemStatus();
       setStatus(newStatus);
       return newStatus;
     } catch (err) {
@@ -53,9 +58,20 @@ export function useSystemStatus(): SystemStatus {
     }
   }, [status]);
 
+  // Initial check. Inlined so setState only runs in the async continuation.
   useEffect(() => {
-    checkStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    fetchSystemStatus()
+      .then((newStatus) => {
+        if (!cancelled) setStatus(newStatus);
+      })
+      .catch((err) => {
+        console.error("Failed to check system status:", err);
+        if (!cancelled) setStatus((prev) => ({ ...prev, loading: false }));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { ...status, refresh: checkStatus };

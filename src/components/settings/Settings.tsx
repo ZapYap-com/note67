@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useModels, useOllama, useUpdater, useSystemStatus } from "../../hooks";
 import { useProfile } from "./useProfile";
 import { WarningIcon } from "./WarningIcon";
@@ -39,10 +39,13 @@ export function Settings({ onClose, initialTab = DEFAULT_TAB, onTabChange }: Set
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const { profile } = useProfile();
 
-  // Sync activeTab when initialTab changes (e.g., clicking Details while modal is open)
-  useEffect(() => {
+  // Sync activeTab when initialTab changes (e.g., clicking Details while modal
+  // is open). Adjusting state during render avoids an extra render pass.
+  const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
+  if (initialTab !== prevInitialTab) {
+    setPrevInitialTab(initialTab);
     setActiveTab(initialTab);
-  }, [initialTab]);
+  }
 
   // Handle tab change and notify parent to keep state in sync
   const handleTabChange = (tab: SettingsTab) => {

@@ -51,7 +51,7 @@ export function useModels(): UseModelsReturn {
   // Initialize on first mount - load settings first, then refreshModels will auto-load saved model
   useEffect(() => {
     loadSettings().then(() => refreshModels());
-  }, []);
+  }, [loadSettings, refreshModels]);
 
   return {
     models,
