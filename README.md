@@ -8,7 +8,15 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.23)
+## What's New (v0.1.24)
+
+- Tasks — turn a meeting's action items into a real to-do list, or add standalone tasks; each task has a due date, description, and subtasks
+- Central Tasks page — open tasks from every meeting in one place, grouped by date (Overdue / Today / Tomorrow / Future) with quick filters
+- AI "Generate" pulls action items straight from a meeting into your task list; click a task to jump back to its note
+- Smarter summaries — when you take your own notes, the AI summary now expands them with detail from the transcript instead of ignoring them
+- First-run setup wizard — guided setup for the transcription model, AI assistant, and microphone/screen permissions
+
+### v0.1.23
 
 - Sentence-based transcript formatting — long monologues break into readable sentences instead of one block of text
 - Interval timestamps — a timestamp every 30 seconds within a speaker turn for easier navigation
@@ -78,7 +86,12 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter
 - [x] AI-powered summaries via Ollama
+- [x] Smarter summaries that expand your own notes using the transcript
 - [x] AI writing assistant sidebar (improve, summarize, expand notes)
+- [x] Tasks with due dates, descriptions, and subtasks
+- [x] Central Tasks page grouped by date (Overdue / Today / Tomorrow / Future)
+- [x] AI-generated action items from meetings into your task list
+- [x] First-run setup wizard (model, AI assistant, permissions)
 - [x] Export to Markdown
 - [x] Settings with Profile, Whisper, Ollama, System tabs
 - [x] Dark mode support
