@@ -11,22 +11,33 @@ import {
  * assertions to the new surfaces (see TODOs).
  */
 
-test.describe("first-run / needs setup", () => {
-  test("prompts the user to set up Whisper & Ollama", async ({ page }) => {
+test.describe("first-run / needs setup (#7 onboarding)", () => {
+  test("shows the onboarding wizard on the first unmet step", async ({ page }) => {
     // No Whisper model, Ollama down, permissions not granted.
     await installTauriMock(page, needsSetupCommands);
     await page.goto("/");
 
-    // Today this shows in the EmptyState. TODO(#7): assert the onboarding
-    // wizard overlay + its first unmet step instead.
+    // The skippable wizard overlays the app, landing on the first unmet step.
+    await expect(page.getByRole("heading", { name: /welcome to note67/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /download a transcription model/i })
+    ).toBeVisible();
+
+    await page.screenshot({ path: "e2e/__screenshots__/onboarding.png", fullPage: true });
+  });
+
+  test("'Skip for now' dismisses the wizard", async ({ page }) => {
+    await installTauriMock(page, needsSetupCommands);
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: /welcome to note67/i })).toBeVisible();
+    await page.getByRole("button", { name: /skip for now/i }).click();
+
+    // Wizard gone; the app's own setup affordance remains behind it.
+    await expect(page.getByRole("heading", { name: /welcome to note67/i })).toBeHidden();
     await expect(
       page.getByRole("button", { name: /set up whisper & ollama/i })
     ).toBeVisible();
-
-    // The "Start listening" button should be disabled until setup completes.
-    await expect(page.getByRole("button", { name: /start listening/i })).toBeDisabled();
-
-    await page.screenshot({ path: "e2e/__screenshots__/needs-setup.png", fullPage: true });
   });
 });
 

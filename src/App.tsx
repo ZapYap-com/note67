@@ -17,6 +17,7 @@ import {
   BacklinksPanel,
   UnlinkedMentionsPanel,
   GraphView,
+  OnboardingWizard,
 } from "./components";
 import { exportApi, aiApi, notesApi, transcriptionApi, tagsApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
@@ -33,6 +34,7 @@ import {
   useSystemStatus,
   useUploadedAudio,
   useAIWriting,
+  useOnboarding,
 } from "./hooks";
 import { useThemeStore } from "./stores/themeStore";
 import type { Note, TranscriptSegment, AudioSegment } from "./types";
@@ -82,6 +84,19 @@ function App() {
   const micOk = micAvailable && micPermission;
   const systemOk = systemAudioSupported && systemAudioPermission;
   const systemNeedsSetup = !systemLoading && !micOk && !systemOk;
+
+  // First-run onboarding: show a skippable wizard while core setup is
+  // incomplete and the user hasn't dismissed it yet.
+  const { dismissed: onboardingDismissed, dismiss: dismissOnboarding } =
+    useOnboarding();
+  const setupIncomplete =
+    !loadedModel ||
+    !ollamaRunning ||
+    !ollamaModel ||
+    (micAvailable && !micPermission) ||
+    (systemAudioSupported && !systemAudioPermission);
+  const showOnboarding =
+    onboardingDismissed === false && !systemLoading && setupIncomplete;
 
   const { profile } = useProfile();
   const theme = useThemeStore((state) => state.theme);
@@ -1325,6 +1340,14 @@ function App() {
 
       {/* Meeting Detected Popup */}
       <MeetingDetectedPopup onStartListening={handleStartRecording} />
+
+      {/* First-run onboarding wizard */}
+      {showOnboarding && (
+        <OnboardingWizard
+          onDismiss={dismissOnboarding}
+          onStatusChange={refreshSystemStatus}
+        />
+      )}
     </div>
   );
 }

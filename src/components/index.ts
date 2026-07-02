@@ -23,3 +23,4 @@ export { BacklinksPanel } from "./BacklinksPanel";
 export { UnlinkedMentionsPanel } from "./UnlinkedMentionsPanel";
 export { SearchModal } from "./SearchModal";
 export { GraphView } from "./graph";
+export { OnboardingWizard } from "./onboarding";
