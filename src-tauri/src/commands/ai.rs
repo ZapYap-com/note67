@@ -699,10 +699,21 @@ pub fn get_action_items(
     db.get_action_items(&note_id).map_err(|e| e.to_string())
 }
 
-/// #3: Get every action item across all notes (central Tasks page).
+/// #3: Open tasks across all notes (default central Tasks page load).
 #[tauri::command]
-pub fn get_all_action_items(db: State<'_, Database>) -> Result<Vec<ActionItem>, String> {
-    db.get_all_action_items().map_err(|e| e.to_string())
+pub fn get_open_action_items(db: State<'_, Database>) -> Result<Vec<ActionItem>, String> {
+    db.get_open_action_items().map_err(|e| e.to_string())
+}
+
+/// #3: A page of completed tasks (newest first), loaded lazily.
+#[tauri::command]
+pub fn get_completed_action_items(
+    limit: i64,
+    offset: i64,
+    db: State<'_, Database>,
+) -> Result<Vec<ActionItem>, String> {
+    db.get_completed_action_items(limit, offset)
+        .map_err(|e| e.to_string())
 }
 
 /// #3: Create an action item (top-level, or a subtask when `parent_id` is set).

@@ -77,7 +77,8 @@ export const defaultCommands: CommandMap = {
 
   // action items (#3)
   get_action_items: [],
-  get_all_action_items: [],
+  get_open_action_items: [],
+  get_completed_action_items: [],
   extract_action_items: [],
   create_action_item: {
     id: 999,

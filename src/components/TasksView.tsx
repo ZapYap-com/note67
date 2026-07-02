@@ -51,7 +51,38 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
+  // Completed tasks load lazily (a long history isn't pulled with open tasks).
+  const [completedLoaded, setCompletedLoaded] = useState(false);
+  const [completedOffset, setCompletedOffset] = useState(0);
+  const [hasMoreCompleted, setHasMoreCompleted] = useState(false);
+  const [loadingCompleted, setLoadingCompleted] = useState(false);
   const m = useTaskMutations(items, setItems);
+
+  const COMPLETED_PAGE = 50;
+  const loadCompletedPage = async () => {
+    if (loadingCompleted) return;
+    setLoadingCompleted(true);
+    try {
+      const page = await tasksApi.getCompletedActionItems(COMPLETED_PAGE, completedOffset);
+      setItems((prev) => {
+        const ids = new Set(prev.map((i) => i.id));
+        return [...prev, ...page.filter((i) => !ids.has(i.id))];
+      });
+      setCompletedOffset((o) => o + COMPLETED_PAGE);
+      setHasMoreCompleted(page.filter((i) => i.parent_id == null).length >= COMPLETED_PAGE);
+      setCompletedLoaded(true);
+    } catch (e) {
+      console.error("Failed to load completed tasks:", e);
+    } finally {
+      setLoadingCompleted(false);
+    }
+  };
+
+  const toggleShowCompleted = () => {
+    const next = !showCompleted;
+    setShowCompleted(next);
+    if (next && !completedLoaded) loadCompletedPage();
+  };
 
   // Add a standalone task (not tied to any note) with today's date.
   const addStandaloneTask = async (text: string) => {
@@ -71,7 +102,7 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
   useEffect(() => {
     let cancelled = false;
     tasksApi
-      .getAllActionItems()
+      .getOpenActionItems()
       .then((data) => {
         if (cancelled) return;
         setItems(data);
@@ -139,7 +170,7 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
               Tasks
             </h1>
             <button
-              onClick={() => setShowCompleted((v) => !v)}
+              onClick={toggleShowCompleted}
               className="text-xs px-2.5 py-1 rounded-full transition-colors"
               style={{
                 backgroundColor: showCompleted ? "var(--color-accent)" : "var(--color-bg-subtle)",
@@ -250,6 +281,17 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
                 })}
               </div>
             ))
+          )}
+
+          {showCompleted && hasMoreCompleted && (
+            <button
+              onClick={loadCompletedPage}
+              disabled={loadingCompleted}
+              className="w-full mt-1 mb-2 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-50"
+              style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-bg-subtle)" }}
+            >
+              {loadingCompleted ? "Loading…" : "Load more completed"}
+            </button>
           )}
         </div>
 

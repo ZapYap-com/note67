@@ -153,7 +153,7 @@ test.describe("ready state", () => {
       list_notes: [note],
       get_note: note,
       get_action_items: [task],
-      get_all_action_items: [task],
+      get_open_action_items: [task],
     });
     await page.goto("/");
 

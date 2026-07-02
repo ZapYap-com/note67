@@ -259,14 +259,43 @@ impl Database {
         Ok(items)
     }
 
-    /// Get every action item across all notes (for the central Tasks page).
-    pub fn get_all_action_items(&self) -> anyhow::Result<Vec<ActionItem>> {
+    /// Open (unchecked) top-level tasks across all notes plus their subtasks —
+    /// the default central Tasks page load. Bounded by the number of open tasks.
+    pub fn get_open_action_items(&self) -> anyhow::Result<Vec<ActionItem>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let mut stmt = conn.prepare(&format!(
-            "SELECT {ACTION_ITEM_COLS} FROM action_items ORDER BY sort_order ASC, created_at ASC",
+            "SELECT {ACTION_ITEM_COLS} FROM action_items
+             WHERE (parent_id IS NULL AND done = 0)
+                OR parent_id IN (SELECT id FROM action_items WHERE parent_id IS NULL AND done = 0)
+             ORDER BY sort_order ASC, created_at ASC",
         ))?;
         let items = stmt
             .query_map([], Self::map_action_item)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(items)
+    }
+
+    /// A page of completed top-level tasks (newest first) plus their subtasks,
+    /// loaded lazily so a long history isn't pulled in one go.
+    pub fn get_completed_action_items(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> anyhow::Result<Vec<ActionItem>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let mut stmt = conn.prepare(&format!(
+            "WITH page AS (
+                 SELECT id FROM action_items
+                 WHERE parent_id IS NULL AND done = 1
+                 ORDER BY updated_at DESC LIMIT ?1 OFFSET ?2
+             )
+             SELECT {ACTION_ITEM_COLS} FROM action_items
+             WHERE id IN (SELECT id FROM page) OR parent_id IN (SELECT id FROM page)
+             ORDER BY updated_at DESC",
+        ))?;
+        let items = stmt
+            .query_map([limit, offset], Self::map_action_item)?
             .filter_map(|r| r.ok())
             .collect();
         Ok(items)

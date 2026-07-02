@@ -7,9 +7,14 @@ export const tasksApi = {
     return invoke("get_action_items", { noteId });
   },
 
-  /** Get every action item across all notes (central Tasks page). */
-  getAllActionItems: (): Promise<ActionItem[]> => {
-    return invoke("get_all_action_items");
+  /** Open tasks across all notes (default central Tasks page load). */
+  getOpenActionItems: (): Promise<ActionItem[]> => {
+    return invoke("get_open_action_items");
+  },
+
+  /** A page of completed tasks (newest first), loaded lazily. */
+  getCompletedActionItems: (limit: number, offset: number): Promise<ActionItem[]> => {
+    return invoke("get_completed_action_items", { limit, offset });
   },
 
   /** AI-extract action items from a note's transcript + notes into structured rows. */
