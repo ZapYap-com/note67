@@ -135,21 +135,25 @@ test.describe("ready state", () => {
 
   test("global Tasks view lists open action items (#3)", async ({ page }) => {
     const note = makeNote({ title: "Weekly Sync" });
+    const task = {
+      id: 1,
+      note_id: note.id,
+      stable_id: "a1",
+      text: "Send the pricing deck",
+      description: null,
+      parent_id: null,
+      assignee: null,
+      due_date: null,
+      done: false,
+      sort_order: 0,
+      created_at: "2026-07-02T09:31:00.000Z",
+      updated_at: "2026-07-02T09:31:00.000Z",
+    };
     await installTauriMock(page, {
       list_notes: [note],
       get_note: note,
-      list_all_open_action_items: [
-        {
-          id: 1,
-          note_id: note.id,
-          note_title: "Weekly Sync",
-          text: "Send the pricing deck",
-          assignee: "sofia",
-          due_date: null,
-          done: false,
-          created_at: "2026-07-02T09:31:00.000Z",
-        },
-      ],
+      get_action_items: [task],
+      list_all_open_action_items: [{ ...task, note_title: "Weekly Sync" }],
     });
     await page.goto("/");
 
@@ -158,11 +162,13 @@ test.describe("ready state", () => {
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
     await expect(page.getByText("Send the pricing deck")).toBeVisible();
 
-    // Clicking a task opens its source note.
+    // Clicking a task opens its note's Tasks tab with that task selected — the
+    // detail pane (subtask adder) is only shown when a task is selected.
     await page.getByText("Send the pricing deck").click();
     const tabBar = page.locator("div.flex.gap-6", {
       has: page.getByRole("button", { name: "transcript", exact: true }),
     });
     await expect(tabBar.getByRole("button", { name: "note", exact: true })).toBeVisible();
+    await expect(page.getByPlaceholder("Add a subtask…")).toBeVisible();
   });
 });

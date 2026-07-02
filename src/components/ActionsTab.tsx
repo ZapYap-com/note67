@@ -15,13 +15,15 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   const [extracting, setExtracting] = useState(false);
   const [draft, setDraft] = useState("");
   const [subDraft, setSubDraft] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Seed the selection from focusTaskId so opening from the global Tasks view
+  // lands on that task (not just the first one).
+  const [selectedId, setSelectedId] = useState<number | null>(focusTaskId ?? null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const loading = noteId !== loadedNoteId;
 
-  // Focus a specific task when navigated from the global Tasks view. Adjust
-  // during render (guarded) so it wins over the default first-task selection.
+  // Re-focus when focusTaskId changes within the same mount (e.g. navigating to
+  // another task in the already-open note). Adjust during render, guarded.
   const [prevFocus, setPrevFocus] = useState(focusTaskId);
   if (focusTaskId !== prevFocus) {
     setPrevFocus(focusTaskId);
