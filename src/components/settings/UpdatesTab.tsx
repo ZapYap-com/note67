@@ -23,6 +23,13 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.26",
+      date: "August 2026",
+      changes: [
+        "Security - updated bundled third-party components to patch five known vulnerabilities, including the sanitizer that cleans pasted content in the editor",
+      ],
+    },
+    {
       version: "0.1.25",
       date: "July 2026",
       changes: [

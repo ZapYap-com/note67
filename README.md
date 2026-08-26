@@ -8,7 +8,11 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.25)
+## What's New (v0.1.26)
+
+- Security — updated bundled third-party components to patch five known vulnerabilities, including the sanitizer that cleans pasted content in the editor
+
+### v0.1.25
 
 - Fixed your own voice missing from the transcript — quiet microphones are now boosted before transcription instead of being treated as silence
 - Fixed short replies like "hello" or "thanks" being dropped from the live transcript
