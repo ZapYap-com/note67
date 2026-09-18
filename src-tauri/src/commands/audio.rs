@@ -330,8 +330,10 @@ pub fn stop_dual_recording_with_segments(
     db: State<Database>,
     note_id: String,
 ) -> Result<DualRecordingResult, String> {
-    // Get the recording duration before stopping
-    let duration_ms = state.recording.get_segment_elapsed_ms();
+    // Read the open segment before stop_recording resets the session: it
+    // zeroes current_segment_db_id, so reading the id afterwards meant the
+    // final segment's duration was never saved.
+    let open_segment = open_segment_timing(&state.recording);
 
     // Stop mic recording
     let mic_path = audio::stop_recording(&state.recording)
@@ -355,9 +357,7 @@ pub fn stop_dual_recording_with_segments(
         *sys_path = None;
     }
 
-    // Update segment duration in database
-    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
-    if segment_id > 0 {
+    if let Some((segment_id, duration_ms)) = open_segment {
         let _ = db.update_segment_duration(segment_id, duration_ms);
     }
 
@@ -373,7 +373,13 @@ pub fn stop_dual_recording_with_segments(
     })
 }
 
-/// Rebuild `{note_id}.wav` from all of the note's recording segments, in order.
+/// Rebuild `{note_id}_playback.wav` from all of the note's recording segments,
+/// in order.
+///
+/// The track used to be `{note_id}.wav`, which is also the name of a legacy
+/// mic-only recording, and such a recording becomes segment 0 of its note: so
+/// continuing that note, or rebuilding it, replaced the recording with the
+/// mix. The combined track now has a name no recording uses.
 ///
 /// Returns `None` (having logged) if it cannot be built — playback is a
 /// convenience, and the per-segment files are still on disk either way, so a
@@ -409,7 +415,7 @@ fn build_note_playback(app: &AppHandle, db: &Database, note_id: &str) -> Option<
         return None;
     }
 
-    let playback_file = recordings_dir.join(format!("{}.wav", note_id));
+    let playback_file = recordings_dir.join(format!("{}_playback.wav", note_id));
     match build_playback_track(&inputs, &playback_file) {
         Ok(()) => Some(playback_file.to_string_lossy().to_string()),
         Err(e) => {
@@ -438,7 +444,6 @@ fn wav_duration_secs(path: &PathBuf) -> Option<f64> {
 /// correct if a segment is ever removed or re-recorded.
 #[tauri::command]
 pub fn playback_needs_rebuild(
-    app: AppHandle,
     db: State<Database>,
     note_id: String,
 ) -> Result<bool, String> {
@@ -462,12 +467,13 @@ pub fn playback_needs_rebuild(
         return Ok(false);
     }
 
-    let recordings_dir = app
-        .path()
-        .app_data_dir()
+    // Measure the track the note actually plays. It has had two names, so the
+    // note's audio_path, not a guessed filename, is the one that counts.
+    let current = db
+        .get_note_audio_path(&note_id)
         .map_err(|e| e.to_string())?
-        .join("recordings");
-    let current = wav_duration_secs(&recordings_dir.join(format!("{}.wav", note_id)))
+        .map(PathBuf::from)
+        .and_then(|p| wav_duration_secs(&p))
         .unwrap_or(0.0);
 
     // Tolerance for resampling and rounding across segment boundaries.
@@ -476,16 +482,20 @@ pub fn playback_needs_rebuild(
 
 /// Rebuild a note's combined playback track from its segments.
 ///
-/// Only regenerates the derived {note_id}.wav; transcripts, notes and the
-/// per-segment audio are untouched, so it is safe to run repeatedly.
+/// Only regenerates the derived {note_id}_playback.wav and points the note at
+/// it; transcripts, notes and the per-segment audio are untouched, so it is
+/// safe to run repeatedly.
 #[tauri::command]
 pub fn rebuild_note_playback(
     app: AppHandle,
     db: State<Database>,
     note_id: String,
 ) -> Result<String, String> {
-    build_note_playback(&app, &db, &note_id)
-        .ok_or_else(|| "Could not rebuild playback from this note's recordings".to_string())
+    let path = build_note_playback(&app, &db, &note_id)
+        .ok_or_else(|| "Could not rebuild playback from this note's recordings".to_string())?;
+    db.set_note_audio_path(&note_id, &path)
+        .map_err(|e| e.to_string())?;
+    Ok(path)
 }
 
 /// Path to a single recording segment's audio, mixed for playback.
@@ -985,6 +995,20 @@ pub fn start_dual_recording_with_segments(
 // Used when the microphone is unavailable or denied but system audio is supported.
 // The user is just listening into a meeting; only system audio is captured.
 
+/// The segment a stop should close: its database id and how long it ran.
+///
+/// None when no segment is running. A paused segment already had its duration
+/// saved by the pause, and the elapsed clock keeps counting through a pause,
+/// so timing it again at stop would overwrite a correct duration with one that
+/// includes the paused time.
+fn open_segment_timing(state: &RecordingState) -> Option<(i64, i64)> {
+    if state.get_phase() != RecordingPhase::Recording {
+        return None;
+    }
+    let segment_id = state.current_segment_db_id.load(Ordering::SeqCst);
+    (segment_id > 0).then(|| (segment_id, state.get_segment_elapsed_ms()))
+}
+
 fn set_phase_for_system_only_session(state: &RecordingState) {
     use std::time::Instant;
     state.set_phase(RecordingPhase::Recording);
@@ -1070,7 +1094,7 @@ pub fn stop_system_only_recording_with_segments(
     db: State<Database>,
     _note_id: String,
 ) -> Result<DualRecordingResult, String> {
-    let duration_ms = state.recording.get_segment_elapsed_ms();
+    let open_segment = open_segment_timing(&state.recording);
 
     let system_path = {
         let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
@@ -1086,8 +1110,7 @@ pub fn stop_system_only_recording_with_segments(
         *sys_path = None;
     }
 
-    let segment_id = state.recording.current_segment_db_id.load(Ordering::SeqCst);
-    if segment_id > 0 {
+    if let Some((segment_id, duration_ms)) = open_segment {
         let _ = db.update_segment_duration(segment_id, duration_ms);
     }
 
@@ -1202,4 +1225,40 @@ pub fn resume_system_only_recording(
         system_path: Some(system_path.to_string_lossy().to_string()),
         playback_path: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn running_segment(id: i64, started: Duration) -> RecordingState {
+        let state = RecordingState::new();
+        state.set_phase(RecordingPhase::Recording);
+        state.current_segment_db_id.store(id, Ordering::SeqCst);
+        *state.segment_start_time.lock().unwrap() = Some(Instant::now() - started);
+        state
+    }
+
+    #[test]
+    fn a_running_segment_is_timed_at_stop() {
+        let state = running_segment(7, Duration::from_secs(90));
+        let (id, ms) = open_segment_timing(&state).expect("a running segment");
+        assert_eq!(id, 7);
+        assert!((90_000..95_000).contains(&ms), "timed {ms} ms");
+    }
+
+    #[test]
+    fn a_paused_segment_keeps_the_duration_its_pause_saved() {
+        let state = running_segment(7, Duration::from_secs(600));
+        state.set_phase(RecordingPhase::Paused);
+        assert_eq!(open_segment_timing(&state), None);
+    }
+
+    #[test]
+    fn nothing_is_timed_after_the_session_resets() {
+        let state = running_segment(7, Duration::from_secs(5));
+        state.reset_for_new_session();
+        assert_eq!(open_segment_timing(&state), None);
+    }
 }

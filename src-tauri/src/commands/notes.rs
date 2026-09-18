@@ -224,45 +224,58 @@ pub fn update_note(
 #[tauri::command]
 pub fn search_notes(db: State<Database>, query: String) -> Result<Vec<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    search_notes_fts(&conn, &query).map_err(|e| e.to_string())
+}
 
-    // Use FTS5 search with fallback to LIKE for simple queries
-    let search_query = if query.contains('*') || query.contains('"') {
-        query.clone()
-    } else {
-        format!("{}*", query) // Prefix search by default
+/// Turn what the user typed into an FTS5 query that cannot be a syntax error.
+///
+/// The raw text used to go straight into MATCH, where `-`, `'`, `.`, `+`,
+/// `#`, `:`, parentheses, an unbalanced quote or a bare AND/OR/NOT are all
+/// query syntax. Ordinary searches like "q3-planning", "don't" or "C++" failed,
+/// the error was swallowed, and the modal said "No notes found". Each word is
+/// now quoted as a literal (inner quotes doubled), and the last one also
+/// matches as a prefix so results keep up while the user is typing.
+fn fts_query(input: &str) -> Option<String> {
+    let words: Vec<String> = input
+        .split_whitespace()
+        .map(|word| format!("\"{}\"", word.replace('"', "\"\"")))
+        .collect();
+    if words.is_empty() {
+        return None;
+    }
+    Some(format!("{}*", words.join(" ")))
+}
+
+fn search_notes_fts(conn: &rusqlite::Connection, query: &str) -> rusqlite::Result<Vec<Note>> {
+    let Some(search_query) = fts_query(query) else {
+        return Ok(Vec::new());
     };
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT m.id, m.title, m.description, m.participants, m.started_at, m.ended_at,
-                    m.audio_path, m.created_at, m.updated_at
-             FROM notes m
-             JOIN notes_fts fts ON m.rowid = fts.rowid
-             WHERE notes_fts MATCH ?1
-             ORDER BY m.started_at DESC
-             LIMIT 50",
-        )
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT m.id, m.title, m.description, m.participants, m.started_at, m.ended_at,
+                m.audio_path, m.created_at, m.updated_at
+         FROM notes m
+         JOIN notes_fts fts ON m.rowid = fts.rowid
+         WHERE notes_fts MATCH ?1
+         ORDER BY m.started_at DESC
+         LIMIT 50",
+    )?;
 
-    let notes = stmt
-        .query_map([&search_query], |row| {
-            Ok(Note {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                description: row.get(2)?,
-                participants: row.get(3)?,
-                started_at: parse_datetime(row.get::<_, String>(4)?),
-                ended_at: row.get::<_, Option<String>>(5)?.map(parse_datetime),
-                audio_path: row.get(6)?,
-                created_at: parse_datetime(row.get::<_, String>(7)?),
-                updated_at: parse_datetime(row.get::<_, String>(8)?),
-            })
+    stmt.query_map([&search_query], |row| {
+        Ok(Note {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            participants: row.get(3)?,
+            started_at: parse_datetime(row.get::<_, String>(4)?),
+            ended_at: row.get::<_, Option<String>>(5)?.map(parse_datetime),
+            audio_path: row.get(6)?,
+            created_at: parse_datetime(row.get::<_, String>(7)?),
+            updated_at: parse_datetime(row.get::<_, String>(8)?),
         })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Ok(notes)
+    })?
+    // A bad row is an error to report, not a result to drop silently.
+    .collect()
 }
 
 #[tauri::command]
@@ -435,4 +448,76 @@ pub fn migrate_legacy_audio(
 
     db.migrate_legacy_audio(&note_id, duration_ms)
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn notebook() -> Database {
+        let db = Database::in_memory();
+        {
+            let conn = db.conn.lock().unwrap();
+            for (id, title, body) in [
+                ("n1", "Q3 planning", "Agenda for q3-planning with the team"),
+                ("n2", "Retro", "We don't ship on Fridays. Release v1.2 next."),
+                ("n3", "Interview", "Strong C++ background, email sam@example.com"),
+                ("n4", "Design sync", "Discussed #design tokens (colors: warm)"),
+            ] {
+                conn.execute(
+                    "INSERT INTO notes (id, title, started_at, created_at, updated_at, description)
+                     VALUES (?1, ?2, '2026-01-01', '2026-01-01', '2026-01-01', ?3)",
+                    [id, title, body],
+                )
+                .unwrap();
+            }
+        }
+        db
+    }
+
+    fn ids(db: &Database, query: &str) -> Vec<String> {
+        let conn = db.conn.lock().unwrap();
+        let mut ids: Vec<String> = search_notes_fts(&conn, query)
+            .unwrap_or_else(|e| panic!("search for {query:?} failed: {e}"))
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn punctuation_in_ordinary_searches_is_not_query_syntax() {
+        let db = notebook();
+        assert_eq!(ids(&db, "q3-planning"), ["n1"]);
+        assert_eq!(ids(&db, "don't"), ["n2"]);
+        assert_eq!(ids(&db, "v1.2"), ["n2"]);
+        // The tokenizer drops '+', so this is the prefix "c": it also matches
+        // "colors", but it no longer errors and it finds the C++ note.
+        assert!(ids(&db, "C++").contains(&"n3".to_string()));
+        assert_eq!(ids(&db, "sam@example.com"), ["n3"]);
+        assert_eq!(ids(&db, "#design"), ["n4"]);
+        assert_eq!(ids(&db, "colors: warm"), ["n4"]);
+    }
+
+    #[test]
+    fn operators_and_stray_quotes_do_not_error() {
+        let db = notebook();
+        for query in ["budget AND", "NOT", "OR design", "\"design", "(tokens", "a\"b", "-", "*"] {
+            ids(&db, query); // panics on an FTS syntax error
+        }
+    }
+
+    #[test]
+    fn the_last_word_matches_as_a_prefix_while_typing() {
+        let db = notebook();
+        assert_eq!(ids(&db, "plan"), ["n1"]);
+        assert_eq!(ids(&db, "release v1"), ["n2"]);
+    }
+
+    #[test]
+    fn a_blank_query_returns_nothing() {
+        let db = notebook();
+        assert!(ids(&db, "   ").is_empty());
+    }
 }

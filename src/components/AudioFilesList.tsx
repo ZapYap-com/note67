@@ -22,6 +22,8 @@ interface AudioFilesListProps {
   onDeleteUpload: (uploadId: number) => void;
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
+  // The rebuilt track has a new path, saved on the note; the parent refetches.
+  onPlaybackRebuilt?: () => void;
   compact?: boolean; // Hide header and top border when embedded in player
 }
 
@@ -227,6 +229,7 @@ export function AudioFilesList({
   onDeleteUpload,
   onReorder,
   onPlayAudio,
+  onPlaybackRebuilt,
   compact = false,
 }: AudioFilesListProps) {
   // Check if we have a main recording (legacy format - no segments)
@@ -386,6 +389,7 @@ export function AudioFilesList({
     try {
       const path = await audioApi.rebuildNotePlayback(noteId);
       setNeedsRebuild(false);
+      onPlaybackRebuilt?.();
       // Play the repaired track so the result is immediately audible.
       onPlayAudio?.(path);
     } catch (err) {

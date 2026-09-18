@@ -66,7 +66,26 @@ fn read_wav_as_f32(path: &Path) -> Result<(Vec<f32>, WavSpec), AudioError> {
 /// `segments` is `(mic, optional system)` in playback order. A segment whose mic
 /// file is missing is skipped rather than aborting the whole track; losing one
 /// segment beats losing all of them.
+///
+/// The track is written beside `output` and renamed into place. Creating the
+/// output first truncated it before any input was read, so when an input was
+/// also the output (a legacy `{note_id}.wav` recording) the recording was
+/// destroyed: 5.76 MB became a 44-byte header. Writing aside also means a
+/// failed build never leaves a half-written track behind.
 pub fn build_playback_track(
+    segments: &[(std::path::PathBuf, Option<std::path::PathBuf>)],
+    output: &Path,
+) -> Result<(), AudioError> {
+    let tmp = output.with_extension("wav.tmp");
+    let written = write_playback_track(segments, &tmp)
+        .and_then(|()| std::fs::rename(&tmp, output).map_err(AudioError::IoError));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
+}
+
+fn write_playback_track(
     segments: &[(std::path::PathBuf, Option<std::path::PathBuf>)],
     output: &Path,
 ) -> Result<(), AudioError> {
@@ -203,6 +222,41 @@ mod tests {
             return 0.0;
         }
         (samples.iter().map(|&s| (s as f64) * (s as f64)).sum::<f64>() / samples.len() as f64).sqrt()
+    }
+
+    #[test]
+    fn playback_track_can_overwrite_one_of_its_own_inputs() {
+        // A legacy mic-only recording is stored as {note_id}.wav, the same name
+        // the combined track used to be written to. Building over it used to
+        // truncate the recording before reading it.
+        let dir = std::env::temp_dir().join("note67_playback_self_overwrite");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let recording = dir.join("note.wav");
+        write_wav(&recording, 1, 48_000, 6_000); // 1s
+
+        build_playback_track(&[(recording.clone(), None)], &recording).expect("build playback");
+
+        let r = WavReader::open(&recording).expect("open recording");
+        assert_eq!(r.duration(), 48_000, "the recording was truncated");
+        assert!(rms_of(&recording) > 1_000.0, "the recording lost its audio");
+        assert!(!recording.with_extension("wav.tmp").exists(), "temp file left behind");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failed_playback_build_leaves_the_existing_track_alone() {
+        let dir = std::env::temp_dir().join("note67_playback_failed_build");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let out = dir.join("playback.wav");
+        write_wav(&out, 1, 48_000, 6_000);
+
+        let missing = dir.join("missing.wav");
+        assert!(build_playback_track(&[(missing, None)], &out).is_err());
+        assert_eq!(WavReader::open(&out).expect("open").duration(), 48_000);
+        assert!(!out.with_extension("wav.tmp").exists(), "temp file left behind");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A real session produced a completely silent playback file even though its

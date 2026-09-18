@@ -18,6 +18,7 @@ interface AudioPlayerProps {
   onDeleteUpload?: (uploadId: number) => void;
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
+  onPlaybackRebuilt?: () => void;
 }
 
 export interface AudioPlayerHandle {
@@ -41,6 +42,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
     onDeleteUpload,
     onReorder,
     onPlayAudio,
+    onPlaybackRebuilt,
   },
   ref
 ) {
@@ -281,6 +283,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             onDeleteUpload={onDeleteUpload || (() => {})}
             onReorder={onReorder}
             onPlayAudio={onPlayAudio}
+            onPlaybackRebuilt={onPlaybackRebuilt}
             compact
           />
         </div>

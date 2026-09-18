@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{
+    get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
+};
 
 use super::TranscriptionError;
 
@@ -54,18 +56,27 @@ impl Transcriber {
         self.is_transcribing.load(Ordering::SeqCst)
     }
 
-    /// Transcribe an audio file
-    pub fn transcribe(&self, audio_path: &Path) -> Result<TranscriptionResult, TranscriptionError> {
+    /// Transcribe an audio file. `language` is a Whisper language code such as
+    /// "en" or "zh"; None auto-detects.
+    pub fn transcribe(
+        &self,
+        audio_path: &Path,
+        language: Option<&str>,
+    ) -> Result<TranscriptionResult, TranscriptionError> {
         if self.is_transcribing.swap(true, Ordering::SeqCst) {
             return Err(TranscriptionError::AlreadyTranscribing);
         }
 
-        let result = self.transcribe_internal(audio_path);
+        let result = self.transcribe_internal(audio_path, language);
         self.is_transcribing.store(false, Ordering::SeqCst);
         result
     }
 
-    fn transcribe_internal(&self, audio_path: &Path) -> Result<TranscriptionResult, TranscriptionError> {
+    fn transcribe_internal(
+        &self,
+        audio_path: &Path,
+        language: Option<&str>,
+    ) -> Result<TranscriptionResult, TranscriptionError> {
         if !audio_path.exists() {
             return Err(TranscriptionError::AudioNotFound(
                 audio_path.to_string_lossy().to_string(),
@@ -85,7 +96,7 @@ impl Transcriber {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
         // Configure for better meeting transcription
-        params.set_language(Some("en")); // Default to English, can be made configurable
+        params.set_language(language);
         params.set_translate(false);
         params.set_print_special(false);
         params.set_print_progress(false);
@@ -135,10 +146,18 @@ impl Transcriber {
             }
         }
 
+        // The language Whisper actually used: the requested one, or what it
+        // detected when asked to auto-detect.
+        let language = state
+            .full_lang_id_from_state()
+            .ok()
+            .and_then(get_lang_str)
+            .map(str::to_string);
+
         Ok(TranscriptionResult {
             segments,
             full_text,
-            language: Some("en".to_string()),
+            language,
         })
     }
 

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 
 use crate::db::models::{
@@ -35,6 +35,19 @@ fn map_audio_segment(row: &rusqlite::Row) -> rusqlite::Result<AudioSegment> {
 
 pub struct Database {
     pub conn: Mutex<Connection>,
+}
+
+#[cfg(test)]
+impl Database {
+    /// A migrated in-memory database, for tests that exercise real queries.
+    pub fn in_memory() -> Self {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        run_migrations(&conn).expect("run migrations");
+        Self {
+            conn: Mutex::new(conn),
+        }
+    }
 }
 
 impl Database {
@@ -866,6 +879,31 @@ impl Database {
     }
 
     // ========== Legacy Audio Migration ==========
+
+    /// The note's combined playback track (`notes.audio_path`), if any.
+    pub fn get_note_audio_path(&self, note_id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let path = conn
+            .query_row(
+                "SELECT audio_path FROM notes WHERE id = ?1",
+                [note_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(path)
+    }
+
+    /// Point a note at a rebuilt playback track. updated_at is left alone: the
+    /// track is derived from audio the note already had.
+    pub fn set_note_audio_path(&self, note_id: &str, path: &str) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "UPDATE notes SET audio_path = ?1 WHERE id = ?2",
+            params![path, note_id],
+        )?;
+        Ok(())
+    }
 
     /// Migrate legacy audio_path to audio_segments table.
     /// Returns the created segment if migration occurred, None if no migration needed.

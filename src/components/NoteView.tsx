@@ -32,6 +32,8 @@ export interface NoteViewProps {
   onRegenerate: () => void;
   onClose: () => void;
   onTranscriptUpdated?: () => void;
+  // The note's playback track was rebuilt under a new path; refetch the note.
+  onAudioChanged?: () => void;
   // Backlinks navigation
   onNavigateToNote?: (noteId: string) => void;
   // Wiki link navigation
@@ -56,6 +58,7 @@ export function NoteView({
   onRegenerate,
   onClose,
   onTranscriptUpdated,
+  onAudioChanged,
   onNavigateToNote,
   onWikiLinkClick,
   onOpenGuide,
@@ -870,6 +873,7 @@ export function NoteView({
           onDeleteUpload={deleteUpload}
           onReorder={handleAudioReorder}
           onPlayAudio={handlePlayAudio}
+          onPlaybackRebuilt={onAudioChanged}
         />
       )}
       </div>

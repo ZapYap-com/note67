@@ -25,6 +25,49 @@ fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f64, f64) {
     (clamped_start, clamped_end)
 }
 
+/// What a retranscription pass does with the note's existing transcript.
+#[derive(Debug, PartialEq)]
+enum PassOutcome {
+    /// Swap the rebuilt transcript in.
+    Replace,
+    /// Leave the existing transcript untouched; nothing went wrong.
+    Keep,
+    /// Leave the existing transcript untouched and report the failures.
+    KeepAndReport,
+}
+
+/// Only a complete pass that produced lines replaces a transcript:
+/// - No audio items: nothing to rebuild from. This is the normal case for a
+///   mic-only recording, whose audio isn't tracked as a segment; replacing
+///   here wrote an empty transcript over the live one.
+/// - Any failure: the existing rows can't be swapped per item (live rows
+///   aren't tied to a recording), so replacing would drop the failed item's
+///   lines. Keep the whole transcript and report instead.
+/// - No lines at all: far more likely unreadable audio than a meeting where
+///   nobody spoke.
+fn pass_outcome(total_items: usize, failures: usize, rebuilt_segments: usize) -> PassOutcome {
+    if failures > 0 {
+        PassOutcome::KeepAndReport
+    } else if total_items == 0 || rebuilt_segments == 0 {
+        PassOutcome::Keep
+    } else {
+        PassOutcome::Replace
+    }
+}
+
+/// The language batch transcription uses. Live transcription gets it from the
+/// frontend's `whisper_language` setting, so the batch passes read the same
+/// key with the same defaults: unset means English, "auto" means detect.
+/// Before this, every batch pass forced English, so the post-Stop pass
+/// replaced a correct non-English live transcript with an English-forced one.
+pub(crate) fn batch_language(db: &Database) -> Option<String> {
+    match db.get_setting("whisper_language").ok().flatten().as_deref() {
+        None | Some("") => Some("en".to_string()),
+        Some("auto") => None,
+        Some(code) => Some(code.to_string()),
+    }
+}
+
 /// State for transcription operations
 pub struct TranscriptionState {
     pub model_manager: Mutex<Option<ModelManager>>,
@@ -252,7 +295,8 @@ pub async fn transcribe_audio(
 
     // Run transcription in a blocking task (since whisper-rs is synchronous)
     let path = PathBuf::from(&audio_path);
-    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path))
+    let lang = batch_language(&db);
+    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path, lang.as_deref()))
         .await
         .map_err(|e| {
             state.is_transcribing.store(false, Ordering::SeqCst);
@@ -336,7 +380,8 @@ pub async fn transcribe_dual_audio(
     // Transcribe mic audio (labeled as "You")
     let mic_path_buf = PathBuf::from(&mic_path);
     let transcriber_clone = transcriber.clone();
-    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
+    let lang = batch_language(&db);
+    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf, lang.as_deref()))
         .await
         .map_err(|e| {
             state.is_transcribing.store(false, Ordering::SeqCst);
@@ -369,7 +414,8 @@ pub async fn transcribe_dual_audio(
         let sys_path_buf = PathBuf::from(&sys_path);
         let transcriber_clone = transcriber.clone();
 
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+        let lang = batch_language(&db);
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf, lang.as_deref())).await {
             Ok(Ok(result)) => {
                 // Save system segments to database with "Others" speaker label (skip blank/noise)
                 for segment in &result.segments {
@@ -536,7 +582,8 @@ pub async fn retranscribe_audio_segment(
         let sys_path_buf = PathBuf::from(sys_path);
         let transcriber_clone = transcriber.clone();
 
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf)).await {
+        let lang = batch_language(&db);
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf, lang.as_deref())).await {
             Ok(Ok(result)) => {
                 for seg in &result.segments {
                     if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
@@ -571,7 +618,8 @@ pub async fn retranscribe_audio_segment(
     if let Some(ref mic_path) = segment.mic_path {
         let mic_path_buf = PathBuf::from(mic_path);
         let transcriber_clone = transcriber.clone();
-        let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf))
+        let lang = batch_language(&db);
+        let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf, lang.as_deref()))
             .await
             .map_err(|e| {
                 state.is_transcribing.store(false, Ordering::SeqCst);
@@ -730,7 +778,8 @@ pub async fn retranscribe_note(
             let sys_path_clone = sys_path.clone();
             let transcriber_clone = transcriber.clone();
 
-            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_clone)).await {
+            let lang = batch_language(&db);
+            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_clone, lang.as_deref())).await {
                 Ok(Ok(result)) => {
                     println!("[retranscribe_note] System transcription succeeded, {} segments", result.segments.len());
                     let mut last_start = 0.0_f64;
@@ -750,11 +799,13 @@ pub async fn retranscribe_note(
                         }
                     }
                 }
+                // A failed system pass must count as a failure: the rebuilt
+                // transcript would otherwise silently lose every "Others" line.
                 Ok(Err(e)) => {
-                    eprintln!("Failed to transcribe system audio for segment {}: {}", segment.id, e);
+                    failed_items.push(format!("{} (system): {}", item_name, e));
                 }
                 Err(e) => {
-                    eprintln!("Failed to spawn system audio transcription for segment {}: {}", segment.id, e);
+                    failed_items.push(format!("{} (system): {}", item_name, e));
                 }
             }
         }
@@ -765,7 +816,8 @@ pub async fn retranscribe_note(
             let mic_path_for_task = mic_path.clone();
             let transcriber_clone = transcriber.clone();
 
-            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task)).await {
+            let lang = batch_language(&db);
+            match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task, lang.as_deref())).await {
                 Ok(Ok(result)) => {
                     println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
                     let mut echo_filtered = 0;
@@ -835,7 +887,8 @@ pub async fn retranscribe_note(
         let file_path = PathBuf::from(&upload.file_path);
         let transcriber_clone = transcriber.clone();
 
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&file_path)).await {
+        let lang = batch_language(&db);
+        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&file_path, lang.as_deref())).await {
             Ok(Ok(result)) => {
                 let mut last_start = 0.0_f64;
                 for seg in &result.segments {
@@ -868,24 +921,24 @@ pub async fn retranscribe_note(
     // Swap the rebuilt transcript in, in a single transaction. Up to this point
     // the note still holds its previous transcript, so anything that went wrong
     // above — including the app being closed — costs nothing.
-    //
-    // If every item failed there is nothing trustworthy to write, so keep what
-    // was already there rather than replacing a real transcript with silence.
-    if total_items > 0 && failed_items.len() == total_items {
-        state.is_transcribing.store(false, Ordering::SeqCst);
-        return Err(format!(
-            "Retranscription failed for all {} item(s); the existing transcript was left untouched: {}",
-            total_items,
-            failed_items.join("; ")
-        ));
-    }
-
-    if let Err(e) = db.replace_transcript_segments(&note_id, &rebuilt) {
-        state.is_transcribing.store(false, Ordering::SeqCst);
-        return Err(format!(
-            "Failed to save the rebuilt transcript (the existing one was kept): {}",
-            e
-        ));
+    match pass_outcome(total_items, failed_items.len(), rebuilt.len()) {
+        PassOutcome::Replace => {
+            if let Err(e) = db.replace_transcript_segments(&note_id, &rebuilt) {
+                state.is_transcribing.store(false, Ordering::SeqCst);
+                return Err(format!(
+                    "Failed to save the rebuilt transcript (the existing one was kept): {}",
+                    e
+                ));
+            }
+        }
+        PassOutcome::Keep => {}
+        PassOutcome::KeepAndReport => {
+            state.is_transcribing.store(false, Ordering::SeqCst);
+            return Err(format!(
+                "Retranscription failed, so the existing transcript was kept: {}",
+                failed_items.join("; ")
+            ));
+        }
     }
 
     state.is_transcribing.store(false, Ordering::SeqCst);
@@ -921,5 +974,46 @@ fn parse_model_size(size: &str) -> Result<ModelSize, String> {
         "large-turbo" => Ok(ModelSize::LargeTurbo),
         "large-turbo-q8" => Ok(ModelSize::LargeTurboQ8),
         _ => Err(format!("Invalid model size: {}", size)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_note_without_audio_items_keeps_its_transcript() {
+        // Mic-only recordings reach retranscribe_note with no segments.
+        assert_eq!(pass_outcome(0, 0, 0), PassOutcome::Keep);
+    }
+
+    #[test]
+    fn any_failure_keeps_the_whole_transcript() {
+        assert_eq!(pass_outcome(3, 1, 40), PassOutcome::KeepAndReport);
+        // Mic and system can both fail for one recording.
+        assert_eq!(pass_outcome(1, 2, 0), PassOutcome::KeepAndReport);
+    }
+
+    #[test]
+    fn a_pass_that_heard_nothing_keeps_the_transcript() {
+        assert_eq!(pass_outcome(2, 0, 0), PassOutcome::Keep);
+    }
+
+    #[test]
+    fn a_complete_pass_replaces_the_transcript() {
+        assert_eq!(pass_outcome(2, 0, 25), PassOutcome::Replace);
+    }
+
+    #[test]
+    fn batch_language_follows_the_whisper_language_setting() {
+        let db = Database::in_memory();
+        // Unset: English, the same default the frontend uses for live.
+        assert_eq!(batch_language(&db).as_deref(), Some("en"));
+
+        db.set_setting("whisper_language", "zh").unwrap();
+        assert_eq!(batch_language(&db).as_deref(), Some("zh"));
+
+        db.set_setting("whisper_language", "auto").unwrap();
+        assert_eq!(batch_language(&db), None, "auto means detect");
     }
 }

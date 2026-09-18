@@ -1187,6 +1187,7 @@ function App() {
             }}
             onRegenerate={handleRegenerateSummaryTitle}
             onClose={() => setSelectedNoteId(null)}
+            onAudioChanged={refreshNotes}
             onTranscriptUpdated={async () => {
               if (selectedNote) {
                 const segments = await loadTranscript(selectedNote.id);

@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::audio::converter::{convert_to_wav, get_audio_duration_ms, is_supported_format};
-use crate::commands::transcription::TranscriptionState;
+use crate::commands::transcription::{batch_language, TranscriptionState};
 use crate::db::models::{NewTranscriptSegment, UploadedAudio};
 use crate::db::Database;
 
@@ -169,7 +169,8 @@ pub async fn transcribe_uploaded_audio(
 
     // Run transcription
     let path = PathBuf::from(&info.file_path);
-    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path))
+    let lang = batch_language(&db);
+    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path, lang.as_deref()))
         .await
         .map_err(|e| {
             state.is_transcribing.store(false, Ordering::SeqCst);
