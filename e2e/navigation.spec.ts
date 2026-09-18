@@ -21,7 +21,9 @@ test.describe("opening notes", () => {
     await page.keyboard.press("Control+n");
 
     await expect(noteTabBar(page)).toBeVisible();
-    // The Note tab is the one with the editor.
+    // The Note tab is the one with the editor. It is briefly built twice (the
+    // editor rebuilds on an outside value change), so wait for it to settle.
+    await expect(page.locator("main .ProseMirror")).toHaveCount(1);
     await expect(page.locator("main .ProseMirror")).toBeVisible();
   });
 
