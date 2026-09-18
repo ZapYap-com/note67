@@ -27,7 +27,7 @@ vi.mock("../api", () => ({
     resumeSystemOnlyRecording: vi.fn(),
     // misc
     continueNoteRecording: vi.fn(),
-    getRecordingStatus: vi.fn(),
+    getActiveRecording: vi.fn(),
     getAudioLevel: vi.fn(),
   },
 }));
@@ -54,7 +54,7 @@ beforeEach(() => {
   // between tests or it leaks from one case into the next.
   resetRecordingStore();
   // The hook checks recording status once on mount.
-  api.getRecordingStatus.mockResolvedValue(false);
+  api.getActiveRecording.mockResolvedValue(null);
   api.getAudioLevel.mockResolvedValue(0);
   api.stopRecording.mockResolvedValue("/mic.wav");
   api.startDualRecordingWithSegments.mockResolvedValue(dualResult);
@@ -440,10 +440,42 @@ describe("useRecording — error handling", () => {
     expect(result.current.error).toBe("write failed");
   });
 
-  it("reflects an already-in-progress recording found on mount", async () => {
-    api.getRecordingStatus.mockResolvedValue(true);
+  it("picks up a session still running in the backend on mount", async () => {
+    api.getActiveRecording.mockResolvedValue({
+      noteId: "note-7",
+      paused: true,
+      mic: true,
+      system: false,
+    });
     const { result } = renderHook(() => useRecording());
 
-    await waitFor(() => expect(result.current.isRecording).toBe(true));
+    await waitFor(() => expect(result.current.isPaused).toBe(true));
+    expect(result.current.recordingMode).toBe("mic-only");
+    expect(useRecordingStore.getState().recordingNoteId).toBe("note-7");
+
+    // And it can be stopped, as the note it belongs to.
+    await act(async () => {
+      await result.current.stopRecording();
+    });
+    expect(api.stopDualRecordingWithSegments).toHaveBeenCalledWith("note-7");
+  });
+
+  it("a refused start doesn't take over the session's Stop", async () => {
+    setInputs({ mic: true, system: true });
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording("note-1");
+    });
+
+    api.startDualRecordingWithSegments.mockRejectedValue(
+      new Error("A recording is already in progress.")
+    );
+    await act(async () => {
+      await expect(result.current.startRecording("note-2")).rejects.toThrow();
+    });
+    await act(async () => {
+      await result.current.stopRecording();
+    });
+    expect(api.stopDualRecordingWithSegments).toHaveBeenCalledWith("note-1");
   });
 });

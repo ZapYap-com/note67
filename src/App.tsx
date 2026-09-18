@@ -332,39 +332,49 @@ function App() {
     setFocusTaskId(null);
   }, [createNote, setActiveTab, setFocusTaskId]);
 
+  // Set while a start is in flight. Start listening stays clickable (and Cmd+R
+  // repeatable) until the backend answers, and a second start would only be
+  // refused after creating, then deleting, a note.
+  const startingRef = useRef(false);
   const handleStartRecording = useCallback(async () => {
-    // Refresh and check that *some* audio input (mic or system audio) is available.
-    const status = await refreshSystemStatus();
-    const canMic = status.micAvailable && status.micPermission;
-    const canSystem =
-      status.systemAudioSupported && status.systemAudioPermission;
-    if (!canMic && !canSystem) {
-      setSettingsTab("system");
-      setShowSettings(true);
-      return;
-    }
-
-    const note = await createNote("Untitled");
+    if (startingRef.current) return;
+    startingRef.current = true;
     try {
-      await startRecording(note.id);
-    } catch (error) {
-      // Nothing was recorded (another session is running, or capture failed):
-      // don't leave an empty note behind.
-      console.error("Start recording failed:", error);
-      await deleteNote(note.id).catch(console.error);
-      return;
+      // Refresh and check that *some* audio input (mic or system audio) is available.
+      const status = await refreshSystemStatus();
+      const canMic = status.micAvailable && status.micPermission;
+      const canSystem =
+        status.systemAudioSupported && status.systemAudioPermission;
+      if (!canMic && !canSystem) {
+        setSettingsTab("system");
+        setShowSettings(true);
+        return;
+      }
+
+      const note = await createNote("Untitled");
+      try {
+        await startRecording(note.id);
+      } catch (error) {
+        // Nothing was recorded (another session is running, or capture failed):
+        // don't leave an empty note behind.
+        console.error("Start recording failed:", error);
+        await deleteNote(note.id).catch(console.error);
+        return;
+      }
+      setSelectedNoteId(note.id);
+      // Only now: pointing the recording UI at the note before the start
+      // succeeded is how a failed start used to take over a running session.
+      setRecordingNoteId(note.id);
+      // Recording answers any meeting prompt; don't bring it back after Stop.
+      useMeetingStore.getState().dismissMeeting();
+      // Show the recording (and its Stop control) even from Graph or Tasks.
+      setCurrentView("notes");
+      setActiveTab("transcript");
+      // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
+      await startLiveTranscription(note.id, profile.name || "Me");
+    } finally {
+      startingRef.current = false;
     }
-    setSelectedNoteId(note.id);
-    // Only now: pointing the recording UI at the note before the start
-    // succeeded is how a failed start used to take over a running session.
-    setRecordingNoteId(note.id);
-    // Recording answers any meeting prompt; don't bring it back after Stop.
-    useMeetingStore.getState().dismissMeeting();
-    // Show the recording (and its Stop control) even from Graph or Tasks.
-    setCurrentView("notes");
-    setActiveTab("transcript");
-    // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
-    await startLiveTranscription(note.id, profile.name || "Me");
   }, [
     createNote,
     deleteNote,
@@ -650,7 +660,7 @@ function App() {
       await flushPendingNoteSave();
       // Save segments before stopping (to avoid stale closure)
       const segmentsToSave = [...liveSegments];
-      const audioPath = await stopRecording();
+      const audioPath = await stopRecording(noteId);
       // Stop live transcription and save segments to database
       await stopLiveTranscription(noteId);
       await endNote(noteId, audioPath ?? undefined);
@@ -1253,6 +1263,7 @@ function App() {
                 await continueRecording(selectedNote.id);
                 // Only after the start succeeded (see handleStartRecording).
                 setRecordingNoteId(selectedNote.id);
+                useMeetingStore.getState().dismissMeeting();
                 await startLiveTranscription(
                   selectedNote.id,
                   profile?.name || "Me",

@@ -64,8 +64,6 @@ export function useRecording(): UseRecordingReturn {
     async (noteId: string) => {
       try {
         patch({ error: null });
-        currentNoteIdRef.current = noteId;
-
         const { micOk, systemOk } = await detectInputs();
 
         if (micOk && systemOk) {
@@ -95,6 +93,9 @@ export function useRecording(): UseRecordingReturn {
           );
         }
         patch({ isRecording: true });
+        // Only now. Set before the start, a refused second start (say, a
+        // double-click) re-pointed Stop at the note that never recorded.
+        currentNoteIdRef.current = noteId;
       } catch (e) {
         patch({ error: e instanceof Error ? e.message : String(e) });
         // Callers undo what they set up for this recording (the note they
@@ -261,12 +262,30 @@ export function useRecording(): UseRecordingReturn {
     };
   }, [isRecording]);
 
+  // Pick up a session that is still running in the backend. After a webview
+  // reload the frontend starts blank, and with only one session allowed, a
+  // session it had lost track of could be neither stopped nor replaced.
   useEffect(() => {
     audioApi
-      .getRecordingStatus()
-      .then((status) =>
-        useRecordingStore.getState().patch({ isRecording: status })
-      )
+      .getActiveRecording()
+      .then((active) => {
+        if (!active) return;
+        currentNoteIdRef.current = active.noteId;
+        const store = useRecordingStore.getState();
+        store.patch({
+          isRecording: !active.paused,
+          isPaused: active.paused,
+          recordingPhase: active.paused
+            ? RecordingPhase.Paused
+            : RecordingPhase.Recording,
+          recordingMode: !active.mic
+            ? "system-only"
+            : active.system
+              ? "dual"
+              : "mic-only",
+        });
+        store.setRecordingNoteId(active.noteId);
+      })
       .catch(console.error);
   }, []);
 

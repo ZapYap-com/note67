@@ -363,7 +363,7 @@ pub fn run() {
             commands::search_notes,
             commands::start_recording,
             commands::stop_recording,
-            commands::get_recording_status,
+            commands::get_active_recording,
             commands::get_audio_level,
             commands::is_system_audio_supported,
             commands::has_system_audio_permission,

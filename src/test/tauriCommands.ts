@@ -78,7 +78,7 @@ export const defaultCommands: CommandMap = {
   get_download_progress: 0,
 
   // recording / transcription (idle)
-  get_recording_status: false,
+  get_active_recording: null,
   is_live_transcribing: false,
   get_audio_level: 0,
 

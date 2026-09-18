@@ -10,6 +10,13 @@ export interface DualRecordingResult {
   playbackPath: string | null;
 }
 
+export interface ActiveRecording {
+  noteId: string;
+  paused: boolean;
+  mic: boolean;
+  system: boolean;
+}
+
 export const audioApi = {
   // Basic recording (mic only)
 
@@ -32,8 +39,9 @@ export const audioApi = {
     return invoke("get_segment_playback_path", { segmentId });
   },
 
-  getRecordingStatus: (): Promise<boolean> => {
-    return invoke("get_recording_status");
+  /** The recording session in progress (recording or paused), if any. */
+  getActiveRecording: (): Promise<ActiveRecording | null> => {
+    return invoke("get_active_recording");
   },
 
   getAudioLevel: (): Promise<number> => {

@@ -73,9 +73,44 @@ pub fn stop_recording(state: State<AudioState>) -> Result<Option<String>, String
     Ok(path.map(|p| p.to_string_lossy().to_string()))
 }
 
+/// The recording session in progress, as the frontend needs it to find its
+/// way back to one.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveRecording {
+    pub note_id: String,
+    pub paused: bool,
+    pub mic: bool,
+    pub system: bool,
+}
+
+/// The session in progress, if any. After a webview reload the frontend starts
+/// blank; with only one session allowed, a session it had lost track of could
+/// be neither stopped nor replaced. Recording or paused, the open segment's
+/// row says which note it belongs to and what it captures.
 #[tauri::command]
-pub fn get_recording_status(state: State<AudioState>) -> bool {
-    state.recording.is_recording.load(Ordering::SeqCst)
+pub fn get_active_recording(
+    state: State<AudioState>,
+    db: State<Database>,
+) -> Result<Option<ActiveRecording>, String> {
+    active_recording(&state.recording, &db).map_err(|e| e.to_string())
+}
+
+fn active_recording(
+    state: &RecordingState,
+    db: &Database,
+) -> anyhow::Result<Option<ActiveRecording>> {
+    let phase = state.get_phase();
+    if phase == RecordingPhase::Idle {
+        return Ok(None);
+    }
+    let segment_id = state.current_segment_db_id.load(Ordering::SeqCst);
+    Ok(db.get_audio_segment(segment_id)?.map(|seg| ActiveRecording {
+        note_id: seg.note_id,
+        paused: phase == RecordingPhase::Paused,
+        mic: seg.mic_path.is_some(),
+        system: seg.system_path.is_some(),
+    }))
 }
 
 #[tauri::command]
@@ -289,6 +324,12 @@ fn build_note_playback(app: &AppHandle, db: &Database, note_id: &str) -> Option<
 
     if inputs.is_empty() {
         return None;
+    }
+
+    // One mic-only segment already is its own playback track: copying it would
+    // only cost memory and a duplicate file.
+    if let [(mic, None)] = inputs.as_slice() {
+        return Some(mic.to_string_lossy().to_string());
     }
 
     let playback_file = recordings_dir.join(format!("{}_playback.wav", note_id));
@@ -762,9 +803,7 @@ fn start_segment_system_capture(
         let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
         match capture.as_ref() {
             Some(cap) => match cap.start(system_path.to_path_buf()) {
-                Ok(()) => {
-                    true
-                }
+                Ok(()) => true,
                 Err(e) => {
                     eprintln!("Failed to start system audio capture: {}", e);
                     false
@@ -1020,6 +1059,49 @@ mod tests {
 
         state.set_phase(RecordingPhase::Idle);
         assert!(ensure_no_session(&state).is_ok());
+    }
+
+    fn note_with_segment(db: &Database, mic: Option<&str>, system: Option<&str>) -> i64 {
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO notes (id, title, started_at, created_at, updated_at)
+                 VALUES ('n1', 'Call', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z')",
+                [],
+            )
+            .unwrap();
+        db.add_audio_segment("n1", 0, mic, system).unwrap()
+    }
+
+    #[test]
+    fn the_session_in_progress_can_be_found_again() {
+        let db = Database::in_memory();
+        let segment = note_with_segment(
+            &db,
+            Some("/r/n1_mic_seg0.wav"),
+            Some("/r/n1_system_seg0.wav"),
+        );
+        let state = running_segment(segment, Duration::from_secs(10));
+
+        let active = active_recording(&state, &db).unwrap().expect("a session");
+        assert_eq!(active.note_id, "n1");
+        assert!(!active.paused && active.mic && active.system);
+
+        state.set_phase(RecordingPhase::Paused);
+        assert!(active_recording(&state, &db).unwrap().unwrap().paused);
+
+        state.set_phase(RecordingPhase::Idle);
+        assert!(active_recording(&state, &db).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_listen_only_session_reports_no_mic() {
+        let db = Database::in_memory();
+        let segment = note_with_segment(&db, None, Some("/r/n1_system_seg0.wav"));
+        let state = running_segment(segment, Duration::from_secs(10));
+        let active = active_recording(&state, &db).unwrap().unwrap();
+        assert!(!active.mic && active.system);
     }
 
     #[test]
