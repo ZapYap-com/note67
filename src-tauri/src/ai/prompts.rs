@@ -148,11 +148,18 @@ Summary:"#,
 
     /// Extract action items as an inline GitHub-style markdown checklist that
     /// gets spliced into the note body (the source of truth for #3).
-    pub fn action_items_checkboxes(transcript: &str, notes: Option<&str>) -> String {
+    pub fn action_items_checkboxes(
+        transcript: &str,
+        notes: Option<&str>,
+        meeting_date: Option<&str>,
+    ) -> String {
         let notes_section = Self::format_notes_section(notes);
+        let date_section = meeting_date
+            .map(|date| format!("{date}\n\n"))
+            .unwrap_or_default();
         format!(
             r#"Extract the action items from this meeting as a GitHub-style markdown checklist.
-{}TRANSCRIPT:
+{}{}TRANSCRIPT:
 {}
 
 Output ONLY checkbox lines, one per action item, in exactly this format:
@@ -165,7 +172,7 @@ Rules:
 - If there are no action items, output nothing at all.
 
 Checklist:"#,
-            notes_section, transcript
+            date_section, notes_section, transcript
         )
     }
 

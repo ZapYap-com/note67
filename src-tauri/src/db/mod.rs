@@ -501,6 +501,19 @@ impl Database {
     }
 
     /// Get the description (user notes) for a note
+    /// When the note's meeting started (RFC 3339, UTC).
+    pub fn get_note_started_at(&self, note_id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let started_at = conn
+            .query_row(
+                "SELECT started_at FROM notes WHERE id = ?1",
+                [note_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(started_at)
+    }
+
     pub fn get_note_description(&self, note_id: &str) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let description: Option<String> = conn

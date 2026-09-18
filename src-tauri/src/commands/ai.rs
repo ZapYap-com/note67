@@ -83,6 +83,8 @@ pub struct AiState {
     pub client: Arc<OllamaClient>,
     pub selected_model: Mutex<Option<String>>,
     pub is_generating: AtomicBool,
+    /// Task extraction runs one at a time; a second click would duplicate it.
+    pub is_extracting: AtomicBool,
 }
 
 impl Default for AiState {
@@ -91,6 +93,7 @@ impl Default for AiState {
             client: Arc::new(OllamaClient::new()),
             selected_model: Mutex::new(None),
             is_generating: AtomicBool::new(false),
+            is_extracting: AtomicBool::new(false),
         }
     }
 }
@@ -634,11 +637,26 @@ pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), St
 
 /// Parse one AI checklist line ("- [ ] task @assignee 📅2026-07-11") into
 /// (text, assignee, due_date). Returns None for non-task lines.
-fn parse_checklist_line(line: &str) -> Option<(String, Option<String>, Option<String>)> {
+/// One line of the model's checklist.
+#[derive(Debug, PartialEq)]
+struct ChecklistItem {
+    text: String,
+    done: bool,
+    due: Option<String>,
+}
+
+fn parse_checklist_line(line: &str) -> Option<ChecklistItem> {
     let trimmed = line.trim_start();
-    let rest = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] "]
-        .iter()
-        .find_map(|p| trimmed.strip_prefix(p))?;
+    let (rest, done) = [
+        ("- [ ] ", false),
+        ("* [ ] ", false),
+        ("- [x] ", true),
+        ("- [X] ", true),
+        ("* [x] ", true),
+        ("* [X] ", true),
+    ]
+    .iter()
+    .find_map(|(prefix, done)| trimmed.strip_prefix(prefix).map(|rest| (rest, *done)))?;
     let mut text = rest.trim().to_string();
 
     // 📅YYYY-MM-DD → due date
@@ -662,24 +680,225 @@ fn parse_checklist_line(line: &str) -> Option<(String, Option<String>, Option<St
         text = text.replacen(&token, "", 1).trim().to_string();
     }
 
-    // @assignee
-    let mut assignee: Option<String> = None;
-    if let Some(pos) = text.find('@') {
-        let name: String = text[pos + 1..]
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.')
-            .collect();
-        if !name.is_empty() {
-            assignee = Some(name.clone());
-            text = text.replacen(&format!("@{name}"), "", 1).trim().to_string();
-        }
-    }
-
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.is_empty() {
         return None;
     }
-    Some((text, assignee, due))
+    Some(ChecklistItem { text, done, due })
+}
+
+/// Context window requested from Ollama for task extraction.
+const EXTRACT_NUM_CTX: usize = 4096;
+/// Tokens kept free in every extraction request for the model's answer.
+const EXTRACT_OUTPUT_RESERVE: usize = 512;
+/// The user's own notes are capped so they can't crowd out the transcript.
+const EXTRACT_NOTES_CAP: usize = 1500;
+
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x30FF     // CJK punctuation, Hiragana, Katakana
+        | 0x3400..=0x4DBF   // CJK Extension A
+        | 0x4E00..=0x9FFF   // CJK Unified Ideographs
+        | 0xAC00..=0xD7AF   // Hangul syllables
+        | 0xF900..=0xFAFF   // CJK compatibility ideographs
+        | 0xFF00..=0xFFEF)  // Fullwidth forms
+}
+
+/// A deliberately generous token estimate for budgeting a prompt: a CJK
+/// character counts as one token, other text as one token per four bytes.
+fn estimate_tokens(text: &str) -> usize {
+    let (cjk, other_bytes) = text.chars().fold((0usize, 0usize), |(cjk, other), c| {
+        if is_cjk(c) {
+            (cjk + 1, other)
+        } else {
+            (cjk, other + c.len_utf8())
+        }
+    });
+    cjk + other_bytes.div_ceil(4)
+}
+
+/// The longest prefix of `text` estimated at no more than `cap` tokens.
+fn truncate_to_tokens(text: &str, cap: usize) -> &str {
+    let mut cjk = 0usize;
+    let mut other = 0usize;
+    for (i, c) in text.char_indices() {
+        if is_cjk(c) {
+            cjk += 1;
+        } else {
+            other += c.len_utf8();
+        }
+        if cjk + other.div_ceil(4) > cap {
+            return &text[..i];
+        }
+    }
+    text
+}
+
+/// Split a transcript into chunks that each fit a token budget, the first
+/// chunk under `first_budget` (it also carries the notes) and the rest under
+/// `rest_budget`. Splits at sentence ends where it can (including the CJK
+/// 。！？, which the summary splitter misses) and mid-sentence only when a
+/// sentence alone is over budget.
+fn split_by_token_budget(text: &str, first_budget: usize, rest_budget: usize) -> Vec<String> {
+    let first_budget = first_budget.max(1);
+    let rest_budget = rest_budget.max(1);
+    let mut chunks: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let budget = |chunks: &Vec<String>| if chunks.is_empty() { first_budget } else { rest_budget };
+
+    for sentence in text.split_inclusive(['.', '!', '?', '。', '！', '？']) {
+        let mut piece = sentence;
+        loop {
+            let limit = budget(&chunks);
+            if estimate_tokens(&current) + estimate_tokens(piece) <= limit {
+                current.push_str(piece);
+                break;
+            }
+            if !current.trim().is_empty() {
+                chunks.push(std::mem::take(&mut current).trim().to_string());
+                continue;
+            }
+            // A single sentence over budget: cut it at the budget.
+            let head = truncate_to_tokens(piece, limit);
+            let head = if head.is_empty() {
+                // Always make progress, even past a budget smaller than one character.
+                &piece[..piece.chars().next().map_or(0, char::len_utf8)]
+            } else {
+                head
+            };
+            chunks.push(head.trim().to_string());
+            piece = &piece[head.len()..];
+            if piece.is_empty() {
+                break;
+            }
+        }
+    }
+    if !current.trim().is_empty() {
+        chunks.push(current.trim().to_string());
+    }
+    chunks.retain(|c| !c.is_empty());
+    chunks
+}
+
+/// Task text compared the way a person would: case and spacing don't matter.
+fn normalize_task_text(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+/// A due date the model gave, if it is a real date on or after the meeting.
+fn valid_due_date(due: Option<&str>, meeting_day: Option<chrono::NaiveDate>) -> Option<String> {
+    let date = chrono::NaiveDate::parse_from_str(due?, "%Y-%m-%d").ok()?;
+    if meeting_day.is_some_and(|day| date < day) {
+        return None;
+    }
+    Some(date.format("%Y-%m-%d").to_string())
+}
+
+/// Extract a note's action items with `model` and store the new ones.
+///
+/// Used to send the whole transcript in one request at num_ctx 2048, so past
+/// a few minutes of speech Ollama silently dropped the start of the meeting,
+/// and every re-run inserted every item again. Now:
+/// - the transcript goes in chunks that each fit a 4096-token context (the
+///   notes, capped, ride along with the first);
+/// - items already in the note, or already found in an earlier chunk, are
+///   skipped, so re-running adds only what is new;
+/// - relative dates resolve against the meeting's date, and a due date that
+///   isn't a real date on or after the meeting is dropped;
+/// - a `- [x]` item is stored as done.
+async fn extract_action_items_with(
+    client: &OllamaClient,
+    model: &str,
+    db: &Database,
+    note_id: &str,
+) -> Result<Vec<ActionItem>, String> {
+    let segments = db
+        .get_transcript_segments(note_id)
+        .map_err(|e| e.to_string())?;
+    let transcript = segments
+        .iter()
+        .map(|s| s.text.clone())
+        .filter(|text| !text.contains("[BLANK_AUDIO]"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let notes = db
+        .get_note_description(note_id)
+        .map_err(|e| e.to_string())?
+        .filter(|n| !n.trim().is_empty());
+    let notes = notes.as_deref().map(|n| truncate_to_tokens(n, EXTRACT_NOTES_CAP));
+
+    if transcript.trim().is_empty() && notes.is_none() {
+        return Ok(vec![]);
+    }
+
+    let meeting_day = db
+        .get_note_started_at(note_id)
+        .map_err(|e| e.to_string())?
+        .and_then(|started| chrono::DateTime::parse_from_rfc3339(&started).ok())
+        .map(|started| started.with_timezone(&chrono::Local).date_naive());
+    let date_line = meeting_day.map(|day| {
+        format!(
+            "The meeting took place on {} ({}). Resolve relative dates such as \"Friday\" or \"next week\" against it. Omit 📅 when unsure.",
+            day.format("%Y-%m-%d"),
+            day.format("%A")
+        )
+    });
+
+    let template_tokens = estimate_tokens(&SummaryPrompts::action_items_checkboxes(
+        "",
+        None,
+        date_line.as_deref(),
+    ));
+    let rest_budget = EXTRACT_NUM_CTX
+        .saturating_sub(EXTRACT_OUTPUT_RESERVE)
+        .saturating_sub(template_tokens);
+    let first_budget = rest_budget.saturating_sub(notes.map(estimate_tokens).unwrap_or(0));
+    let chunks = if transcript.trim().is_empty() {
+        vec![String::new()]
+    } else {
+        split_by_token_budget(&transcript, first_budget, rest_budget)
+    };
+
+    let mut seen: std::collections::HashSet<String> = db
+        .get_action_items(note_id)
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|item| normalize_task_text(&item.text))
+        .collect();
+
+    let mut created = Vec::new();
+    for (i, chunk) in chunks.iter().enumerate() {
+        let prompt = SummaryPrompts::action_items_checkboxes(
+            chunk,
+            if i == 0 { notes } else { None },
+            date_line.as_deref(),
+        );
+        let response = client
+            .generate(model, &prompt, 0.3, Some(EXTRACT_NUM_CTX as u32))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        for line in strip_thinking_tags(&response).lines() {
+            let Some(item) = parse_checklist_line(line) else {
+                continue;
+            };
+            if !seen.insert(normalize_task_text(&item.text)) {
+                continue;
+            }
+            let due = valid_due_date(item.due.as_deref(), meeting_day);
+            let stable_id = Uuid::new_v4().to_string();
+            let mut stored = db
+                .create_action_item(Some(note_id), &stable_id, &item.text, due.as_deref(), None, None)
+                .map_err(|e| e.to_string())?;
+            if item.done {
+                db.set_action_item_done(stored.id, true)
+                    .map_err(|e| e.to_string())?;
+                stored.done = true;
+            }
+            created.push(stored);
+        }
+    }
+    Ok(created)
 }
 
 /// #3: Extract action items from a note's transcript + notes and store them as
@@ -690,48 +909,18 @@ pub async fn extract_action_items(
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<Vec<ActionItem>, String> {
+    if ai_state.is_extracting.swap(true, Ordering::SeqCst) {
+        return Err("Already finding tasks. Please wait for it to finish.".to_string());
+    }
+    let _guard = scopeguard::guard((), |_| {
+        ai_state.is_extracting.store(false, Ordering::SeqCst);
+    });
+
     let model = resolve_model(&ai_state, &db)
         .await
         .ok_or("No model selected. Please select a model first.")?;
 
-    let segments = db
-        .get_transcript_segments(&note_id)
-        .map_err(|e| e.to_string())?;
-    let notes = db
-        .get_note_description(&note_id)
-        .map_err(|e| e.to_string())?;
-    let transcript = segments
-        .iter()
-        .map(|s| s.text.clone())
-        .filter(|text| !text.contains("[BLANK_AUDIO]"))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let has_notes = notes.as_ref().is_some_and(|n| !n.trim().is_empty());
-    if transcript.trim().is_empty() && !has_notes {
-        return Ok(vec![]);
-    }
-
-    let prompt = SummaryPrompts::action_items_checkboxes(&transcript, notes.as_deref());
-    let response = ai_state
-        .client
-        .generate(&model, &prompt, 0.3, Some(2048))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut created = Vec::new();
-    for line in strip_thinking_tags(&response).lines() {
-        if let Some((text, assignee, due)) = parse_checklist_line(line) {
-            let _ = assignee;
-            let stable_id = Uuid::new_v4().to_string();
-            if let Ok(item) =
-                db.create_action_item(Some(&note_id), &stable_id, &text, due.as_deref(), None, None)
-            {
-                created.push(item);
-            }
-        }
-    }
-    Ok(created)
+    extract_action_items_with(&ai_state.client, &model, &db, &note_id).await
 }
 
 /// #3: Get a note's action items.
@@ -1456,6 +1645,175 @@ mod tests {
         assert!(is_placeholder_title(""));
         assert!(!is_placeholder_title("Q3 planning"));
         assert!(!is_placeholder_title("Untitled draft of the roadmap"));
+    }
+
+    /// A stand-in for Ollama's /api/generate on a local port. Records every
+    /// prompt and answers each with `respond(prompt)`.
+    fn fake_ollama(respond: fn(&str) -> String) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let prompts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = prompts.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 16384];
+                let (body_start, len) = loop {
+                    let n = stream.read(&mut tmp).unwrap_or(0);
+                    if n == 0 {
+                        return;
+                    }
+                    buf.extend_from_slice(&tmp[..n]);
+                    if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&buf[..pos]).to_lowercase();
+                        let len = head
+                            .lines()
+                            .find_map(|l| l.strip_prefix("content-length:"))
+                            .and_then(|v| v.trim().parse::<usize>().ok())
+                            .unwrap_or(0);
+                        break (pos + 4, len);
+                    }
+                };
+                while buf.len() < body_start + len {
+                    let n = stream.read(&mut tmp).unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    buf.extend_from_slice(&tmp[..n]);
+                }
+                let body: serde_json::Value =
+                    serde_json::from_slice(&buf[body_start..body_start + len]).unwrap();
+                let prompt = body["prompt"].as_str().unwrap_or_default().to_string();
+                let json = serde_json::json!({ "response": respond(&prompt), "done": true }).to_string();
+                seen.lock().unwrap().push(prompt);
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    json.len(),
+                    json
+                );
+                let _ = stream.write_all(reply.as_bytes());
+            }
+        });
+        (url, prompts)
+    }
+
+    /// A note that started at midday UTC on 2026-01-05 (a Monday), so its local
+    /// date is the same in every timezone from UTC-11 to UTC+11.
+    fn meeting(db: &Database, transcript: &[&str], notes: Option<&str>) {
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO notes (id, title, started_at, created_at, updated_at, description)
+                 VALUES ('m1', 'Standup', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z', ?1)",
+                [notes],
+            )
+            .unwrap();
+        for (i, text) in transcript.iter().enumerate() {
+            let t = i as f64;
+            db.add_transcript_segment(&crate::db::models::NewTranscriptSegment::new("m1", t, t + 1.0, *text))
+                .unwrap();
+        }
+    }
+
+    fn prompt_budget() -> usize {
+        EXTRACT_NUM_CTX - EXTRACT_OUTPUT_RESERVE
+    }
+
+    #[tokio::test]
+    async fn long_meetings_are_read_in_chunks_that_fit_the_context() {
+        let db = Database::in_memory();
+        let mut lines = vec!["Alice will send the pricing deck by Friday."];
+        let filler = "We talked through the quarterly roadmap and the hiring plan in detail.";
+        lines.extend(std::iter::repeat_n(filler, 560)); // ~40k characters
+        meeting(&db, &lines, None);
+
+        let (url, prompts) = fake_ollama(|prompt| {
+            if prompt.contains("pricing deck") {
+                "- [ ] Send the pricing deck 📅2026-01-09".to_string()
+            } else {
+                "- [ ] Book the review room".to_string()
+            }
+        });
+        let client = OllamaClient::with_base_url(&url);
+        let created = extract_action_items_with(&client, "m", &db, "m1").await.unwrap();
+
+        let prompts = prompts.lock().unwrap();
+        assert!(prompts.len() > 1, "a 40k-character transcript went in one request");
+        for prompt in prompts.iter() {
+            assert!(estimate_tokens(prompt) <= prompt_budget(), "a prompt overflows num_ctx");
+        }
+        assert!(prompts[0].contains("2026-01-05 (Monday)"), "the prompt lacks the meeting date");
+
+        // The start of the meeting is no longer cut off...
+        let deck = created.iter().find(|t| t.text == "Send the pricing deck").unwrap();
+        assert_eq!(deck.due_date.as_deref(), Some("2026-01-09"));
+        // ...and an item found in several chunks is stored once.
+        assert_eq!(created.iter().filter(|t| t.text == "Book the review room").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn chinese_meetings_are_chunked_by_characters() {
+        let db = Database::in_memory();
+        let sentence = "我们讨论了下个季度的产品路线图和招聘计划。"; // 21 CJK characters
+        let transcript: Vec<&str> = std::iter::repeat_n(sentence, 950).collect(); // ~20k characters
+        let notes = "会议记录".repeat(750); // 3k characters, over the notes cap
+        meeting(&db, &transcript, Some(&notes));
+
+        let (url, prompts) = fake_ollama(|_| String::new());
+        let client = OllamaClient::with_base_url(&url);
+        extract_action_items_with(&client, "m", &db, "m1").await.unwrap();
+
+        let prompts = prompts.lock().unwrap();
+        assert!(prompts.len() > 1);
+        for prompt in prompts.iter() {
+            assert!(estimate_tokens(prompt) <= prompt_budget(), "a CJK prompt overflows num_ctx");
+        }
+        // The notes ride with the first chunk only.
+        assert!(prompts[0].contains("会议记录"));
+        assert!(prompts[1..].iter().all(|p| !p.contains("会议记录")));
+    }
+
+    #[tokio::test]
+    async fn running_generate_again_adds_nothing_new() {
+        let db = Database::in_memory();
+        meeting(&db, &["Bob will ping legal about the contract."], None);
+        let (url, _) = fake_ollama(|_| "- [ ] Ping legal about the contract".to_string());
+        let client = OllamaClient::with_base_url(&url);
+
+        assert_eq!(extract_action_items_with(&client, "m", &db, "m1").await.unwrap().len(), 1);
+        assert!(extract_action_items_with(&client, "m", &db, "m1").await.unwrap().is_empty());
+        assert_eq!(db.get_action_items("m1").unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn done_items_and_impossible_dates_are_handled() {
+        let db = Database::in_memory();
+        meeting(&db, &["Some things were decided."], None);
+        let (url, _) = fake_ollama(|_| {
+            "- [x] Ping legal\n- [ ] Ship v2 📅2023-01-01\n- [ ] Plan the offsite 📅2026-02-30\nNot a task"
+                .to_string()
+        });
+        let client = OllamaClient::with_base_url(&url);
+        let created = extract_action_items_with(&client, "m", &db, "m1").await.unwrap();
+
+        let by_text = |text: &str| created.iter().find(|t| t.text == text).unwrap();
+        assert!(by_text("Ping legal").done);
+        assert_eq!(by_text("Ship v2").due_date, None, "a date before the meeting was kept");
+        assert_eq!(by_text("Plan the offsite").due_date, None, "Feb 30 was kept");
+        assert_eq!(created.len(), 3);
+    }
+
+    #[test]
+    fn token_budget_splitting_keeps_every_word() {
+        let text = "One two three. Four five six! Seven eight nine? Ten. ".repeat(200);
+        let chunks = split_by_token_budget(&text, 40, 60);
+        assert!(estimate_tokens(&chunks[0]) <= 40);
+        assert!(chunks[1..].iter().all(|c| estimate_tokens(c) <= 60));
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>().join(" ");
+        assert_eq!(words(&chunks.join(" ")), words(&text));
     }
 
     #[test]

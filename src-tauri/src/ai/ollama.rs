@@ -73,6 +73,15 @@ impl OllamaClient {
         }
     }
 
+    /// A client for an Ollama-compatible server at `base_url` (tests).
+    #[cfg(test)]
+    pub fn with_base_url(base_url: &str) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+        }
+    }
+
     /// Check if Ollama is running
     pub async fn is_running(&self) -> bool {
         match self.client.get(&self.base_url).send().await {

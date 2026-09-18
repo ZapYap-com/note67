@@ -5,6 +5,7 @@ import { useTaskMutations } from "./tasks/useTaskMutations";
 import { TaskDetailPane } from "./tasks/TaskDetailPane";
 import { TaskCheckbox } from "./tasks/TaskCheckbox";
 import { DueChip } from "./tasks/DueChip";
+import { useAddTask } from "./tasks/useAddTask";
 
 interface ActionsTabProps {
   noteId: string;
@@ -17,7 +18,6 @@ interface ActionsTabProps {
 export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: ActionsTabProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [extracting, setExtracting] = useState(false);
-  const [draft, setDraft] = useState("");
   // Seed from focusTaskId so opening from the central page lands on that task.
   const [selectedId, setSelectedId] = useState<number | null>(focusTaskId ?? null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
@@ -82,21 +82,11 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
     items.find((i) => i.id === selectedId && i.parent_id == null) ?? null;
   const subtasks = selected ? items.filter((i) => i.parent_id === selected.id) : [];
 
-  const addTask = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    try {
-      // Autofill today's date on manual task entry (local YYYY-MM-DD).
-      const today = new Date().toLocaleDateString("en-CA");
-      const created = await tasksApi.createActionItem(noteId, trimmed, today);
-      setItems((prev) => [...prev, created]);
-      setDraft("");
-      setSelectedId(created.id);
-      onChanged?.();
-    } catch (e) {
-      console.error("Failed to create task:", e);
-    }
-  };
+  const { draft, setDraft, add: addTask } = useAddTask(noteId, (created) => {
+    setItems((prev) => [...prev, created]);
+    setSelectedId(created.id);
+    onChanged?.();
+  });
 
   const generate = async () => {
     if (extracting) return;
@@ -209,8 +199,8 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTask(draft)}
-              onBlur={() => addTask(draft)}
+              onKeyDown={(e) => e.key === "Enter" && addTask()}
+              onBlur={() => addTask()}
               placeholder="Add a task…"
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: "var(--color-text)" }}

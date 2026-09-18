@@ -5,6 +5,7 @@ import { useTaskMutations } from "./tasks/useTaskMutations";
 import { TaskDetailPane } from "./tasks/TaskDetailPane";
 import { TaskCheckbox } from "./tasks/TaskCheckbox";
 import { DueChip } from "./tasks/DueChip";
+import { useAddTask } from "./tasks/useAddTask";
 
 interface TasksViewProps {
   refreshKey?: number;
@@ -49,7 +50,6 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   // Completed tasks load lazily (a long history isn't pulled with open tasks).
   const [completedLoaded, setCompletedLoaded] = useState(false);
@@ -84,20 +84,15 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
     if (next && !completedLoaded) loadCompletedPage();
   };
 
-  // Add a standalone task (not tied to any note) with today's date.
-  const addStandaloneTask = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    try {
-      const today = new Date().toLocaleDateString("en-CA");
-      const created = await tasksApi.createActionItem(null, trimmed, today);
-      setItems((prev) => [...prev, created]);
-      setDraft("");
-      setSelectedId(created.id);
-    } catch (e) {
-      console.error("Failed to create task:", e);
-    }
-  };
+  // Add a standalone task (not tied to any note).
+  const {
+    draft,
+    setDraft,
+    add: addStandaloneTask,
+  } = useAddTask(null, (created) => {
+    setItems((prev) => [...prev, created]);
+    setSelectedId(created.id);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -318,8 +313,8 @@ export function TasksView({ refreshKey = 0, onOpenInNote, noteTitles }: TasksVie
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addStandaloneTask(draft)}
-                onBlur={() => addStandaloneTask(draft)}
+                onKeyDown={(e) => e.key === "Enter" && addStandaloneTask()}
+                onBlur={() => addStandaloneTask()}
                 placeholder="Add a task…"
                 className="flex-1 bg-transparent outline-none text-sm"
                 style={{ color: "var(--color-text)" }}
