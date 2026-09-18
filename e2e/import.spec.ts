@@ -33,6 +33,29 @@ test.describe("imported audio", () => {
     await expect(page.getByRole("button", { name: "Transcribe", exact: true })).toBeVisible();
   });
 
+  test("a failed Retranscribe says why, and the files show how it went", async ({ page }) => {
+    const reason =
+      "Retranscription failed, so the existing transcript was kept: call.m4a: unreadable";
+    await installTauriMock(page, {
+      list_notes: [note],
+      get_note: note,
+      get_uploaded_audio: [imported],
+      retranscribe_note: { __reject: reason },
+    });
+    await page.goto("/");
+    await openNote(page);
+
+    await page.getByRole("button", { name: "Retranscribe", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText(reason);
+    // The pass settles each upload's status, so the list is fetched again.
+    await page.waitForFunction(
+      () =>
+        ((window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []).filter(
+          (name) => name === "get_uploaded_audio"
+        ).length >= 2
+    );
+  });
+
   test("a failed import says why", async ({ page }) => {
     const reason = "Opus audio isn't supported yet. Convert it to m4a or mp3 and upload it again.";
     await installTauriMock(page, {

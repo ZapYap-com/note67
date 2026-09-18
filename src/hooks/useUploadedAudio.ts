@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { uploadApi } from "../api";
 import type { UploadedAudio } from "../types";
 
+const errorText = (err: unknown) =>
+  err instanceof Error ? err.message : String(err);
+
+/**
+ * A note's uploaded audio. `error` is a sentence ready to show: it says which
+ * action failed, because upload, delete and transcribe share it.
+ */
 export function useUploadedAudio(noteId: string | null) {
   const [uploads, setUploads] = useState<UploadedAudio[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -19,7 +26,7 @@ export function useUploadedAudio(noteId: string | null) {
       setUploads(data);
       setLoadedNoteId(noteId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(`Couldn't load this note's audio files. ${errorText(err)}`);
     }
   }, [noteId]);
 
@@ -36,7 +43,9 @@ export function useUploadedAudio(noteId: string | null) {
         setLoadedNoteId(noteId);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) {
+          setError(`Couldn't load this note's audio files. ${errorText(err)}`);
+        }
       });
     return () => {
       cancelled = true;
@@ -59,8 +68,7 @@ export function useUploadedAudio(noteId: string | null) {
         }
         return upload;
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
+        setError(`Couldn't upload that file. ${errorText(err)}`);
         return null;
       } finally {
         setIsUploading(false);
@@ -74,7 +82,7 @@ export function useUploadedAudio(noteId: string | null) {
       await uploadApi.delete(uploadId);
       setUploads((prev) => prev.filter((u) => u.id !== uploadId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(`Couldn't delete that file. ${errorText(err)}`);
     }
   }, []);
 
@@ -102,8 +110,7 @@ export function useUploadedAudio(noteId: string | null) {
 
         return segmentCount;
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
+        setError(`Couldn't transcribe that file. ${errorText(err)}`);
 
         // Update local status to failed
         setUploads((prev) =>

@@ -561,40 +561,40 @@ const EXTRACT_OUTPUT_RESERVE: usize = 512;
 /// The user's own notes are capped so they can't crowd out the transcript.
 const EXTRACT_NOTES_CAP: usize = 1500;
 
-fn is_cjk(c: char) -> bool {
-    matches!(c as u32,
-        0x3000..=0x30FF     // CJK punctuation, Hiragana, Katakana
-        | 0x3400..=0x4DBF   // CJK Extension A
-        | 0x4E00..=0x9FFF   // CJK Unified Ideographs
-        | 0xAC00..=0xD7AF   // Hangul syllables
-        | 0xF900..=0xFAFF   // CJK compatibility ideographs
-        | 0xFF00..=0xFFEF)  // Fullwidth forms
+/// Whether a character counts as a whole token: any that UTF-8 stores in
+/// three or more bytes. That covers CJK, Thai, Devanagari and the other
+/// scripts tokenizers split most finely. Counting them by bytes, as only CJK
+/// escaped before, undercounted Thai and Hindi until chunks overflowed
+/// num_ctx. One- and two-byte text (Latin, Greek, Cyrillic, Arabic, Hebrew)
+/// merges into two or more characters a token, so bytes/4 stays generous.
+fn is_whole_token(c: char) -> bool {
+    c.len_utf8() >= 3
 }
 
-/// A deliberately generous token estimate for budgeting a prompt: a CJK
-/// character counts as one token, other text as one token per four bytes.
+/// A deliberately generous token estimate for budgeting a prompt: see
+/// `is_whole_token`; other text counts one token per four bytes.
 fn estimate_tokens(text: &str) -> usize {
-    let (cjk, other_bytes) = text.chars().fold((0usize, 0usize), |(cjk, other), c| {
-        if is_cjk(c) {
-            (cjk + 1, other)
+    let (whole, bytes) = text.chars().fold((0usize, 0usize), |(whole, bytes), c| {
+        if is_whole_token(c) {
+            (whole + 1, bytes)
         } else {
-            (cjk, other + c.len_utf8())
+            (whole, bytes + c.len_utf8())
         }
     });
-    cjk + other_bytes.div_ceil(4)
+    whole + bytes.div_ceil(4)
 }
 
 /// The longest prefix of `text` estimated at no more than `cap` tokens.
 fn truncate_to_tokens(text: &str, cap: usize) -> &str {
-    let mut cjk = 0usize;
-    let mut other = 0usize;
+    let mut whole = 0usize;
+    let mut bytes = 0usize;
     for (i, c) in text.char_indices() {
-        if is_cjk(c) {
-            cjk += 1;
+        if is_whole_token(c) {
+            whole += 1;
         } else {
-            other += c.len_utf8();
+            bytes += c.len_utf8();
         }
-        if cjk + other.div_ceil(4) > cap {
+        if whole + bytes.div_ceil(4) > cap {
             return &text[..i];
         }
     }
@@ -1164,35 +1164,39 @@ pub async fn generate_title_from_summary(
         }
     }
 
-    // Update note title in database and sync incoming links
-    {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    Ok(apply_generated_title(&db, &note_id, &title)?.unwrap_or(current_title))
+}
 
-        // Get old title for link updates
-        let old_title: Option<String> = conn
-            .query_row(
-                "SELECT title FROM notes WHERE id = ?1",
-                [&note_id],
-                |row| row.get(0),
-            )
-            .ok();
-
-        let now = chrono::Utc::now();
-        conn.execute(
-            "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            rusqlite::params![&title, now.to_rfc3339(), &note_id],
-        )
-        .map_err(|e| e.to_string())?;
-
-        // Update incoming links if title changed
-        if let Some(old) = old_title
-            && old != title
-        {
-            update_incoming_links_internal(&conn, &note_id, &old, &title)?;
-        }
+/// Give a note its generated title and update the links to it, unless it no
+/// longer has a placeholder title. The model takes seconds, and the check
+/// before it ran didn't cover a title typed meanwhile, which this then
+/// overwrote; checking under the same lock as the write does. Returns the
+/// note's title afterwards, or None if the note is gone.
+fn apply_generated_title(
+    db: &Database,
+    note_id: &str,
+    title: &str,
+) -> Result<Option<String>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let Ok(old) = conn.query_row("SELECT title FROM notes WHERE id = ?1", [note_id], |row| {
+        row.get::<_, String>(0)
+    }) else {
+        return Ok(None);
+    };
+    if !is_placeholder_title(&old) {
+        return Ok(Some(old));
     }
 
-    Ok(title)
+    let now = chrono::Utc::now();
+    conn.execute(
+        "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![title, now.to_rfc3339(), note_id],
+    )
+    .map_err(|e| e.to_string())?;
+    if old != title {
+        update_incoming_links_internal(&conn, note_id, &old, title)?;
+    }
+    Ok(Some(title.to_string()))
 }
 
 /// Whether a title is the placeholder a new note gets, so it may be replaced.
@@ -1392,6 +1396,47 @@ mod tests {
         assert!(!is_placeholder_title("Untitled draft of the roadmap"));
     }
 
+    #[test]
+    fn a_title_typed_while_the_model_worked_is_kept() {
+        let db = Database::in_memory();
+        let now = "2026-01-05T12:00:00Z";
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO notes (id, title, started_at, created_at, updated_at)
+                 VALUES ('n1', 'Untitled', ?1, ?1, ?1), ('n2', 'Untitled', ?1, ?1, ?1)",
+                [now],
+            )
+            .unwrap();
+        let title_of = |id: &str| {
+            db.conn
+                .lock()
+                .unwrap()
+                .query_row("SELECT title FROM notes WHERE id = ?1", [id], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap()
+        };
+
+        let apply = |id: &str| apply_generated_title(&db, id, "Q3 roadmap review").unwrap();
+
+        assert_eq!(apply("n1").as_deref(), Some("Q3 roadmap review"));
+        assert_eq!(title_of("n1"), "Q3 roadmap review");
+
+        // Named by hand before the model answered.
+        db.conn
+            .lock()
+            .unwrap()
+            .execute("UPDATE notes SET title = 'Budget call' WHERE id = 'n2'", [])
+            .unwrap();
+        assert_eq!(apply("n2").as_deref(), Some("Budget call"));
+        assert_eq!(title_of("n2"), "Budget call");
+
+        // Deleted before the model answered.
+        assert_eq!(apply("gone"), None);
+    }
+
     /// A stand-in for Ollama's /api/generate on a local port. Records every
     /// prompt and answers each with `respond(prompt)`.
     fn fake_ollama(respond: fn(&str) -> String) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
@@ -1549,6 +1594,19 @@ mod tests {
         assert_eq!(by_text("Ship v2").due_date, None, "a date before the meeting was kept");
         assert_eq!(by_text("Plan the offsite").due_date, None, "Feb 30 was kept");
         assert_eq!(created.len(), 3);
+    }
+
+    #[test]
+    fn scripts_tokenizers_split_finely_count_a_token_a_character() {
+        // Thai, Devanagari, CJK: one token per character.
+        assert_eq!(estimate_tokens("สวัสดีครับ"), 10);
+        assert_eq!(estimate_tokens("नमस्ते"), 6);
+        assert_eq!(estimate_tokens("会议纪要"), 4);
+        // English and Cyrillic: one per four bytes.
+        assert_eq!(estimate_tokens("Meeting notes"), 4);
+        assert_eq!(estimate_tokens("Привет"), 3);
+        // Truncation agrees with the estimate, and never splits a character.
+        assert_eq!(truncate_to_tokens("สวัสดีครับ", 4), "สวัส");
     }
 
     #[test]

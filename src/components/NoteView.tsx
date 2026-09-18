@@ -289,26 +289,30 @@ export function NoteView({
 
   // Retranscribe state and handlers
   const [isRetranscribing, setIsRetranscribing] = useState(false);
+  // Shown until dismissed: the button gives no other sign that it failed.
+  const [retranscribeError, setRetranscribeError] = useState<string | null>(null);
 
   const handleRetranscribeAll = useCallback(async () => {
     if (isRetranscribing) return;
     setIsRetranscribing(true);
+    setRetranscribeError(null);
     // Switch to transcript tab to show progress
     onTabChange("transcript");
     try {
-      console.log("Starting retranscribe for note:", note.id);
-      console.log("Audio segments:", audioSegments);
-      console.log("Uploads:", uploads);
-      const result = await transcriptionApi.retranscribeNote(note.id);
-      console.log("Retranscribe result:", result);
+      await transcriptionApi.retranscribeNote(note.id);
       // Refresh transcripts
       onTranscriptUpdated?.();
     } catch (error) {
       console.error("Retranscribe failed:", error);
+      setRetranscribeError(
+        error instanceof Error ? error.message : String(error)
+      );
     } finally {
       setIsRetranscribing(false);
+      // The pass settles each upload's status, whichever way it went.
+      loadUploads();
     }
-  }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange, audioSegments, uploads]);
+  }, [note.id, isRetranscribing, onTranscriptUpdated, onTabChange, loadUploads]);
 
   // Set titleValue to current note.title when entering edit mode
   const handleEditTitle = () => {
@@ -879,27 +883,17 @@ export function NoteView({
         />
       )}
 
-      {/* Import errors: the file picker closes before conversion, so this is
-          the only place a failed import (e.g. Opus audio) can be reported. */}
+      {/* Audio file errors: the file picker closes before conversion, so
+          this is the only place a failed import (e.g. Opus audio) can be
+          reported. */}
       {uploadError && (
-        <div
-          className="mx-6 mb-2 flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
-          style={{
-            backgroundColor: "var(--color-bg-subtle)",
-            border: "1px solid var(--color-border)",
-            color: "var(--color-text)",
-          }}
-          role="alert"
-        >
-          <span className="flex-1">Couldn't upload that file. {uploadError}</span>
-          <button
-            onClick={clearUploadError}
-            className="text-xs shrink-0"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            Dismiss
-          </button>
-        </div>
+        <Notice message={uploadError} onDismiss={clearUploadError} />
+      )}
+      {retranscribeError && (
+        <Notice
+          message={retranscribeError}
+          onDismiss={() => setRetranscribeError(null)}
+        />
       )}
 
       {/* Audio Player - show when there's audio to play and not recording */}
@@ -944,3 +938,33 @@ export function NoteView({
   );
 }
 
+
+/** A dismissible message about something that failed in the background. */
+function Notice({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="mx-6 mb-2 flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
+      style={{
+        backgroundColor: "var(--color-bg-subtle)",
+        border: "1px solid var(--color-border)",
+        color: "var(--color-text)",
+      }}
+      role="alert"
+    >
+      <span className="flex-1">{message}</span>
+      <button
+        onClick={onDismiss}
+        className="text-xs shrink-0"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}

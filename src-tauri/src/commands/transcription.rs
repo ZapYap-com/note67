@@ -66,6 +66,30 @@ fn pass_outcome(total_items: usize, failures: usize, rebuilt_segments: usize) ->
     }
 }
 
+/// Upload statuses follow what the pass did to the transcript, so they are
+/// written once its outcome is known. Marking an upload "completed" as soon
+/// as it transcribed showed it as done when another item's failure then kept
+/// the old transcript, which may have no lines from it.
+fn settle_upload_statuses(db: &Database, outcome: &PassOutcome, uploads: &[i64], failed: &[i64]) {
+    match outcome {
+        // Every item transcribed, and the transcript now holds each upload's lines.
+        PassOutcome::Replace => {
+            for id in uploads {
+                let _ = db.update_uploaded_audio_status(*id, "completed");
+            }
+        }
+        // Nothing changed, so every status still describes its upload.
+        PassOutcome::Keep => {}
+        // The old transcript stays, and so do the other statuses. A failed
+        // upload offers Retry, which transcribes just that file.
+        PassOutcome::KeepAndReport => {
+            for id in failed {
+                let _ = db.update_uploaded_audio_status(*id, "failed");
+            }
+        }
+    }
+}
+
 /// The language batch transcription uses. Live transcription gets it from the
 /// frontend's `whisper_language` setting, so the batch passes read the same
 /// key with the same defaults: unset means English, "auto" means detect.
@@ -381,6 +405,7 @@ pub async fn retranscribe_note(
     let total_items = segments.len() + uploads.len();
     let mut completed_items = 0;
     let mut failed_items: Vec<String> = Vec::new();
+    let mut failed_uploads: Vec<i64> = Vec::new();
     let mut total_segments_created = 0;
 
     // Build the new transcript in memory and swap it in atomically at the end.
@@ -540,12 +565,9 @@ pub async fn retranscribe_note(
             "currentItem": item_name,
         }));
 
-        // Update status to processing
-        let _ = db.update_uploaded_audio_status(upload.id, "processing");
-
-        // No per-upload delete here: the whole transcript is replaced in one
-        // transaction at the end, so deleting now would undo the atomicity and
-        // leave a gap if this pass never finishes.
+        // No per-upload delete or status here: the whole transcript is
+        // replaced in one transaction at the end, or not at all, and the
+        // statuses follow that outcome (settle_upload_statuses).
 
         // Transcribe
         let file_path = PathBuf::from(&upload.file_path);
@@ -567,14 +589,13 @@ pub async fn retranscribe_note(
                         total_segments_created += 1;
                     }
                 }
-                let _ = db.update_uploaded_audio_status(upload.id, "completed");
             }
             Ok(Err(e)) => {
-                let _ = db.update_uploaded_audio_status(upload.id, "failed");
+                failed_uploads.push(upload.id);
                 failed_items.push(format!("{}: {}", item_name, e));
             }
             Err(e) => {
-                let _ = db.update_uploaded_audio_status(upload.id, "failed");
+                failed_uploads.push(upload.id);
                 failed_items.push(format!("{}: {}", item_name, e));
             }
         }
@@ -585,22 +606,22 @@ pub async fn retranscribe_note(
     // Swap the rebuilt transcript in, in a single transaction. Up to this point
     // the note still holds its previous transcript, so anything that went wrong
     // above — including the app being closed — costs nothing.
-    match pass_outcome(total_items, failed_items.len(), rebuilt.len()) {
-        PassOutcome::Replace => {
-            if let Err(e) = db.replace_transcript_segments(&note_id, &rebuilt) {
-                return Err(format!(
-                    "Failed to save the rebuilt transcript (the existing one was kept): {}",
-                    e
-                ));
-            }
-        }
-        PassOutcome::Keep => {}
-        PassOutcome::KeepAndReport => {
-            return Err(format!(
-                "Retranscription failed, so the existing transcript was kept: {}",
-                failed_items.join("; ")
-            ));
-        }
+    let outcome = pass_outcome(total_items, failed_items.len(), rebuilt.len());
+    if outcome == PassOutcome::Replace
+        && let Err(e) = db.replace_transcript_segments(&note_id, &rebuilt)
+    {
+        return Err(format!(
+            "Failed to save the rebuilt transcript (the existing one was kept): {}",
+            e
+        ));
+    }
+    let upload_ids: Vec<i64> = uploads.iter().map(|u| u.id).collect();
+    settle_upload_statuses(&db, &outcome, &upload_ids, &failed_uploads);
+    if outcome == PassOutcome::KeepAndReport {
+        return Err(format!(
+            "Retranscription failed, so the existing transcript was kept: {}",
+            failed_items.join("; ")
+        ));
     }
 
     // Emit final progress
@@ -677,6 +698,45 @@ mod tests {
     #[test]
     fn a_complete_pass_replaces_the_transcript() {
         assert_eq!(pass_outcome(2, 0, 25), PassOutcome::Replace);
+    }
+
+    #[test]
+    fn upload_statuses_follow_what_happened_to_the_transcript() {
+        let db = Database::in_memory();
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO notes (id, title, started_at, created_at, updated_at)
+                 VALUES ('n1', 'Call', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let add = |name: &str| {
+            let path = format!("/u/{name}");
+            db.add_uploaded_audio("n1", &path, name, None, "Others")
+                .unwrap()
+        };
+        let (new, done, broken) = (add("a.m4a"), add("b.m4a"), add("c.m4a"));
+        db.update_uploaded_audio_status(done, "completed").unwrap();
+        db.update_uploaded_audio_status(broken, "completed")
+            .unwrap();
+        let status = |id| {
+            db.get_uploaded_audio_by_id(id)
+                .unwrap()
+                .transcription_status
+        };
+        let all = [new, done, broken];
+
+        // c.m4a failed, so the old transcript stays: a.m4a transcribed fine
+        // but none of it was kept, so it still offers Transcribe.
+        settle_upload_statuses(&db, &PassOutcome::KeepAndReport, &all, &[broken]);
+        assert_eq!(status(new), "pending");
+        assert_eq!(status(done), "completed");
+        assert_eq!(status(broken), "failed");
+
+        settle_upload_statuses(&db, &PassOutcome::Replace, &all, &[]);
+        assert!(all.iter().all(|id| status(*id) == "completed"));
     }
 
     #[test]

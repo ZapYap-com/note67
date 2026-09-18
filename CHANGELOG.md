@@ -37,6 +37,10 @@ audio, meeting detection and launch at login.
 - After Note67 started at login, its window couldn't be brought back by
   reloading.
 - Clicking through a task's details no longer marks it as edited.
+- When Retranscribe fails, Note67 now says why (the transcript you had is
+  kept), and imported files are no longer marked as transcribed when their
+  new transcript was discarded. Errors about imported files say whether
+  adding, transcribing or deleting the file failed.
 
 ### Under the hood
 
@@ -69,7 +73,8 @@ transcript or your notes could be lost.
 - Recording no longer needs Ollama. You only need a transcription model;
   Ollama adds summaries, titles and tasks when it's running. If you start
   Ollama after Note67, it's picked up without choosing your model again.
-- Summarize no longer renames notes you've titled yourself.
+- Summarize no longer renames notes you've titled yourself, including a
+  title you type while the summary is being written.
 - Search works with hyphens, apostrophes, dots and email addresses.
 - Finding tasks in a long meeting now reads the whole meeting, and running
   it again doesn't add the same tasks twice. Tasks you add yourself no
