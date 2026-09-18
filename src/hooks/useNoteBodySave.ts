@@ -8,6 +8,9 @@ import { useCallback, useEffect, useRef } from "react";
  * `value` is the editor's text and `stored` the note's saved description.
  * Latest values live in refs (updated in effects, not during render), so a
  * save always writes the newest text through the newest callback.
+ *
+ * `save` rejects if `onSave` does, and the text then stays unsaved, so the
+ * next edit, blur or flush tries it again.
  */
 export function useNoteBodySave(
   value: string,
@@ -40,14 +43,22 @@ export function useNoteBodySave(
     // surrounding whitespace used to count as unsaved forever, so every save
     // scheduled another one.
     if (next.trim() === savedRef.current.trim()) return;
+    // Marked saved up front, so a blur and the timer don't both write it.
+    const previous = savedRef.current;
     savedRef.current = next;
-    await onSaveRef.current(next);
+    try {
+      await onSaveRef.current(next);
+    } catch (e) {
+      // Not saved after all. Left marked, it was never tried again.
+      if (savedRef.current === next) savedRef.current = previous;
+      throw e;
+    }
   }, []);
 
   useEffect(() => {
     if (value.trim() === stored.trim()) return;
     const timeoutId = setTimeout(() => {
-      void save();
+      save().catch((e) => console.error("Autosave failed:", e));
     }, delayMs);
     return () => clearTimeout(timeoutId);
   }, [value, stored, save, delayMs]);

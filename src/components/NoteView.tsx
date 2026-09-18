@@ -188,12 +188,16 @@ export function NoteView({
 
   // Reset the playing audio path when the note's audio changes (don't auto-play).
   // Done during render (not an effect) to avoid a synchronous setState in an
-  // effect; only runs when note.audio_path actually changes.
+  // effect; only runs when note.audio_path actually changes. A rebuild has
+  // already switched the player to the new track and asked it to play; the
+  // notes refresh that follows used to cancel that, so it's left alone.
   const [prevAudioPath, setPrevAudioPath] = useState(note.audio_path);
   if (note.audio_path !== prevAudioPath) {
     setPrevAudioPath(note.audio_path);
-    setPlayingAudioPath(note.audio_path || null);
-    setShouldAutoPlay(false);
+    if ((note.audio_path || null) !== playingAudioPath) {
+      setPlayingAudioPath(note.audio_path || null);
+      setShouldAutoPlay(false);
+    }
   }
 
   // The note body is saved 1.5 s after typing stops, on blur, and on demand
@@ -783,7 +787,11 @@ export function NoteView({
             <MarkdownEditor
               value={descValue}
               onChange={setDescValue}
-              onBlur={() => void saveDescription()}
+              onBlur={() =>
+                saveDescription().catch((e) =>
+                  console.error("Saving the note failed:", e)
+                )
+              }
               placeholder="Take notes or press / for commands..."
               noteId={note.id}
               onWikiLinkClick={onWikiLinkClick}

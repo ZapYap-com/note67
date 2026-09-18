@@ -260,7 +260,9 @@ function App() {
   // Load a note's transcript the first time it is opened, however it was opened:
   // the sidebar, Cmd+K, a link, the graph or the Tasks page. Only the sidebar
   // used to load it, so notes opened any other way showed an empty transcript.
-  // Empty results are cached too, so a note without one isn't refetched.
+  // Empty results are cached too, so a note without one isn't refetched, but
+  // a failed load is not: cached as empty, the note showed no transcript for
+  // the rest of the session. Opening it again retries.
   const noteTranscriptsRef = useRef(noteTranscripts);
   useEffect(() => {
     noteTranscriptsRef.current = noteTranscripts;
@@ -269,14 +271,17 @@ function App() {
     if (!selectedNoteId || noteTranscriptsRef.current[selectedNoteId]) return;
     const noteId = selectedNoteId;
     let cancelled = false;
-    loadTranscript(noteId).then((segments) => {
-      if (cancelled || noteTranscriptsRef.current[noteId]) return;
-      setNoteTranscripts((prev) => ({ ...prev, [noteId]: segments }));
-    });
+    transcriptionApi
+      .getTranscript(noteId)
+      .then((segments) => {
+        if (cancelled || noteTranscriptsRef.current[noteId]) return;
+        setNoteTranscripts((prev) => ({ ...prev, [noteId]: segments }));
+      })
+      .catch((e) => console.error("Loading the transcript failed:", e));
     return () => {
       cancelled = true;
     };
-  }, [selectedNoteId, loadTranscript]);
+  }, [selectedNoteId]);
 
   // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId

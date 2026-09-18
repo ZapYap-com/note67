@@ -172,6 +172,16 @@ export async function installTauriMock(
           if (result && typeof result === "object" && "__reject" in result) {
             return Promise.reject((result as { __reject: string }).__reject);
           }
+          // `{ __rejectOnce: "message", __after: value }` fails the first call
+          // only, then answers `__after`.
+          if (result && typeof result === "object" && "__rejectOnce" in result) {
+            const once = result as { __rejectOnce: string; __after: unknown; __failed?: boolean };
+            if (!once.__failed) {
+              once.__failed = true;
+              return Promise.reject(once.__rejectOnce);
+            }
+            return Promise.resolve(once.__after);
+          }
           // Seed the note store from reads so subsequent writes can echo.
           if (cmd === "list_notes" && Array.isArray(result)) result.forEach(rememberNote);
           if (cmd === "get_note") rememberNote(result);

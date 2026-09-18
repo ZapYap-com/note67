@@ -65,7 +65,8 @@ transcript or your notes could be lost.
 - Non-English meetings were re-transcribed in English after you pressed Stop.
   The transcription language setting is now used everywhere.
 - Notes typed during a meeting are saved as you type, not only when you
-  click away, and they are saved before the summary is written.
+  click away, and they are saved before the summary is written. A save that
+  fails is tried again instead of being dropped.
 - Clearing a note's text now sticks.
 - Starting a second recording while one was running (or paused) could file
   the first meeting's audio under the wrong note. Only one recording can

@@ -65,6 +65,20 @@ describe("useNoteBodySave", () => {
     expect(onSave).toHaveBeenCalledOnce();
   });
 
+  it("keeps a failed save pending, so the next one tries again", async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockResolvedValue(undefined);
+    const { result, rerender } = setup({ value: "a", stored: "a", onSave });
+    rerender({ value: "a b", stored: "a", onSave });
+
+    await act(() => expect(result.current()).rejects.toThrow("disk full"));
+    await act(() => result.current());
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave).toHaveBeenLastCalledWith("a b");
+  });
+
   it("does nothing when flushed with no edits", async () => {
     const onSave = vi.fn();
     const { result } = setup({ value: "a", stored: "a", onSave });

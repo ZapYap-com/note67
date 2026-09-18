@@ -51,9 +51,18 @@ export const useNoteUiStore = create<NoteUiState>((set) => ({
   setFlushNoteSave: (flushNoteSave) => set({ flushNoteSave }),
 }));
 
-/** Save the open note's pending edits now, if there are any. */
+/**
+ * Save the open note's pending edits now, if there are any. Never throws:
+ * a failed save stays pending for the editor to retry, and what called this
+ * (a Stop, a summary) goes ahead with what's saved. A rejected flush used
+ * to abort the Stop before the recording stopped.
+ */
 export async function flushPendingNoteSave(): Promise<void> {
-  await useNoteUiStore.getState().flushNoteSave?.();
+  try {
+    await useNoteUiStore.getState().flushNoteSave?.();
+  } catch (e) {
+    console.error("Saving the note first failed:", e);
+  }
 }
 
 /** Restore the initial state — for tests. */
