@@ -7,6 +7,41 @@ the people using the app.
 Earlier versions are listed on the
 [GitHub releases page](https://github.com/ZapYap-com/note67/releases).
 
+## [0.1.28] - Unreleased
+
+Cleanup, and fixes to the features Note67 is keeping: tasks, uploaded
+audio, meeting detection and launch at login.
+
+### Changed
+
+- Meeting detection can be turned off (Settings > System), and the setting
+  is remembered. It prompts once per call instead of again whenever the
+  call's window title changes, never during a recording, and the prompt
+  goes away when the call ends. Having Teams or Discord open no longer counts
+  as being in a meeting. If Screen Recording permission is missing, the
+  setting says so.
+- The meeting prompt now shows even when Note67's window is closed to the
+  menu bar.
+- Uploaded audio is transcribed as soon as it's added, when a
+  transcription model is loaded.
+- Deleting a task can be undone for a few seconds, subtasks included.
+  Deleting a note tells you how many tasks go with it.
+- Overdue tasks are highlighted in a note's Tasks tab too, and task
+  checkboxes work with the keyboard and screen readers.
+
+### Fixed
+
+- Stopping a recording while an upload was still being transcribed skipped
+  the recording's final, higher-quality transcription. It now waits its turn.
+- After Note67 started at login, its window couldn't be brought back by
+  reloading.
+- Clicking through a task's details no longer marks it as edited.
+
+### Under the hood
+
+- About 2,500 lines of unused code, 33 unused internal commands and five
+  unused libraries removed.
+
 ## [0.1.27] - Unreleased
 
 A reliability release: fixes for crashes and for ways a recording, its
