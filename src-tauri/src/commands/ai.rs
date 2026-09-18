@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::ai::prompts::MAX_CONTENT_LENGTH;
 use crate::ai::{OllamaClient, OllamaModel, SummaryPrompts, WritingPrompts};
 use crate::commands::links::update_incoming_links_internal;
-use crate::db::models::{ActionItem, ActionItemWithNote, Summary, SummaryType};
+use crate::db::models::{ActionItem, Summary, SummaryType};
 use crate::db::Database;
 
 /// The longest prefix of `text` that fits in `max_bytes` without splitting a
@@ -635,9 +635,8 @@ pub fn delete_summary(summary_id: i64, db: State<'_, Database>) -> Result<(), St
     db.delete_summary(summary_id).map_err(|e| e.to_string())
 }
 
-/// Parse one AI checklist line ("- [ ] task @assignee 📅2026-07-11") into
-/// (text, assignee, due_date). Returns None for non-task lines.
-/// One line of the model's checklist.
+/// One line of the model's checklist ("- [ ] task 📅2026-07-11"). Lines that
+/// aren't checklist items parse to None.
 #[derive(Debug, PartialEq)]
 struct ChecklistItem {
     text: String,
@@ -985,24 +984,10 @@ pub fn update_action_item(
         .map_err(|e| e.to_string())
 }
 
-/// #3: Toggle an action item's done flag (used by the global Tasks view).
-#[tauri::command]
-pub fn set_action_item_done(id: i64, done: bool, db: State<'_, Database>) -> Result<(), String> {
-    db.set_action_item_done(id, done).map_err(|e| e.to_string())
-}
-
 /// #3: Delete an action item.
 #[tauri::command]
 pub fn delete_action_item(id: i64, db: State<'_, Database>) -> Result<(), String> {
     db.delete_action_item(id).map_err(|e| e.to_string())
-}
-
-/// #3: All open action items across every note, for the global Tasks view.
-#[tauri::command]
-pub fn list_all_open_action_items(
-    db: State<'_, Database>,
-) -> Result<Vec<ActionItemWithNote>, String> {
-    db.list_all_open_action_items().map_err(|e| e.to_string())
 }
 
 /// Generate a title for a note based on its transcript

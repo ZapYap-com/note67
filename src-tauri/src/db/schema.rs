@@ -429,10 +429,9 @@ fn migrate_v10(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 fn migrate_v11(conn: &Connection) -> rusqlite::Result<()> {
-    // Action items derived from note bodies (inline GFM checkboxes are the
-    // source of truth; this table is a queryable index for the global Tasks
-    // view). `stable_id` is a hash of note_id + normalized text so a note can
-    // be re-synced idempotently without losing checked state.
+    // Action items. First planned as an index over checklists in note bodies,
+    // with `stable_id` a hash of the text; they shipped as rows of their own,
+    // `stable_id` is a random id, and v13 later dropped the UNIQUE constraint.
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS action_items (
              id INTEGER PRIMARY KEY AUTOINCREMENT,

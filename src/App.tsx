@@ -23,7 +23,7 @@ import {
   ConfirmDialog,
   ContextMenu,
 } from "./components";
-import { exportApi, aiApi, transcriptionApi, tagsApi } from "./api";
+import { exportApi, aiApi, transcriptionApi, tagsApi, tasksApi } from "./api";
 import { getTagColor } from "./utils/tagColors";
 import { useTagsStore } from "./stores/tagsStore";
 import {
@@ -161,8 +161,6 @@ function App() {
   const [currentView, setCurrentView] = useState<"notes" | "graph" | "tasks">(
     "notes"
   );
-  // Bumped after note edits so the global Tasks view reloads.
-  const [tasksRefreshKey, setTasksRefreshKey] = useState(0);
   // When navigating from the global Tasks view, the task to focus in the note.
   const setFocusTaskId = useNoteUiStore((s) => s.setFocusTaskId);
   const [showSettings, setShowSettings] = useState(false);
@@ -803,11 +801,32 @@ function App() {
     }
   };
 
-  // Stable so NoteView's debounced effects don't reset on every App render.
-  const handleTasksChanged = useCallback(
-    () => setTasksRefreshKey((k) => k + 1),
-    []
-  );
+  // How many tasks go with a note being deleted: the foreign key cascades
+  // them, so the confirmation should say so.
+  const deletingNoteId = showDeleteConfirm
+    ? ((noteToDelete ?? selectedNote)?.id ?? null)
+    : null;
+  const [deletingTaskCount, setDeletingTaskCount] = useState<{
+    noteId: string;
+    count: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!deletingNoteId) return;
+    let cancelled = false;
+    tasksApi
+      .getActionItems(deletingNoteId)
+      .then((items) => {
+        if (cancelled) return;
+        const count = items.filter((i) => i.parent_id == null).length;
+        setDeletingTaskCount({ noteId: deletingNoteId, count });
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [deletingNoteId]);
+  const deletingTasks =
+    deletingTaskCount?.noteId === deletingNoteId ? deletingTaskCount.count : 0;
 
   const handleSelectNote = (note: Note) => {
     setSelectedNoteId(note.id);
@@ -1187,7 +1206,6 @@ function App() {
         )}
         {currentView === "tasks" && (
           <TasksView
-            refreshKey={tasksRefreshKey}
             noteTitles={noteTitles}
             onOpenInNote={(noteId, taskId) => {
               const target = notes.find((n) => n.id === noteId);
@@ -1288,7 +1306,6 @@ function App() {
               setSettingsTab("guide");
               setShowSettings(true);
             }}
-            onTasksChanged={handleTasksChanged}
           />
         ) : currentView === "notes" ? (
           <EmptyState
@@ -1433,7 +1450,11 @@ function App() {
       {showDeleteConfirm && (noteToDelete || selectedNote) && (
         <ConfirmDialog
           title="Delete Note"
-          message={`Are you sure you want to delete "${(noteToDelete || selectedNote)!.title}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${(noteToDelete || selectedNote)!.title}"? This action cannot be undone.${
+            deletingTasks > 0
+              ? ` This also deletes its ${deletingTasks} task${deletingTasks === 1 ? "" : "s"}.`
+              : ""
+          }`}
           confirmLabel="Delete"
           onConfirm={() => {
             const note = noteToDelete || selectedNote;

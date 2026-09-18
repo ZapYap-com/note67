@@ -101,7 +101,6 @@ export const defaultCommands: CommandMap = {
     note_id: "note-1",
     stable_id: "x",
     text: "New action item",
-    assignee: null,
     due_date: null,
     done: false,
     sort_order: 0,
@@ -109,9 +108,7 @@ export const defaultCommands: CommandMap = {
     updated_at: "2026-07-02T09:31:00.000Z",
   },
   update_action_item: null,
-  set_action_item_done: null,
   delete_action_item: null,
-  list_all_open_action_items: [],
 
   // note detail surfaces
   get_transcript: [],

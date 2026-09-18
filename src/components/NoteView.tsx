@@ -41,8 +41,6 @@ export interface NoteViewProps {
   onWikiLinkClick?: (noteTitle: string) => void;
   // Help
   onOpenGuide?: () => void;
-  // #3: notify the parent to refresh the global Tasks view after edits.
-  onTasksChanged?: () => void;
 }
 
 export function NoteView({
@@ -63,7 +61,6 @@ export function NoteView({
   onNavigateToNote,
   onWikiLinkClick,
   onOpenGuide,
-  onTasksChanged,
 }: NoteViewProps) {
   // Read straight from the stores rather than taking these as props — they are
   // already global state, so threading them through App.tsx bought nothing.
@@ -860,7 +857,6 @@ export function NoteView({
           <ActionsTab
             noteId={note.id}
             canUseAI={ollamaRunning && hasOllamaModel}
-            onChanged={onTasksChanged}
             focusTaskId={focusTaskId}
           />
         )}

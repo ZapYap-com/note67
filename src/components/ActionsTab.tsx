@@ -1,29 +1,32 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { tasksApi } from "../api";
 import type { ActionItem } from "../types";
+import { useTasksUiStore } from "../stores/tasksUiStore";
 import { useTaskMutations } from "./tasks/useTaskMutations";
 import { TaskDetailPane } from "./tasks/TaskDetailPane";
-import { TaskCheckbox } from "./tasks/TaskCheckbox";
-import { DueChip } from "./tasks/DueChip";
 import { useAddTask } from "./tasks/useAddTask";
+import { AddTaskRow, TaskRow, UndoDeleteToast } from "./tasks/TaskListParts";
+import { useTaskMenu } from "./tasks/useTaskMenu";
 
 interface ActionsTabProps {
   noteId: string;
   canUseAI: boolean;
-  onChanged?: () => void;
   /** When opened from the global Tasks view, the task to auto-select. */
   focusTaskId?: number | null;
 }
 
-export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: ActionsTabProps) {
+export function ActionsTab({ noteId, canUseAI, focusTaskId }: ActionsTabProps) {
   const [items, setItems] = useState<ActionItem[]>([]);
-  const [extracting, setExtracting] = useState(false);
   // Seed from focusTaskId so opening from the central page lands on that task.
   const [selectedId, setSelectedId] = useState<number | null>(focusTaskId ?? null);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const loading = noteId !== loadedNoteId;
-  const m = useTaskMutations(items, setItems, onChanged);
+  const m = useTaskMutations(items, setItems);
+
+  const refreshKey = useTasksUiStore((s) => s.refreshKey);
+  const bumpRefreshKey = useTasksUiStore((s) => s.bumpRefreshKey);
+  const extracting = useTasksUiStore((s) => s.extractingNoteIds.includes(noteId));
+  const setExtracting = useTasksUiStore((s) => s.setExtracting);
 
   // Re-focus when focusTaskId changes within the same mount.
   const [prevFocus, setPrevFocus] = useState(focusTaskId);
@@ -32,35 +35,12 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
     if (focusTaskId != null) setSelectedId(focusTaskId);
   }
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [menu]);
-
-  // Escape closes the menu, else deselects the task. Capture phase + stop so the
-  // app's global Escape (which would close the note) doesn't also fire.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (menu) {
-        setMenu(null);
-        e.stopPropagation();
-      } else if (selectedId != null) {
-        setSelectedId(null);
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [menu, selectedId]);
-
-  const openMenu = (e: React.MouseEvent, id: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu({ x: e.clientX, y: e.clientY, id });
-  };
+  const deselect = useCallback(() => setSelectedId(null), []);
+  const { openMenu, menuElement } = useTaskMenu({
+    selectedId,
+    onDeselect: deselect,
+    onDelete: m.remove,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +55,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
     return () => {
       cancelled = true;
     };
-  }, [noteId]);
+  }, [noteId, refreshKey]);
 
   const topLevel = items.filter((i) => i.parent_id == null);
   const selected =
@@ -85,21 +65,18 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
   const { draft, setDraft, add: addTask } = useAddTask(noteId, (created) => {
     setItems((prev) => [...prev, created]);
     setSelectedId(created.id);
-    onChanged?.();
   });
 
   const generate = async () => {
     if (extracting) return;
-    setExtracting(true);
+    setExtracting(noteId, true);
     try {
       await tasksApi.extractActionItems(noteId);
-      const data = await tasksApi.getActionItems(noteId);
-      setItems(data);
-      onChanged?.();
+      bumpRefreshKey(); // reloads this list, and any other one showing these tasks
     } catch (e) {
       console.error("Find tasks failed:", e);
     } finally {
-      setExtracting(false);
+      setExtracting(noteId, false);
     }
   };
 
@@ -149,41 +126,17 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-1">
-          {topLevel.map((item) => {
-            const subs = items.filter((i) => i.parent_id === item.id);
-            const isSel = selected?.id === item.id;
-            return (
-              <div
-                key={item.id}
-                data-task-context
-                onClick={() => setSelectedId(item.id)}
-                onContextMenu={(e) => openMenu(e, item.id)}
-                className="w-full flex items-start gap-2.5 p-2 rounded-lg text-left transition-colors cursor-pointer"
-                style={{ backgroundColor: isSel ? "var(--color-sidebar-selected)" : "transparent" }}
-              >
-                <TaskCheckbox done={item.done} onToggle={() => m.toggleDone(item)} className="mt-0.5" />
-                <span className="flex-1 min-w-0">
-                  <span
-                    className="text-sm block"
-                    style={{
-                      color: item.done ? "var(--color-text-tertiary)" : "var(--color-text)",
-                      textDecoration: item.done ? "line-through" : "none",
-                    }}
-                  >
-                    {item.text}
-                  </span>
-                  <span className="flex items-center gap-2 mt-0.5">
-                    {item.due_date && <DueChip date={item.due_date} />}
-                    {subs.length > 0 && (
-                      <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                        ☑ {subs.filter((s) => s.done).length}/{subs.length}
-                      </span>
-                    )}
-                  </span>
-                </span>
-              </div>
-            );
-          })}
+          {topLevel.map((item) => (
+            <TaskRow
+              key={item.id}
+              task={item}
+              subtasks={items.filter((i) => i.parent_id === item.id)}
+              selected={selected?.id === item.id}
+              onSelect={() => setSelectedId(item.id)}
+              onToggle={() => m.toggleDone(item)}
+              onContextMenu={(e) => openMenu(e, item.id)}
+            />
+          ))}
         </div>
 
         {/* Pinned add-task row */}
@@ -191,21 +144,7 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
           className="shrink-0 border-t px-3 py-2"
           style={{ borderColor: "var(--color-border)" }}
         >
-          <div className="flex items-center gap-2.5 px-2">
-            <span
-              className="w-4 h-4 rounded-[5px] shrink-0"
-              style={{ border: "2px dashed var(--color-border)" }}
-            />
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTask()}
-              onBlur={() => addTask()}
-              placeholder="Add a task…"
-              className="flex-1 bg-transparent outline-none text-sm"
-              style={{ color: "var(--color-text)" }}
-            />
-          </div>
+          <AddTaskRow draft={draft} setDraft={setDraft} onAdd={addTask} />
         </div>
       </div>
 
@@ -229,31 +168,8 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
         )}
       </div>
 
-      {menu && (
-        <div
-          className="fixed z-[100] min-w-[140px] py-1 rounded-lg"
-          style={{
-            left: menu.x,
-            top: menu.y,
-            backgroundColor: "var(--color-bg-elevated)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
-          }}
-        >
-          <button
-            onClick={() => {
-              m.remove(menu.id);
-              setMenu(null);
-            }}
-            className="w-full px-3 py-1.5 flex items-center gap-2.5 text-sm transition-colors hover:bg-black/5"
-            style={{ color: "#ef4444" }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </button>
-        </div>
-      )}
+      {menuElement}
+      <UndoDeleteToast deleted={m.deleted} onUndo={m.undoDelete} onDismiss={m.dismissDeleted} />
     </div>
   );
 }

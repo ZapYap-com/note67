@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ActionItem, ActionItemWithNote } from "../types";
+import type { ActionItem } from "../types";
 
 export const tasksApi = {
   /** Get a note's action items. */
@@ -42,16 +42,7 @@ export const tasksApi = {
     return invoke("update_action_item", { id, text, description, dueDate, done });
   },
 
-  setActionItemDone: (id: number, done: boolean): Promise<void> => {
-    return invoke("set_action_item_done", { id, done });
-  },
-
   deleteActionItem: (id: number): Promise<void> => {
     return invoke("delete_action_item", { id });
-  },
-
-  /** All open action items across every note, for the global Tasks view. */
-  listAllOpen: (): Promise<ActionItemWithNote[]> => {
-    return invoke("list_all_open_action_items");
   },
 };

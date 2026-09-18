@@ -57,23 +57,11 @@ export interface ActionItem {
   text: string;
   description: string | null;
   parent_id: number | null;
-  assignee: string | null;
   due_date: string | null;
   done: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface ActionItemWithNote {
-  id: number;
-  note_id: string;
-  note_title: string;
-  text: string;
-  assignee: string | null;
-  due_date: string | null;
-  done: boolean;
-  created_at: string;
 }
 
 // Model types for transcription

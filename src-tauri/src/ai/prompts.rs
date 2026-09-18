@@ -146,8 +146,8 @@ Summary:"#,
         }
     }
 
-    /// Extract action items as an inline GitHub-style markdown checklist that
-    /// gets spliced into the note body (the source of truth for #3).
+    /// Extract action items as a GitHub-style markdown checklist, which
+    /// extract_action_items parses into task rows.
     pub fn action_items_checkboxes(
         transcript: &str,
         notes: Option<&str>,

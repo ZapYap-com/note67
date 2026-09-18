@@ -88,7 +88,9 @@ pub struct Summary {
     pub created_at: DateTime<Utc>,
 }
 
-/// An action item derived from a note's inline GFM checkboxes.
+/// A task: found in a meeting by extract_action_items, or added by hand.
+/// A subtask points at its parent through `parent_id`; a standalone task has
+/// no note. (The table's `assignee` column was never written and isn't read.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionItem {
     pub id: i64,
@@ -97,7 +99,6 @@ pub struct ActionItem {
     pub text: String,
     pub description: Option<String>,
     pub parent_id: Option<i64>,
-    pub assignee: Option<String>,
     pub due_date: Option<String>,
     pub done: bool,
     pub sort_order: i64,
@@ -105,18 +106,6 @@ pub struct ActionItem {
     pub updated_at: DateTime<Utc>,
 }
 
-/// An open action item joined with its source note, for the global Tasks view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionItemWithNote {
-    pub id: i64,
-    pub note_id: String,
-    pub note_title: String,
-    pub text: String,
-    pub assignee: Option<String>,
-    pub due_date: Option<String>,
-    pub done: bool,
-    pub created_at: DateTime<Utc>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

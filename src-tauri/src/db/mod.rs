@@ -9,14 +9,14 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 
 use crate::db::models::{
-    ActionItem, ActionItemWithNote, AudioSegment, NewTranscriptSegment, Summary, SummaryType,
+    ActionItem, AudioSegment, NewTranscriptSegment, Summary, SummaryType,
     TranscriptSegment, UploadedAudio,
 };
 use crate::db::schema::run_migrations;
 
 /// Column order for reading an `ActionItem` row (see `map_action_item`).
 const ACTION_ITEM_COLS: &str =
-    "id, note_id, stable_id, text, description, parent_id, assignee, due_date, done, sort_order, created_at, updated_at";
+    "id, note_id, stable_id, text, description, parent_id, due_date, done, sort_order, created_at, updated_at";
 
 /// Row -> AudioSegment. Shared so the by-note and by-id queries cannot drift.
 fn map_audio_segment(row: &rusqlite::Row) -> rusqlite::Result<AudioSegment> {
@@ -459,8 +459,7 @@ impl Database {
         Self::action_item_by_id(&conn, id)
     }
 
-    /// Toggle just the done flag (used by the global Tasks view, which doesn't
-    /// carry the full item).
+    /// Set just the done flag. Extraction stores a checked (`- [x]`) item this way.
     pub fn set_action_item_done(&self, id: i64, done: bool) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now().to_rfc3339();
@@ -486,12 +485,11 @@ impl Database {
             text: row.get(3)?,
             description: row.get(4)?,
             parent_id: row.get(5)?,
-            assignee: row.get(6)?,
-            due_date: row.get(7)?,
-            done: row.get::<_, i32>(8)? != 0,
-            sort_order: row.get(9)?,
-            created_at: row.get::<_, String>(10)?.parse().unwrap_or_else(|_| Utc::now()),
-            updated_at: row.get::<_, String>(11)?.parse().unwrap_or_else(|_| Utc::now()),
+            due_date: row.get(6)?,
+            done: row.get::<_, i32>(7)? != 0,
+            sort_order: row.get(8)?,
+            created_at: row.get::<_, String>(9)?.parse().unwrap_or_else(|_| Utc::now()),
+            updated_at: row.get::<_, String>(10)?.parse().unwrap_or_else(|_| Utc::now()),
         })
     }
 
@@ -504,39 +502,6 @@ impl Database {
         Ok(item)
     }
 
-    /// List all open (unchecked) action items across every note, joined with the
-    /// source note title, for the global Tasks view.
-    pub fn list_all_open_action_items(&self) -> anyhow::Result<Vec<ActionItemWithNote>> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        let mut stmt = conn.prepare(
-            "SELECT a.id, a.note_id, n.title, a.text, a.assignee, a.due_date, a.done, a.created_at
-             FROM action_items a
-             JOIN notes n ON n.id = a.note_id
-             WHERE a.done = 0 AND a.parent_id IS NULL
-             ORDER BY (a.due_date IS NULL), a.due_date ASC, a.created_at DESC",
-        )?;
-        let items = stmt
-            .query_map([], |row| {
-                Ok(ActionItemWithNote {
-                    id: row.get(0)?,
-                    note_id: row.get(1)?,
-                    note_title: row.get(2)?,
-                    text: row.get(3)?,
-                    assignee: row.get(4)?,
-                    due_date: row.get(5)?,
-                    done: row.get::<_, i32>(6)? != 0,
-                    created_at: row
-                        .get::<_, String>(7)?
-                        .parse()
-                        .unwrap_or_else(|_| Utc::now()),
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(items)
-    }
-
-    /// Get the description (user notes) for a note
     /// When the note's meeting started (RFC 3339, UTC).
     pub fn get_note_started_at(&self, note_id: &str) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -550,6 +515,7 @@ impl Database {
         Ok(started_at)
     }
 
+    /// Get the description (user notes) for a note
     pub fn get_note_description(&self, note_id: &str) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let description: Option<String> = conn

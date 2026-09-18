@@ -6,7 +6,6 @@ export type {
   Summary,
   SummaryType,
   ActionItem,
-  ActionItemWithNote,
   ModelSize,
   ModelInfo,
   TranscriptionSegment,

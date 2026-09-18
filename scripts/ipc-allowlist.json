@@ -21,8 +21,6 @@
     "is_ai_generating": "unused wrapper",
     "generate_summary_stream": "only reached through an unused hook value; becomes the one summary command in 0.2.0",
     "generate_title": "superseded by generate_title_from_summary",
-    "set_action_item_done": "superseded by update_action_item",
-    "list_all_open_action_items": "superseded by get_open_action_items",
     "save_export_to_file": "unused since PDF export",
     "get_export_directory": "unused wrapper",
     "update_uploaded_audio_speaker": "no UI",

@@ -1,7 +1,10 @@
+import { isOverdue } from "./dates";
+
 interface DueChipProps {
   /** ISO date (YYYY-MM-DD). */
   date: string;
-  overdue?: boolean;
+  /** Done tasks are never overdue. */
+  done?: boolean;
 }
 
 function formatShort(date: string) {
@@ -11,12 +14,18 @@ function formatShort(date: string) {
   });
 }
 
-/** A subtle due-date chip with an outlined calendar icon. */
-export function DueChip({ date, overdue }: DueChipProps) {
+/**
+ * A subtle due-date chip with an outlined calendar icon, in the accent colour
+ * when overdue. The rule lives here so both task lists agree on it (the note's
+ * Tasks tab never highlighted overdue tasks).
+ */
+export function DueChip({ date, done = false }: DueChipProps) {
   return (
     <span
       className="text-xs flex items-center gap-1"
-      style={{ color: overdue ? "var(--color-accent)" : "var(--color-text-tertiary)" }}
+      style={{
+        color: isOverdue(date, done) ? "var(--color-accent)" : "var(--color-text-tertiary)",
+      }}
     >
       <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path

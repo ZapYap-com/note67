@@ -48,6 +48,19 @@ export async function installTauriMock(
     };
     let createdCount = 0;
 
+    // A tiny task store, like the note store: seeded from the task fixtures,
+    // so a task changed in one view reads back changed in another. Only used
+    // when a spec provides tasks.
+    const taskStore = new Map<number, Record<string, unknown>>();
+    for (const key of ["get_action_items", "get_open_action_items"]) {
+      const seeded = commands[key];
+      if (Array.isArray(seeded)) {
+        for (const task of seeded as Record<string, unknown>[]) {
+          taskStore.set(task.id as number, { ...task });
+        }
+      }
+    }
+
     // 0.1 s of 8 kHz mono silence as a data: URL.
     const silentWav = (() => {
       const rate = 8000;
@@ -124,6 +137,33 @@ export async function installTauriMock(
           const note = { ...NOTE_DEFAULTS, id: `created-${++createdCount}`, ...input };
           noteStore[String(note.id)] = note;
           return Promise.resolve(note);
+        }
+        if (taskStore.size > 0) {
+          const tasks = [...taskStore.values()];
+          if (cmd === "get_action_items") {
+            return Promise.resolve(tasks.filter((t) => t.note_id === args.noteId));
+          }
+          if (cmd === "get_open_action_items") {
+            return Promise.resolve(tasks.filter((t) => !t.done));
+          }
+          if (cmd === "update_action_item") {
+            const task = taskStore.get(args.id as number);
+            if (task) {
+              Object.assign(task, {
+                text: args.text,
+                description: args.description,
+                due_date: args.dueDate,
+                done: args.done,
+              });
+              return Promise.resolve({ ...task });
+            }
+          }
+          if (cmd === "delete_action_item") {
+            for (const [id, task] of taskStore) {
+              if (id === args.id || task.parent_id === args.id) taskStore.delete(id);
+            }
+            return Promise.resolve(null);
+          }
         }
         if (cmd === "reopen_note") {
           const id = String(args.id);
