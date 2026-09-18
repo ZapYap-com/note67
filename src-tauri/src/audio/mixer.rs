@@ -252,7 +252,7 @@ mod tests {
         )
         .expect("build playback");
 
-        let mut r = WavReader::open(&out).expect("open output");
+        let r = WavReader::open(&out).expect("open output");
         // 1s + 0.5s at the first segment's 48kHz.
         assert_eq!(r.duration(), 72_000, "segments were not concatenated");
         assert!(rms_of(&out) > 100.0, "playback should carry audio");

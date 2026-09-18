@@ -1,7 +1,9 @@
 use rusqlite::Connection;
 
+/// The version the last `migrate_vN` sets. The migration tests assert it, so
+/// bump it together with every new migration.
 #[allow(dead_code)]
-pub const SCHEMA_VERSION: i32 = 10;
+pub const SCHEMA_VERSION: i32 = 13;
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     let version = get_schema_version(conn)?;
@@ -504,4 +506,83 @@ fn migrate_v13(conn: &Connection) -> rusqlite::Result<()> {
     set_schema_version(conn, 13)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn exists(conn: &Connection, kind: &str, name: &str) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = ?1 AND name = ?2",
+            [kind, name],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
+    }
+
+    #[test]
+    fn fresh_database_migrates_to_current_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        for table in [
+            "notes",
+            "transcript_segments",
+            "summaries",
+            "settings",
+            "audio_segments",
+            "uploaded_audio",
+            "tags",
+            "note_tags",
+            "note_links",
+            "action_items",
+            "notes_fts",
+        ] {
+            assert!(exists(&conn, "table", table), "missing table {table}");
+        }
+        // update_note and delete_note fail outright if the FTS triggers go
+        // missing, so they are part of the schema contract too.
+        for trigger in ["notes_ai", "notes_ad", "notes_au"] {
+            assert!(exists(&conn, "trigger", trigger), "missing trigger {trigger}");
+        }
+    }
+
+    #[test]
+    fn migrations_are_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        run_migrations(&conn).unwrap();
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn fts_triggers_index_note_writes() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO notes (id, title, started_at, created_at, updated_at, description)
+             VALUES ('n1', 'Budget review', '2026-01-01', '2026-01-01', '2026-01-01', 'pricing')",
+            [],
+        )
+        .unwrap();
+        conn.execute("UPDATE notes SET description = 'roadmap' WHERE id = 'n1'", [])
+            .unwrap();
+
+        let hits = |term: &str| -> i64 {
+            conn.query_row(
+                "SELECT COUNT(*) FROM notes_fts WHERE notes_fts MATCH ?1",
+                [term],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(hits("roadmap"), 1);
+        assert_eq!(hits("pricing"), 0, "the update trigger left stale text indexed");
+
+        conn.execute("DELETE FROM notes WHERE id = 'n1'", []).unwrap();
+        assert_eq!(hits("roadmap"), 0);
+    }
 }

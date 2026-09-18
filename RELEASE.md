@@ -33,6 +33,29 @@ Add the public key to `src-tauri/tauri.conf.json`:
 }
 ```
 
+## Before Tagging
+
+### CI
+
+`.github/workflows/ci.yml` must be green on `development`: lint, `tsc --noEmit`, vitest, the
+production build, the IPC parity check (`node scripts/check-ipc.mjs`), Playwright, and
+`cargo clippy -D warnings` + `cargo test` on macOS and Windows.
+
+### Manual recording check (MRC)
+
+CI mocks every Tauri call, so recording is only ever tested by hand. Run these on a macOS
+release build (`npm run tauri build`) before every tag:
+
+| | Check | Pass when |
+|---|---|---|
+| a | Dual (mic + system), 2 minutes, one pause/resume, then Stop | Every segment is listed with a duration, the full track plays, the final transcript replaces the live one, a summary and title appear |
+| b | Mic-only, with Screen Recording denied | Same as (a); both stretches around a pause are listed and transcribed |
+| c | Listen-only, with the mic denied | Same as (a) |
+| d | Record again on an existing, ended note | New audio is appended; the earlier recording still plays |
+| e | Quit while recording | The WAV plays to the end |
+| f | Non-English meeting with the transcription language set | The final transcript stays in that language |
+| g | Import an .m4a into a blank note | The player and file list appear, the file plays, it gets a transcript, and the transcript survives Retry transcription |
+
 ## Creating a Release
 
 ### 1. Bump Version
