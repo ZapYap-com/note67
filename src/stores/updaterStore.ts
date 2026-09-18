@@ -13,7 +13,6 @@ interface UpdaterState {
   update: Update | null;
   checkForUpdates: () => Promise<boolean>;
   downloadAndInstall: () => Promise<void>;
-  dismissUpdate: () => void;
 }
 
 export const useUpdaterStore = create<UpdaterState>((set, get) => ({
@@ -92,7 +91,4 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
     }
   },
 
-  dismissUpdate: () => {
-    set({ available: false, version: null, body: null, update: null });
-  },
 }));

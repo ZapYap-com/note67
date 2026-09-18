@@ -14,7 +14,6 @@ vi.mock("../api", () => ({
     isSystemAudioSupported: vi.fn(),
     hasSystemAudioPermission: vi.fn(),
     // mic-only
-    startRecording: vi.fn(),
     stopRecording: vi.fn(),
     // dual
     startDualRecordingWithSegments: vi.fn(),
@@ -57,7 +56,6 @@ beforeEach(() => {
   // The hook checks recording status once on mount.
   api.getRecordingStatus.mockResolvedValue(false);
   api.getAudioLevel.mockResolvedValue(0);
-  api.startRecording.mockResolvedValue("/mic.wav");
   api.stopRecording.mockResolvedValue("/mic.wav");
   api.startDualRecordingWithSegments.mockResolvedValue(dualResult);
   api.stopDualRecordingWithSegments.mockResolvedValue(dualResult);
@@ -109,7 +107,6 @@ describe("useRecording — mode selection from the micOk x systemOk matrix", () 
 
     // Segmented like every other mode, without trying system audio.
     expect(api.startDualRecordingWithSegments).toHaveBeenCalledWith("note-1", false);
-    expect(api.startRecording).not.toHaveBeenCalled();
     expect(result.current.recordingMode).toBe("mic-only");
     expect(result.current.isDualRecording).toBe(false);
   });

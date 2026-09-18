@@ -6,10 +6,6 @@ import type { ModelInfo, ModelSize } from "../types";
 const SETTINGS_KEY_MODEL = "whisper_model";
 const SETTINGS_KEY_LANGUAGE = "whisper_language";
 
-// Legacy localStorage keys for migration
-const LEGACY_STORAGE_KEY = "note67_whisper_model";
-const LEGACY_LANGUAGE_STORAGE_KEY = "note67_whisper_language";
-
 export type WhisperLanguage = "auto" | string;
 
 // Common languages supported by Whisper (subset of ~99 total)
@@ -36,34 +32,6 @@ export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
   { code: "tl", name: "Tagalog" },
   { code: "auto", name: "Auto-detect (not recommended)" },
 ];
-
-// Migrate from localStorage to database (one-time)
-async function migrateFromLocalStorage(): Promise<void> {
-  try {
-    // Check if migration already done
-    const migrated = localStorage.getItem("note67_whisper_migrated");
-    if (migrated) return;
-
-    // Migrate model setting
-    const legacyModel = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacyModel) {
-      await settingsApi.set(SETTINGS_KEY_MODEL, legacyModel);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    }
-
-    // Migrate language setting
-    const legacyLanguage = localStorage.getItem(LEGACY_LANGUAGE_STORAGE_KEY);
-    if (legacyLanguage) {
-      await settingsApi.set(SETTINGS_KEY_LANGUAGE, legacyLanguage);
-      localStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY);
-    }
-
-    // Mark migration as done
-    localStorage.setItem("note67_whisper_migrated", "true");
-  } catch {
-    // Ignore migration errors
-  }
-}
 
 interface WhisperState {
   models: ModelInfo[];
@@ -104,7 +72,6 @@ export const useWhisperStore = create<WhisperState>((set, get) => ({
   loadSettings: async () => {
     try {
       // Run migration first
-      await migrateFromLocalStorage();
 
       // Load settings from database
       const settings = await settingsApi.getMultiple([SETTINGS_KEY_MODEL, SETTINGS_KEY_LANGUAGE]);

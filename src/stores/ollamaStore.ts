@@ -5,27 +5,6 @@ import type { OllamaModel, OllamaStatus } from "../types";
 // Settings key for database storage
 const SETTINGS_KEY_MODEL = "ollama_model";
 
-// Legacy localStorage key for migration
-const LEGACY_STORAGE_KEY = "note67_ollama_model";
-
-// Migrate from localStorage to database (one-time)
-async function migrateFromLocalStorage(): Promise<void> {
-  try {
-    const migrated = localStorage.getItem("note67_ollama_migrated");
-    if (migrated) return;
-
-    const legacyModel = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacyModel) {
-      await settingsApi.set(SETTINGS_KEY_MODEL, legacyModel);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    }
-
-    localStorage.setItem("note67_ollama_migrated", "true");
-  } catch {
-    // Ignore migration errors
-  }
-}
-
 interface OllamaState {
   status: OllamaStatus | null;
   loading: boolean;
@@ -60,7 +39,6 @@ export const useOllamaStore = create<OllamaState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      await migrateFromLocalStorage();
       const savedModel = await settingsApi.get(SETTINGS_KEY_MODEL);
       set({ savedModel, settingsLoaded: true });
     } catch {

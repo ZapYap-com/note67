@@ -77,18 +77,15 @@ describe("tagsStore.fetchTags", () => {
     const state = useTagsStore.getState();
     expect(state.tags).toEqual(tags);
     expect(state.noteTagsMap).toEqual({ n1: [] });
-    expect(state.loading).toBe(false);
-    expect(state.error).toBeNull();
   });
 
-  it("records the error and clears loading on failure", async () => {
+  it("keeps the previous tags when loading fails", async () => {
+    useTagsStore.setState({ tags: [{ id: 1, name: "design", color: null, note_count: 1 }] });
     api.getAll.mockRejectedValue(new Error("boom"));
 
     await useTagsStore.getState().fetchTags();
 
-    const state = useTagsStore.getState();
-    expect(state.error).toContain("boom");
-    expect(state.loading).toBe(false);
+    expect(useTagsStore.getState().tags).toHaveLength(1);
   });
 });
 
@@ -97,7 +94,7 @@ describe("tagsStore selection", () => {
     useTagsStore.getState().selectTag("design");
     expect(useTagsStore.getState().selectedTag).toBe("design");
 
-    useTagsStore.getState().clearSelection();
+    useTagsStore.getState().selectTag(null);
     expect(useTagsStore.getState().selectedTag).toBeNull();
   });
 });

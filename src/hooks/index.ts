@@ -6,6 +6,5 @@ export { useUpdater } from "./useUpdater";
 export { useSystemStatus } from "./useSystemStatus";
 export { useUploadedAudio } from "./useUploadedAudio";
 export { useAIWriting } from "./useAIWriting";
-export { useGraphUpdates } from "./useGraphUpdates";
 export { useOnboarding } from "./useOnboarding";
 export { useNoteBodySave } from "./useNoteBodySave";

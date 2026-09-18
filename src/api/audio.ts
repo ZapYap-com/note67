@@ -12,9 +12,6 @@ export interface DualRecordingResult {
 
 export const audioApi = {
   // Basic recording (mic only)
-  startRecording: (noteId: string): Promise<string> => {
-    return invoke("start_recording", { noteId });
-  },
 
   stopRecording: (): Promise<string | null> => {
     return invoke("stop_recording");

@@ -11,7 +11,6 @@ export function useUpdater() {
     error,
     checkForUpdates,
     downloadAndInstall,
-    dismissUpdate,
   } = useUpdaterStore();
 
   return {
@@ -24,6 +23,5 @@ export function useUpdater() {
     error,
     checkForUpdates,
     downloadAndInstall,
-    dismissUpdate,
   };
 }

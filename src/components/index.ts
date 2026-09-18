@@ -1,4 +1,3 @@
-export { LogoIcon, LogoWithWordmark } from "./Logo";
 export { LogoImage } from "./LogoImage";
 export { Settings, useProfile } from "./settings";
 export type { UserProfile } from "./settings";

@@ -20,13 +20,9 @@ interface TagsState {
   tags: Tag[];
   noteTagsMap: Record<string, NoteTag[]>;
   selectedTag: string | null;
-  loading: boolean;
-  error: string | null;
 
   fetchTags: () => Promise<void>;
-  fetchNoteTags: () => Promise<void>;
   selectTag: (tagName: string | null) => void;
-  clearSelection: () => void;
   getTagsForNote: (noteId: string) => NoteTag[];
   getTagColor: (tagName: string) => string;
 }
@@ -35,38 +31,21 @@ export const useTagsStore = create<TagsState>()((set, get) => ({
   tags: [],
   noteTagsMap: {},
   selectedTag: null,
-  loading: false,
-  error: null,
 
   fetchTags: async () => {
-    set({ loading: true, error: null });
     try {
       const [tags, noteTagsMap] = await Promise.all([
         tagsApi.getAll(),
         tagsApi.getAllNoteTags(),
       ]);
-      set({ tags, noteTagsMap, loading: false });
+      set({ tags, noteTagsMap });
     } catch (error) {
       console.error("Failed to fetch tags:", error);
-      set({ error: String(error), loading: false });
-    }
-  },
-
-  fetchNoteTags: async () => {
-    try {
-      const noteTagsMap = await tagsApi.getAllNoteTags();
-      set({ noteTagsMap });
-    } catch (error) {
-      console.error("Failed to fetch note tags:", error);
     }
   },
 
   selectTag: (tagName: string | null) => {
     set({ selectedTag: tagName });
-  },
-
-  clearSelection: () => {
-    set({ selectedTag: null });
   },
 
   getTagsForNote: (noteId: string) => {

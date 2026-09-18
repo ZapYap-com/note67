@@ -10,32 +10,11 @@ export interface UserProfile {
 // Settings key for database storage
 const SETTINGS_KEY_PROFILE = "user_profile";
 
-// Legacy localStorage key for migration
-const LEGACY_STORAGE_KEY = "note67_profile";
-
 const DEFAULT_PROFILE: UserProfile = {
   name: "",
   email: "",
   avatar: "",
 };
-
-// Migrate from localStorage to database (one-time)
-async function migrateFromLocalStorage(): Promise<void> {
-  try {
-    const migrated = localStorage.getItem("note67_profile_migrated");
-    if (migrated) return;
-
-    const legacyProfile = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacyProfile) {
-      await settingsApi.set(SETTINGS_KEY_PROFILE, legacyProfile);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    }
-
-    localStorage.setItem("note67_profile_migrated", "true");
-  } catch {
-    // Ignore migration errors
-  }
-}
 
 interface ProfileState {
   profile: UserProfile;
@@ -50,7 +29,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      await migrateFromLocalStorage();
       const saved = await settingsApi.get(SETTINGS_KEY_PROFILE);
       if (saved) {
         const profile = { ...DEFAULT_PROFILE, ...JSON.parse(saved) };

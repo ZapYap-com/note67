@@ -1,6 +1,7 @@
 {
   "_comment": "Registered commands that production frontend code doesn't invoke, each with a reason. check-ipc.mjs --strict (run by CI) fails on any other unreferenced command and on entries that are no longer registered.",
   "commands": {
-    "generate_summary_stream": "only reached through an unused hook value; becomes the one summary command in 0.2.0"
+    "generate_summary_stream": "only reached through an unused hook value; becomes the one summary command in 0.2.0",
+    "start_recording": "legacy unsegmented mic start; unused since mic-only records through the segment commands. Removed with the 0.2.1 session commands"
   }
 }
