@@ -6,7 +6,6 @@ import {
   MarkdownEditor,
   AISidebar,
   BacklinksPanel,
-  UnlinkedMentionsPanel,
   ActionsTab,
 } from "./index";
 import { exportApi, notesApi, transcriptionApi } from "../api";
@@ -847,15 +846,6 @@ export function NoteView({
       {activeTab === "note" && onNavigateToNote && (
         <BacklinksPanel
           noteId={note.id}
-          onNavigate={onNavigateToNote}
-        />
-      )}
-
-      {/* Unlinked Mentions Panel - show notes that mention this note's title */}
-      {activeTab === "note" && onNavigateToNote && (
-        <UnlinkedMentionsPanel
-          noteId={note.id}
-          noteTitle={note.title}
           onNavigate={onNavigateToNote}
         />
       )}

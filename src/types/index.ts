@@ -21,7 +21,6 @@ export type {
   NoteTag,
   NoteLink,
   BacklinkNote,
-  UnlinkedMention,
   GraphNode,
   GraphEdge,
   GraphData,

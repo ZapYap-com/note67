@@ -120,7 +120,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] LaTeX/math support in notes
 - [x] Wiki-style links with `[[Note Title]]` syntax
 - [x] Link aliases, preview on hover, and autocomplete
-- [x] Backlinks panel and unlinked mentions
+- [x] Backlinks panel
 - [x] Hashtag support with autocomplete and auto-generated colors
 - [x] Global search (`Cmd+K`) with full-text search
 - [ ] Linux system audio support

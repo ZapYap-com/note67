@@ -12,6 +12,22 @@ use crate::commands::links::update_incoming_links_internal;
 use crate::db::models::{ActionItem, ActionItemWithNote, Summary, SummaryType};
 use crate::db::Database;
 
+/// The longest prefix of `text` that fits in `max_bytes` without splitting a
+/// UTF-8 character. Slicing a String at a raw byte index panics when the
+/// index lands inside a multi-byte character (CJK, em dashes, emoji), and the
+/// release profile aborts on panic, so any byte-budget truncation of user or
+/// model text goes through here.
+fn truncate_on_char_boundary(text: &str, max_bytes: usize) -> &str {
+    if text.len() <= max_bytes {
+        return text;
+    }
+    let mut end = max_bytes;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// Split text into chunks of approximately max_size characters
 /// Tries to split on sentence boundaries when possible
 fn split_into_chunks(text: &str, max_size: usize) -> Vec<String> {
@@ -809,7 +825,7 @@ pub async fn generate_title(
     }
 
     let truncated = if transcript.len() > 2000 {
-        format!("{}...", &transcript[..2000])
+        format!("{}...", truncate_on_char_boundary(&transcript, 2000))
     } else {
         transcript
     };
@@ -1143,7 +1159,7 @@ pub async fn generate_title_from_summary(
 
     // Truncate summary if too long
     let truncated = if summary_content.len() > 2000 {
-        format!("{}...", &summary_content[..2000])
+        format!("{}...", truncate_on_char_boundary(&summary_content, 2000))
     } else {
         summary_content
     };
@@ -1316,31 +1332,83 @@ fn strip_thinking_tags(text: &str) -> String {
 
     for (open_tag, close_tag) in tag_patterns {
         loop {
-            let lower = result.to_lowercase();
+            // The offsets found in `lower` are applied to `result`, so the two
+            // must have identical byte layouts. ASCII lowercasing guarantees
+            // that; to_lowercase() does not ('İ' grows from 2 bytes to 3).
+            let lower = result.to_ascii_lowercase();
 
-            // Check if we have a closing tag
-            if let Some(end_pos) = lower.find(close_tag) {
-                // Look for matching opening tag
-                if let Some(start) = lower.find(open_tag) {
-                    // Both tags found - remove everything between them (inclusive)
-                    let end = end_pos + close_tag.len();
-                    result = format!("{}{}", &result[..start], &result[end..]);
-                } else {
-                    // Only closing tag found - remove everything before and including it
-                    // This handles cases where the model starts with thinking content
-                    let end = end_pos + close_tag.len();
-                    result = result[end..].to_string();
+            match (lower.find(open_tag), lower.find(close_tag)) {
+                // A complete block - remove it, tags included.
+                (Some(start), Some(end_pos)) if start < end_pos => {
+                    result.replace_range(start..end_pos + close_tag.len(), "");
                 }
-            } else if let Some(start) = lower.find(open_tag) {
-                // Only opening tag found - remove everything from it onwards
-                result = result[..start].to_string();
-                break;
-            } else {
-                // No tags found
-                break;
+                // A closing tag with no opening tag before it: the model
+                // started mid-thought, so drop everything up to the tag.
+                (_, Some(end_pos)) => {
+                    result.replace_range(..end_pos + close_tag.len(), "");
+                }
+                // An unclosed opening tag - everything after it is thinking.
+                (Some(start), None) => {
+                    result.truncate(start);
+                    break;
+                }
+                (None, None) => break,
             }
         }
     }
 
     result.trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncation_never_splits_a_character() {
+        // An em dash (3 bytes) straddling the 2000-byte budget.
+        let dash = format!("{}—tail", "a".repeat(1999));
+        assert_eq!(truncate_on_char_boundary(&dash, 2000), "a".repeat(1999));
+
+        // 800 CJK characters = 2400 bytes; 2000 is not a multiple of 3.
+        let cjk = "会".repeat(800);
+        let cut = truncate_on_char_boundary(&cjk, 2000);
+        assert_eq!(cut.len(), 1998);
+        assert!(cut.chars().all(|c| c == '会'));
+
+        // A 4-byte emoji straddling the budget.
+        let emoji = format!("{}🎉🎉", "b".repeat(1998));
+        assert_eq!(truncate_on_char_boundary(&emoji, 2000), "b".repeat(1998));
+
+        assert_eq!(truncate_on_char_boundary("short", 2000), "short");
+    }
+
+    #[test]
+    fn strips_thinking_blocks() {
+        assert_eq!(strip_thinking_tags("<think>plan</think>Answer"), "Answer");
+        assert_eq!(strip_thinking_tags("<THINKING>x</Thinking> Answer"), "Answer");
+        assert_eq!(strip_thinking_tags("halfway thought</think> Answer"), "Answer");
+        assert_eq!(strip_thinking_tags("Answer <think>never closed"), "Answer");
+        assert_eq!(strip_thinking_tags("No tags here"), "No tags here");
+    }
+
+    #[test]
+    fn strips_thinking_blocks_around_case_changing_characters() {
+        // 'İ' lowercases (Unicode) to 3 bytes; with to_lowercase() offsets
+        // the cut landed mid-character and aborted the app.
+        assert_eq!(
+            strip_thinking_tags("İstanbul <think>plan</think> trip"),
+            "İstanbul  trip"
+        );
+        assert_eq!(strip_thinking_tags("İİİ</think>Answer"), "Answer");
+    }
+
+    #[test]
+    fn close_tag_before_open_tag_terminates() {
+        // Used to splice the text into itself and loop forever.
+        assert_eq!(
+            strip_thinking_tags("</think> Answer <think>more thinking"),
+            "Answer"
+        );
+    }
 }

@@ -112,7 +112,6 @@ export const defaultCommands: CommandMap = {
 
   // links / graph
   get_backlinks: [],
-  get_unlinked_mentions: [],
   get_broken_link_titles: [],
   get_note_links: [],
   get_graph_data: { nodes: [], edges: [] },

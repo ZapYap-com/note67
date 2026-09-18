@@ -469,7 +469,6 @@ pub fn run() {
             commands::get_note_links,
             commands::search_notes_by_title,
             commands::get_broken_link_titles,
-            commands::get_unlinked_mentions,
             // Graph commands
             commands::get_graph_data,
             commands::get_local_graph,

@@ -203,13 +203,6 @@ export interface BacklinkNote {
   started_at: string;
 }
 
-// Unlinked mention - a note that mentions this note's title without [[]] links
-export interface UnlinkedMention {
-  note_id: string;
-  note_title: string;
-  context: string;
-}
-
 // Graph visualization types
 export interface GraphNode {
   id: string;
