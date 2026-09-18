@@ -17,7 +17,8 @@ audio, meeting detection and launch at login.
 - Meeting detection can be turned off (Settings > System), and the setting
   is remembered. It prompts once per call instead of again whenever the
   call's window title changes, never during a recording, and the prompt
-  goes away when the call ends. Having Teams or Discord open no longer counts
+  goes away a couple of minutes after the call ends (switching tabs during
+  the call doesn't end it). Having Teams or Discord open no longer counts
   as being in a meeting. If Screen Recording permission is missing, the
   setting says so.
 - The meeting prompt now shows even when Note67's window is closed to the

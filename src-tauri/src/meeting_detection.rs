@@ -16,8 +16,9 @@ use crate::db::Database;
 /// Settings key for the on/off switch. Absent means on, the default.
 const ENABLED_SETTING: &str = "meeting_detection_enabled";
 
-/// How long an app must show no meeting before a new meeting in it prompts again.
-const ABSENT_BEFORE_REPROMPT: Duration = Duration::from_secs(120);
+/// How long an app must show no meeting window before its meeting counts as
+/// over: the prompt for it goes away, and a new meeting in it prompts again.
+const ABSENT_BEFORE_ENDED: Duration = Duration::from_secs(120);
 
 /// Window titles that mean an app is in a meeting (not just open).
 const MEETING_PATTERNS: &[(&str, &str)] = &[
@@ -79,41 +80,45 @@ fn meeting_app(title: &str) -> Option<&'static str> {
     None
 }
 
-/// Decides when a meeting is worth a prompt: once per meeting, keyed by app.
+/// Decides when a meeting starts and ends: once per meeting, keyed by app.
 ///
 /// Detections used to be keyed by the full window title, which changes during
 /// a call (a browser tab switch, the 🔊 and 🎤 indicators), so the same call
-/// prompted again. An app's meeting ends only after it has shown no meeting
-/// window for `ABSENT_BEFORE_REPROMPT`, so dismissing the prompt also holds
-/// until then.
+/// prompted again. A meeting window also drops out of the on-screen list
+/// whenever its tab is in the background or its window is minimized, so an
+/// app's meeting ends only after it has shown no meeting window for
+/// `ABSENT_BEFORE_ENDED`. Start and end share that one clock: a prompt taken
+/// down as the meeting ended comes back if the meeting does, and a dismissed
+/// prompt stays dismissed until then.
 #[derive(Default)]
 struct PromptGate {
     last_seen: HashMap<&'static str, Instant>,
 }
 
+#[derive(Default)]
 struct Tick {
     /// Apps whose meeting just started.
     started: Vec<&'static str>,
-    /// Apps that showed a meeting last poll and don't now.
+    /// Apps whose meeting just ended.
     gone: Vec<&'static str>,
 }
 
 impl PromptGate {
-    fn tick(
-        &mut self,
-        now: Instant,
-        in_meeting: &HashSet<&'static str>,
-        last: &HashSet<&'static str>,
-    ) -> Tick {
-        self.last_seen
-            .retain(|_, seen| now.duration_since(*seen) < ABSENT_BEFORE_REPROMPT);
+    fn tick(&mut self, now: Instant, in_meeting: &HashSet<&'static str>) -> Tick {
+        let mut gone = Vec::new();
+        self.last_seen.retain(|app, seen| {
+            let ongoing = now.duration_since(*seen) < ABSENT_BEFORE_ENDED;
+            if !ongoing {
+                gone.push(*app);
+            }
+            ongoing
+        });
         let mut started = Vec::new();
         for app in in_meeting {
             if self.last_seen.insert(app, now).is_none() {
                 started.push(*app);
             }
         }
-        let gone = last.difference(in_meeting).copied().collect();
         Tick { started, gone }
     }
 }
@@ -123,7 +128,6 @@ pub struct MeetingDetectionState {
     enabled: AtomicBool,
     running: AtomicBool,
     gate: Mutex<PromptGate>,
-    in_meeting: Mutex<HashSet<&'static str>>,
 }
 
 impl Default for MeetingDetectionState {
@@ -132,7 +136,6 @@ impl Default for MeetingDetectionState {
             enabled: AtomicBool::new(true),
             running: AtomicBool::new(false),
             gate: Mutex::new(PromptGate::default()),
-            in_meeting: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -150,17 +153,13 @@ impl MeetingDetectionState {
     /// off, no window is read at all.
     fn poll(&self, now: Instant, window_titles: impl FnOnce() -> Vec<String>) -> Tick {
         if !self.is_enabled() {
-            return Tick {
-                started: Vec::new(),
-                gone: Vec::new(),
-            };
+            return Tick::default();
         }
-        let current: HashSet<&'static str> =
-            window_titles().iter().filter_map(|t| meeting_app(t)).collect();
-        let mut last = self.in_meeting.lock().unwrap();
-        let tick = self.gate.lock().unwrap().tick(now, &current, &last);
-        *last = current;
-        tick
+        let current: HashSet<&'static str> = window_titles()
+            .iter()
+            .filter_map(|t| meeting_app(t))
+            .collect();
+        self.gate.lock().unwrap().tick(now, &current)
     }
 }
 
@@ -185,12 +184,14 @@ pub fn start_meeting_detection(app: &AppHandle) {
     #[cfg(target_os = "macos")]
     {
         let app = app.clone();
-        std::thread::spawn(move || loop {
-            if let Some(state) = app.try_state::<Arc<MeetingDetectionState>>() {
-                let tick = state.poll(Instant::now(), macos::window_titles);
-                report(&app, tick);
+        std::thread::spawn(move || {
+            loop {
+                if let Some(state) = app.try_state::<Arc<MeetingDetectionState>>() {
+                    let tick = state.poll(Instant::now(), macos::window_titles);
+                    report(&app, tick);
+                }
+                std::thread::sleep(Duration::from_secs(3));
             }
-            std::thread::sleep(Duration::from_secs(3));
         });
     }
 }
@@ -231,7 +232,7 @@ mod macos {
     use core_foundation::base::{CFGetTypeID, TCFType};
     use core_foundation::string::{CFString, CFStringGetTypeID};
     use core_graphics::display::{
-        kCGNullWindowID, kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo,
+        CGWindowListCopyWindowInfo, kCGNullWindowID, kCGWindowListOptionOnScreenOnly,
     };
 
     /// Titles of all on-screen windows. Other apps' titles are withheld
@@ -296,13 +297,22 @@ mod tests {
     fn meetings_are_recognised_from_window_titles() {
         assert_eq!(meeting_app("Meet – abc-defg-hij"), Some("Google Meet"));
         assert_eq!(meeting_app("Zoom Meeting"), Some("Zoom"));
-        assert_eq!(meeting_app("Huddle: #design – Acme – Slack 🎤"), Some("Slack Huddle"));
-        assert_eq!(meeting_app("🔊 Weekly | Microsoft Teams"), Some("Microsoft Teams"));
+        assert_eq!(
+            meeting_app("Huddle: #design – Acme – Slack 🎤"),
+            Some("Slack Huddle")
+        );
+        assert_eq!(
+            meeting_app("🔊 Weekly | Microsoft Teams"),
+            Some("Microsoft Teams")
+        );
 
         assert_eq!(meeting_app("Home | Microsoft Teams"), None);
         assert_eq!(meeting_app("Meet - Join a meeting"), None);
         // An open app is not a call.
-        assert_eq!(meeting_app("Jane | Personal | jane@acme.com | Microsoft Teams"), None);
+        assert_eq!(
+            meeting_app("Jane | Personal | jane@acme.com | Microsoft Teams"),
+            None
+        );
         assert_eq!(meeting_app("Discord | #general | Friends"), None);
         assert_eq!(meeting_app("🔊 Discord | #voice"), Some("Discord"));
     }
@@ -335,12 +345,43 @@ mod tests {
     }
 
     #[test]
-    fn a_meeting_window_closing_is_reported() {
+    fn a_meeting_ends_after_two_minutes_without_its_window() {
         let state = MeetingDetectionState::default();
         let t0 = Instant::now();
-        state.poll(t0, || vec!["Zoom Meeting".to_string()]);
-        let tick = state.poll(t0 + Duration::from_secs(3), Vec::new);
+        let gone = |at: Instant, titles: &[&str]| {
+            let titles: Vec<String> = titles.iter().map(|t| t.to_string()).collect();
+            state.poll(at, || titles).gone
+        };
+
+        assert!(gone(t0, &["Meet – abc-defg-hij"]).is_empty());
+        // Another tab in front hides the meeting's title: that's not the end.
+        assert!(gone(t0 + Duration::from_secs(3), &["Inbox - Gmail"]).is_empty());
+        assert!(gone(t0 + Duration::from_secs(119), &["Inbox - Gmail"]).is_empty());
+        assert_eq!(gone(t0 + Duration::from_secs(122), &[]), ["Google Meet"]);
+        // Reported once.
+        assert!(gone(t0 + Duration::from_secs(125), &[]).is_empty());
+    }
+
+    #[test]
+    fn a_meeting_that_ended_prompts_again_when_it_returns() {
+        let state = MeetingDetectionState::default();
+        let t0 = Instant::now();
+        let zoom = || vec!["Zoom Meeting".to_string()];
+        assert_eq!(state.poll(t0, zoom).started, ["Zoom"]);
+        assert_eq!(
+            state.poll(t0 + Duration::from_secs(123), Vec::new).gone,
+            ["Zoom"]
+        );
+        assert_eq!(
+            state.poll(t0 + Duration::from_secs(126), zoom).started,
+            ["Zoom"]
+        );
+
+        // Back in the very poll that ends it: that is both an end and a new
+        // start, reported in that order, so the prompt comes back.
+        let tick = state.poll(t0 + Duration::from_secs(126 + 120), zoom);
         assert_eq!(tick.gone, ["Zoom"]);
+        assert_eq!(tick.started, ["Zoom"]);
     }
 
     #[test]
@@ -365,14 +406,14 @@ mod tests {
     fn the_gate_forgets_apps_only_after_two_minutes_away() {
         let mut gate = PromptGate::default();
         let t0 = Instant::now();
-        let none = apps(&[]);
-        assert_eq!(gate.tick(t0, &apps(&["Zoom"]), &none).started, ["Zoom"]);
-        assert!(gate
-            .tick(t0 + Duration::from_secs(119), &apps(&["Zoom"]), &none)
-            .started
-            .is_empty());
+        assert_eq!(gate.tick(t0, &apps(&["Zoom"])).started, ["Zoom"]);
+        assert!(
+            gate.tick(t0 + Duration::from_secs(119), &apps(&["Zoom"]))
+                .started
+                .is_empty()
+        );
         assert_eq!(
-            gate.tick(t0 + Duration::from_secs(119 + 121), &apps(&["Zoom"]), &none)
+            gate.tick(t0 + Duration::from_secs(119 + 121), &apps(&["Zoom"]))
                 .started,
             ["Zoom"]
         );

@@ -27,7 +27,8 @@ export function MeetingDetectedPopup({
     listen<MeetingDetectedPayload>("meeting-detected", (event) => {
       setDetectedMeeting(event.payload);
     }).then(keep);
-    // The call's window closed: a prompt for it is stale.
+    // The call ended (no meeting window for two minutes): a prompt for it is
+    // stale.
     listen<string>("meeting-ended", (event) => {
       const shown = useMeetingStore.getState().detectedMeeting;
       if (shown?.app_name === event.payload) setDetectedMeeting(null);
