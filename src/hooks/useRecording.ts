@@ -10,7 +10,6 @@ interface UseRecordingReturn {
   isRecording: boolean;
   isPaused: boolean;
   recordingPhase: RecordingPhase;
-  audioLevel: number;
   audioPath: string | null;
   error: string | null;
   isDualRecording: boolean;
@@ -50,7 +49,9 @@ export function useRecording(): UseRecordingReturn {
   const isRecording = useRecordingStore((s) => s.isRecording);
   const isPaused = useRecordingStore((s) => s.isPaused);
   const recordingPhase = useRecordingStore((s) => s.recordingPhase);
-  const audioLevel = useRecordingStore((s) => s.audioLevel);
+  // audioLevel is deliberately not selected here. It changes every 100 ms
+  // while recording, and subscribing would re-render the hook's owner (App)
+  // at that rate. The level meter reads it from the store itself.
   const audioPath = useRecordingStore((s) => s.audioPath);
   const error = useRecordingStore((s) => s.error);
   const recordingMode = useRecordingStore((s) => s.recordingMode);
@@ -262,7 +263,6 @@ export function useRecording(): UseRecordingReturn {
     isRecording,
     isPaused,
     recordingPhase,
-    audioLevel,
     audioPath,
     error,
     isDualRecording: recordingMode === "dual",

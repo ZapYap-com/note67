@@ -41,7 +41,7 @@ import { useThemeStore } from "./stores/themeStore";
 import { useRecordingStore } from "./stores/recordingStore";
 import { useLiveTranscriptionStore } from "./stores/liveTranscriptionStore";
 import { useSummaryUiStore } from "./stores/summaryUiStore";
-import { useNoteUiStore } from "./stores/noteUiStore";
+import { useNoteUiStore, flushPendingNoteSave } from "./stores/noteUiStore";
 import type { Note, TranscriptSegment } from "./types";
 
 // Lazy-loaded: GraphView pulls in d3, which is only needed on the graph view.
@@ -61,7 +61,9 @@ function App() {
   } = useNotes();
   // App is the single owner of useRecording (it runs the level-polling effect).
   // audioLevel/recordingMode are read from the store by the components that
-  // need them, so App only destructures what it actually uses.
+  // need them. useRecording doesn't subscribe to audioLevel at all: it updates
+  // every 100 ms while recording, and re-rendering App at that rate kept
+  // resetting NoteView's autosave timer.
   const {
     isRecording,
     isPaused,
@@ -255,6 +257,27 @@ function App() {
       setFilteredNotesByTag(null);
     }
   }, [selectTag]);
+  // Load a note's transcript the first time it is opened, however it was opened:
+  // the sidebar, Cmd+K, a link, the graph or the Tasks page. Only the sidebar
+  // used to load it, so notes opened any other way showed an empty transcript.
+  // Empty results are cached too, so a note without one isn't refetched.
+  const noteTranscriptsRef = useRef(noteTranscripts);
+  useEffect(() => {
+    noteTranscriptsRef.current = noteTranscripts;
+  }, [noteTranscripts]);
+  useEffect(() => {
+    if (!selectedNoteId || noteTranscriptsRef.current[selectedNoteId]) return;
+    const noteId = selectedNoteId;
+    let cancelled = false;
+    loadTranscript(noteId).then((segments) => {
+      if (cancelled || noteTranscriptsRef.current[noteId]) return;
+      setNoteTranscripts((prev) => ({ ...prev, [noteId]: segments }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedNoteId, loadTranscript]);
+
   // Show live segments during recording or when paused, otherwise show saved transcript
   const currentTranscript = selectedNoteId
     ? (isLiveTranscribing || isPaused) && recordingNoteId === selectedNoteId
@@ -303,7 +326,11 @@ function App() {
   const handleNewNote = useCallback(async () => {
     const note = await createNote("Untitled");
     setSelectedNoteId(note.id);
-  }, [createNote]);
+    // Open it where it can be typed in, even from the Graph or Tasks view.
+    setCurrentView("notes");
+    setActiveTab("note");
+    setFocusTaskId(null);
+  }, [createNote, setActiveTab, setFocusTaskId]);
 
   const handleStartRecording = useCallback(async () => {
     // Refresh and check that *some* audio input (mic or system audio) is available.
@@ -320,6 +347,8 @@ function App() {
     const note = await createNote("Untitled");
     setSelectedNoteId(note.id);
     setRecordingNoteId(note.id);
+    // Show the recording (and its Stop control) even from Graph or Tasks.
+    setCurrentView("notes");
     setActiveTab("transcript");
     await startRecording(note.id);
     // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
@@ -522,9 +551,15 @@ function App() {
   // Global right-click handler - prevent default and show custom menu
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Text fields and the note editor keep the native menu: cut, copy,
+      // paste and spelling suggestions.
+      if (target.isContentEditable || target.closest("input, textarea, .ProseMirror")) {
+        setContextMenu(null);
+        return;
+      }
       e.preventDefault();
       // Check if clicking on a note item or task row (handled separately)
-      const target = e.target as HTMLElement;
       if (target.closest("[data-note-id]") || target.closest("[data-task-context]")) {
         return; // Let the item-specific handler deal with it
       }
@@ -584,6 +619,8 @@ function App() {
   const handleStopRecording = async () => {
     if (recordingNoteId) {
       const noteId = recordingNoteId;
+      // The summary reads the notes from the database; save what was typed.
+      await flushPendingNoteSave();
       // Save segments before stopping (to avoid stale closure)
       const segmentsToSave = [...liveSegments];
       const audioPath = await stopRecording();
@@ -637,6 +674,8 @@ function App() {
         setActiveTab("summary");
         setIsGeneratingSummaryTitle(true);
         try {
+          // Notes may have been typed while the transcript was being rebuilt.
+          await flushPendingNoteSave();
           // Generate overview summary first
           const summary = await aiApi.generateSummary(noteId, "overview");
           // Trigger summaries refresh in NoteView
@@ -679,6 +718,7 @@ function App() {
 
     setIsGeneratingSummaryTitle(true);
     try {
+      await flushPendingNoteSave();
       // Generate overview summary first
       const summary = await aiApi.generateSummary(selectedNoteId, "overview");
       // Trigger summaries refresh in NoteView
@@ -700,20 +740,11 @@ function App() {
     []
   );
 
-  const handleSelectNote = async (note: Note) => {
+  const handleSelectNote = (note: Note) => {
     setSelectedNoteId(note.id);
     setCurrentView("notes"); // Exit graph view when selecting a note
     setActiveTab("summary");
     setFocusTaskId(null);
-    if (!noteTranscripts[note.id]) {
-      const segments = await loadTranscript(note.id);
-      if (segments.length > 0) {
-        setNoteTranscripts((prev) => ({
-          ...prev,
-          [note.id]: segments,
-        }));
-      }
-    }
   };
 
   const handleUpdateTitle = async (title: string) => {
@@ -727,9 +758,9 @@ function App() {
 
   const handleUpdateDescription = async (description: string) => {
     if (selectedNote) {
-      await updateNote(selectedNote.id, {
-        description: description.trim() || undefined,
-      });
+      // Sent as-is: an empty string clears the body. `undefined` means
+      // "unchanged" to update_note, so a cleared note used to keep its text.
+      await updateNote(selectedNote.id, { description });
     }
     setEditingDescription(false);
   };
@@ -1096,13 +1127,6 @@ function App() {
                 setCurrentView("notes");
                 setActiveTab("tasks");
                 setFocusTaskId(taskId);
-                if (!noteTranscripts[target.id]) {
-                  loadTranscript(target.id).then((segs) => {
-                    if (segs.length > 0) {
-                      setNoteTranscripts((prev) => ({ ...prev, [target.id]: segs }));
-                    }
-                  });
-                }
               }
             }}
           />
@@ -1363,11 +1387,10 @@ function App() {
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         onSelectNote={(noteId) => {
-          const note = notes.find(n => n.id === noteId);
-          if (note) {
-            setSelectedNoteId(noteId);
-            setActiveTab("summary");
-          }
+          // Same as a sidebar click, so a result opened from Graph or Tasks
+          // is actually shown.
+          const note = notes.find((n) => n.id === noteId);
+          if (note) handleSelectNote(note);
         }}
       />
 

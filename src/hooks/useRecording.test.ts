@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { useRecording } from "./useRecording";
 import { audioApi } from "../api";
 import { RecordingPhase } from "../types";
-import { resetRecordingStore } from "../stores/recordingStore";
+import { resetRecordingStore, useRecordingStore } from "../stores/recordingStore";
 
 vi.mock("../api", () => ({
   audioApi: {
@@ -223,7 +223,7 @@ describe("useRecording — stop dispatches on the current mode", () => {
     expect(result.current.isRecording).toBe(false);
     expect(result.current.isPaused).toBe(false);
     expect(result.current.recordingMode).toBe("idle");
-    expect(result.current.audioLevel).toBe(0);
+    expect(useRecordingStore.getState().audioLevel).toBe(0);
     expect(result.current.recordingPhase).toBe(RecordingPhase.Idle);
   });
 });

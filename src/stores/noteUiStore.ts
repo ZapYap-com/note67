@@ -17,12 +17,20 @@ export interface NoteUiState {
   showAISidebar: boolean;
   /** Task to focus when the note is opened from the global Tasks view. */
   focusTaskId: number | null;
+  /**
+   * Saves the open note's body right away if it has unsaved edits. The editor
+   * debounces saves by 1.5 s, so anything that reads the body back from the
+   * database (stopping a recording, summarizing) flushes first. Registered by
+   * NoteView; call it through `flushPendingNoteSave`.
+   */
+  flushNoteSave: (() => Promise<void>) | null;
 
   setActiveTab: (tab: NoteTab) => void;
   setEditingTitle: (editing: boolean) => void;
   toggleAISidebar: () => void;
   setShowAISidebar: (show: boolean) => void;
   setFocusTaskId: (id: number | null) => void;
+  setFlushNoteSave: (flush: (() => Promise<void>) | null) => void;
 }
 
 const initial = {
@@ -30,6 +38,7 @@ const initial = {
   editingTitle: false,
   showAISidebar: false,
   focusTaskId: null as number | null,
+  flushNoteSave: null as (() => Promise<void>) | null,
 };
 
 export const useNoteUiStore = create<NoteUiState>((set) => ({
@@ -39,7 +48,13 @@ export const useNoteUiStore = create<NoteUiState>((set) => ({
   toggleAISidebar: () => set((state) => ({ showAISidebar: !state.showAISidebar })),
   setShowAISidebar: (showAISidebar) => set({ showAISidebar }),
   setFocusTaskId: (focusTaskId) => set({ focusTaskId }),
+  setFlushNoteSave: (flushNoteSave) => set({ flushNoteSave }),
 }));
+
+/** Save the open note's pending edits now, if there are any. */
+export async function flushPendingNoteSave(): Promise<void> {
+  await useNoteUiStore.getState().flushNoteSave?.();
+}
 
 /** Restore the initial state — for tests. */
 export function resetNoteUiStore() {

@@ -9,7 +9,7 @@ import {
   ActionsTab,
 } from "./index";
 import { exportApi, notesApi, transcriptionApi } from "../api";
-import { useSummaries, useUploadedAudio, useAIWriting } from "../hooks";
+import { useSummaries, useUploadedAudio, useAIWriting, useNoteBodySave } from "../hooks";
 import { useOllamaStore } from "../stores/ollamaStore";
 import { useWhisperStore } from "../stores/whisperStore";
 import { useRecordingStore } from "../stores/recordingStore";
@@ -22,7 +22,7 @@ export interface NoteViewProps {
   note: Note;
   transcript: TranscriptSegment[];
   onUpdateTitle: (title: string) => void;
-  onUpdateDescription: (desc: string) => void;
+  onUpdateDescription: (desc: string) => void | Promise<void>;
   onStopRecording: () => void;
   onPauseRecording: () => void;
   onResumeRecording: () => void;
@@ -193,23 +193,24 @@ export function NoteView({
     setShouldAutoPlay(false);
   }
 
-  // Debounced auto-save for description. Keep the latest value in a ref (updated
-  // in an effect, not during render) so the timeout below saves the newest text.
-  const descValueRef = useRef(descValue);
+  // The note body is saved 1.5 s after typing stops, on blur, and on demand
+  // before anything reads it back from the database (flushPendingNoteSave).
+  const saveDescription = useNoteBodySave(
+    descValue,
+    note.description || "",
+    onUpdateDescription
+  );
+
+  const setFlushNoteSave = useNoteUiStore((s) => s.setFlushNoteSave);
   useEffect(() => {
-    descValueRef.current = descValue;
-  }, [descValue]);
-
-  useEffect(() => {
-    // Skip initial render and when description matches note
-    if (descValue === (note.description || "")) return;
-
-    const timeoutId = setTimeout(() => {
-      onUpdateDescription(descValueRef.current);
-    }, 1500);
-
-    return () => clearTimeout(timeoutId);
-  }, [descValue, note.description, onUpdateDescription]);
+    setFlushNoteSave(saveDescription);
+    return () => {
+      // Only clear our own registration, never the next note's.
+      if (useNoteUiStore.getState().flushNoteSave === saveDescription) {
+        setFlushNoteSave(null);
+      }
+    };
+  }, [saveDescription, setFlushNoteSave]);
 
   // Handle play request from audio files list
   const handlePlayAudio = useCallback(
@@ -755,7 +756,7 @@ export function NoteView({
             <MarkdownEditor
               value={descValue}
               onChange={setDescValue}
-              onBlur={() => onUpdateDescription(descValue)}
+              onBlur={() => void saveDescription()}
               placeholder="Take notes or press / for commands..."
               noteId={note.id}
               onWikiLinkClick={onWikiLinkClick}
