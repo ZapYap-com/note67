@@ -15,10 +15,18 @@ use symphonia::core::probe::Hint;
 
 use super::AudioError;
 
-/// Supported input formats for upload
-const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "mp3", "m4a", "aac", "flac", "ogg", "wav", "webm", "mkv", "mp4",
+/// File types the import picker offers and the converter accepts. The picker
+/// asks the backend for this list, so the two can't disagree again (it offered
+/// .wma, which was always rejected, and hid .mp4 and .mkv, which work).
+///
+/// No .webm: it almost always carries Opus, which Symphonia 0.5 can't decode.
+/// .ogg stays because Vorbis decodes; an Opus .ogg gets `OPUS_UNSUPPORTED`.
+pub const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "mp3", "m4a", "aac", "flac", "ogg", "wav", "mkv", "mp4",
 ];
+
+const OPUS_UNSUPPORTED: &str =
+    "Opus audio isn't supported yet. Convert it to m4a or mp3 and upload it again.";
 
 /// Check if a file has a supported audio format
 pub fn is_supported_format(path: &Path) -> bool {
@@ -72,23 +80,25 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
     let track_id = track.id;
     let codec_params = track.codec_params.clone();
 
-    // Get source sample rate for resampling calculation
-    let source_sample_rate = codec_params.sample_rate.unwrap_or(44100);
+    if codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
+        return Err(AudioError::UnsupportedCodec(OPUS_UNSUPPORTED.to_string()));
+    }
 
     // Create decoder
     let decoder_opts = DecoderOptions::default();
     let mut decoder = symphonia::default::get_codecs()
         .make(&codec_params, &decoder_opts)
-        .map_err(|e| {
-            AudioError::IoError(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Failed to create decoder: {}", e),
-            ))
+        .map_err(|_| {
+            AudioError::UnsupportedCodec(
+                "This file's audio codec isn't supported. Convert it to m4a or mp3 and upload it again."
+                    .to_string(),
+            )
         })?;
 
     // Collect all samples
     let mut all_samples: Vec<f32> = Vec::new();
     let mut sample_buf: Option<SampleBuffer<f32>> = None;
+    let mut decoded_spec: Option<symphonia::core::audio::SignalSpec> = None;
 
     loop {
         let packet = match format.next_packet() {
@@ -122,6 +132,7 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
         // Initialize sample buffer on first packet
         if sample_buf.is_none() {
             let spec = *decoded.spec();
+            decoded_spec = Some(spec);
             let capacity = decoded.capacity() as u64;
             sample_buf = Some(SampleBuffer::new(capacity, spec));
         }
@@ -140,8 +151,15 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
         )));
     }
 
-    // Get channel count from decoder
-    let channels = codec_params.channels.map(|c| c.count()).unwrap_or(2);
+    // Channels and rate as the decoder actually produced them, not as the
+    // container claims. An MP4 track often doesn't state its channel count, and
+    // the old fallback of 2 averaged a mono recording's samples in pairs: a
+    // 5 s mono voice memo came out 2.5 s long, at double speed.
+    let Some(spec) = decoded_spec else {
+        return Err(AudioError::UnsupportedFormat);
+    };
+    let channels = spec.channels.count().max(1);
+    let source_sample_rate = spec.rate;
 
     // Convert to mono if stereo (average channels)
     let mono_samples: Vec<f32> = if channels > 1 {
@@ -286,6 +304,44 @@ mod tests {
         assert!(is_supported_format(Path::new("test.ogg")));
         assert!(!is_supported_format(Path::new("test.txt")));
         assert!(!is_supported_format(Path::new("test.pdf")));
+    }
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/audio")
+            .join(name)
+    }
+
+    #[test]
+    fn aac_and_vorbis_imports_convert() {
+        let dir = std::env::temp_dir().join("note67_convert_ok");
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["tone.m4a", "tone_vorbis.ogg"] {
+            let out = dir.join(format!("{name}.wav"));
+            convert_to_wav(&fixture(name), &out).unwrap_or_else(|e| panic!("{name}: {e}"));
+            // Both fixtures are 0.5 s. The mono AAC one came out 288 ms: its
+            // samples were averaged in pairs as if it were stereo.
+            let ms = get_audio_duration_ms(&out).unwrap();
+            assert!((450..=700).contains(&ms), "{name} converted to {ms} ms");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn opus_imports_say_so() {
+        let out = std::env::temp_dir().join("note67_convert_opus.wav");
+        for name in ["tone_opus.ogg", "tone_opus.webm"] {
+            let err = convert_to_wav(&fixture(name), &out).unwrap_err().to_string();
+            assert_eq!(err, OPUS_UNSUPPORTED, "{name}");
+        }
+    }
+
+    #[test]
+    fn webm_is_not_offered_and_mp4_is() {
+        assert!(!is_supported_format(Path::new("voice.webm")));
+        assert!(!is_supported_format(Path::new("call.wma")));
+        assert!(is_supported_format(Path::new("call.mp4")));
+        assert!(is_supported_format(Path::new("call.mkv")));
     }
 
     #[test]

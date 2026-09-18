@@ -136,12 +136,15 @@ export function useUploadedAudio(noteId: string | null) {
     []
   );
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     uploads,
     isLoading,
     isUploading,
     isTranscribing,
     error,
+    clearError,
     loadUploads,
     uploadAudio,
     deleteUpload,

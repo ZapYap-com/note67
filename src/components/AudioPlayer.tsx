@@ -19,6 +19,8 @@ interface AudioPlayerProps {
   onReorder?: () => void;
   onPlayAudio?: (path: string) => void;
   onPlaybackRebuilt?: () => void;
+  /** Changing this opens the file list (e.g. after an import). */
+  openFilesKey?: number;
 }
 
 export interface AudioPlayerHandle {
@@ -43,6 +45,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
     onReorder,
     onPlayAudio,
     onPlaybackRebuilt,
+    openFilesKey = 0,
   },
   ref
 ) {
@@ -55,6 +58,13 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isExpanded, setIsExpanded] = useState(false);
+  // Adjusted during render rather than in an effect (the codebase keeps
+  // setState out of effect bodies).
+  const [seenOpenFilesKey, setSeenOpenFilesKey] = useState(openFilesKey);
+  if (openFilesKey !== seenOpenFilesKey) {
+    setSeenOpenFilesKey(openFilesKey);
+    setIsExpanded(true);
+  }
 
   // Check if we have audio files to show
   const hasMainRecording = mainAudioPath && segments.length === 0;

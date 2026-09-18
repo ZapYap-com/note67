@@ -94,7 +94,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Pause/Resume recording
 - [x] Continue recording on existing notes (Listen)
 - [x] Listen-only mode (system audio without microphone)
-- [x] Upload external audio files for transcription
+- [x] Upload external audio files for transcription (mp3, m4a, aac, flac, ogg, wav, mkv, mp4; Opus audio isn't supported yet)
 - [x] Download and delete audio files
 - [x] Reorder audio files with up/down controls
 - [x] Retranscribe audio with different Whisper model

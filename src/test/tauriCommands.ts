@@ -119,6 +119,7 @@ export const defaultCommands: CommandMap = {
   get_note_audio_segments: [],
   migrate_legacy_audio: null,
   get_uploaded_audio: [],
+  supported_audio_formats: ["mp3", "m4a", "aac", "flac", "ogg", "wav", "mkv", "mp4"],
 
   // links / graph
   get_backlinks: [],

@@ -6,8 +6,11 @@ use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
-use crate::audio::converter::{convert_to_wav, get_audio_duration_ms, is_supported_format};
-use crate::commands::transcription::{batch_language, TranscriptionState};
+use crate::audio::converter::{
+    convert_to_wav, get_audio_duration_ms, is_supported_format, SUPPORTED_EXTENSIONS,
+};
+use crate::commands::transcription::{batch_language, clamp_monotonic, TranscriptionState};
+use crate::transcription::should_skip_segment;
 use crate::db::models::{NewTranscriptSegment, UploadedAudio};
 use crate::db::Database;
 
@@ -31,10 +34,10 @@ pub async fn upload_audio(
 
     // Validate format
     if !is_supported_format(&source) {
-        return Err(
-            "Unsupported audio format. Supported formats: mp3, m4a, wav, webm, ogg, flac, aac, wma"
-                .to_string(),
-        );
+        return Err(format!(
+            "Unsupported audio format. Supported formats: {}",
+            SUPPORTED_EXTENSIONS.join(", ")
+        ));
     }
 
     // Get original filename
@@ -125,99 +128,90 @@ pub fn delete_uploaded_audio(upload_id: i64, db: State<Database>) -> Result<(), 
 }
 
 /// Transcribe an uploaded audio file (also used for retranscription)
+///
+/// Transcribes first and swaps the import's lines in one transaction at the
+/// end. It used to delete the import's transcript up front, so a failed
+/// re-transcribe left it with none, and two `?` returns skipped resetting
+/// `is_transcribing`, leaving every later transcription (including the
+/// post-recording pass) failing with "Already transcribing" until restart.
 #[tauri::command]
 pub async fn transcribe_uploaded_audio(
     upload_id: i64,
     state: State<'_, TranscriptionState>,
     db: State<'_, Database>,
 ) -> Result<usize, String> {
-    // Get the upload info
     let info = db
         .get_uploaded_audio_by_id(upload_id)
         .map_err(|e| e.to_string())?;
 
-    // Check if already transcribing
     if state.is_transcribing.swap(true, Ordering::SeqCst) {
         return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
     }
+    // Cleared on every way out of this function.
+    let _busy = scopeguard::guard((), |_| {
+        state.is_transcribing.store(false, Ordering::SeqCst);
+    });
 
-    // Delete existing transcript segments for this upload (for retranscription)
-    db.delete_transcript_segments_by_source("upload", upload_id)
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
+    let transcriber = state
+        .transcriber
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or("No model loaded. Please load a Whisper model first.")?;
 
-    // Update status to processing
     db.update_uploaded_audio_status(upload_id, "processing")
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
+        .map_err(|e| e.to_string())?;
 
-    // Get the transcriber
-    let transcriber = {
-        let guard = state.transcriber.lock().map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-        guard.clone().ok_or_else(|| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            "No model loaded. Please load a Whisper model first.".to_string()
-        })?
-    };
-
-    // Run transcription
     let path = PathBuf::from(&info.file_path);
     let lang = batch_language(&db);
-    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path, lang.as_deref()))
-        .await
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
+    let result = match tokio::task::spawn_blocking(move || transcriber.transcribe(&path, lang.as_deref())).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
             let _ = db.update_uploaded_audio_status(upload_id, "failed");
-            e.to_string()
-        })?
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            let _ = db.update_uploaded_audio_status(upload_id, "failed");
-            e.to_string()
-        })?;
-
-    // Save transcript segments with the speaker label
-    let mut saved_count = 0;
-    for segment in &result.segments {
-        // Skip blank/noise segments
-        let text_lower = segment.text.to_lowercase();
-        if text_lower.contains("[blank_audio]")
-            || text_lower.contains("[inaudible]")
-            || text_lower.contains("[silence]")
-            || text_lower.contains("[music]")
-            || segment.text.trim().is_empty()
-        {
-            continue;
+            return Err(e.to_string());
         }
+        Err(e) => {
+            let _ = db.update_uploaded_audio_status(upload_id, "failed");
+            return Err(e.to_string());
+        }
+    };
 
-        db.add_transcript_segment(
-            &NewTranscriptSegment::new(
-                &info.note_id,
-                segment.start_time,
-                segment.end_time,
-                &segment.text,
-            )
-            .with_speaker(Some(info.speaker_label.clone()))
-            .with_source("upload", upload_id),
-        )
-        .map_err(|e| e.to_string())?;
-        saved_count += 1;
-    }
+    // The same filter and time handling as the note-wide pass, so both paths
+    // produce the same lines for the same file.
+    let mut last_start = 0.0_f64;
+    let segments: Vec<NewTranscriptSegment> = result
+        .segments
+        .iter()
+        .filter(|seg| !should_skip_segment(&seg.text, seg.start_time, seg.end_time))
+        .map(|seg| {
+            let (start, end) = clamp_monotonic(seg.start_time, seg.end_time, &mut last_start);
+            NewTranscriptSegment::new(&info.note_id, start, end, &seg.text)
+                .with_speaker(Some(info.speaker_label.clone()))
+                .with_source("upload", upload_id)
+        })
+        .collect();
 
-    // Update status to completed
+    // A pass that heard nothing never replaces a transcript (as in retranscribe_note).
+    let saved = if segments.is_empty() {
+        0
+    } else {
+        db.replace_source_transcript("upload", upload_id, &segments)
+            .map_err(|e| {
+                let _ = db.update_uploaded_audio_status(upload_id, "failed");
+                e.to_string()
+            })?
+    };
+
     db.update_uploaded_audio_status(upload_id, "completed")
         .map_err(|e| e.to_string())?;
 
-    state.is_transcribing.store(false, Ordering::SeqCst);
+    Ok(saved)
+}
 
-    Ok(saved_count)
+/// The file types the import picker offers: exactly what the converter accepts.
+#[tauri::command]
+pub fn supported_audio_formats() -> Vec<&'static str> {
+    SUPPORTED_EXTENSIONS.to_vec()
 }
 
 /// Update speaker label for uploaded audio

@@ -18,7 +18,7 @@ use crate::transcription::{
 /// line would sort to the top of the transcript after retranscription. Whisper
 /// returns segments in chronological order, so clamping to the running maximum
 /// preserves the intended order while neutralizing bad timestamps.
-fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f64, f64) {
+pub(crate) fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f64, f64) {
     let clamped_start = start.max(*last_start);
     *last_start = clamped_start;
     let clamped_end = end.max(clamped_start);
@@ -673,29 +673,21 @@ pub async fn retranscribe_note(
     if state.is_transcribing.swap(true, Ordering::SeqCst) {
         return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
     }
+    // Cleared on every way out, including the `?` returns below.
+    let _busy = scopeguard::guard((), |_| {
+        state.is_transcribing.store(false, Ordering::SeqCst);
+    });
 
     // Get the transcriber
     let transcriber = {
-        let guard = state.transcriber.lock().map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-        guard.clone().ok_or_else(|| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            "No model loaded. Please load a Whisper model first.".to_string()
-        })?
+        let guard = state.transcriber.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or_else(|| "No model loaded. Please load a Whisper model first.".to_string())?
     };
 
     // Get all audio segments and uploads for this note
-    let segments = db.get_audio_segments(&note_id).map_err(|e| {
-        state.is_transcribing.store(false, Ordering::SeqCst);
-        e.to_string()
-    })?;
+    let segments = db.get_audio_segments(&note_id).map_err(|e| e.to_string())?;
 
-    let uploads = db.get_uploaded_audio(&note_id).map_err(|e| {
-        state.is_transcribing.store(false, Ordering::SeqCst);
-        e.to_string()
-    })?;
+    let uploads = db.get_uploaded_audio(&note_id).map_err(|e| e.to_string())?;
 
     println!("[retranscribe_note] note_id: {}", note_id);
     println!("[retranscribe_note] Found {} audio segments", segments.len());
@@ -931,7 +923,6 @@ pub async fn retranscribe_note(
     match pass_outcome(total_items, failed_items.len(), rebuilt.len()) {
         PassOutcome::Replace => {
             if let Err(e) = db.replace_transcript_segments(&note_id, &rebuilt) {
-                state.is_transcribing.store(false, Ordering::SeqCst);
                 return Err(format!(
                     "Failed to save the rebuilt transcript (the existing one was kept): {}",
                     e
@@ -940,15 +931,12 @@ pub async fn retranscribe_note(
         }
         PassOutcome::Keep => {}
         PassOutcome::KeepAndReport => {
-            state.is_transcribing.store(false, Ordering::SeqCst);
             return Err(format!(
                 "Retranscription failed, so the existing transcript was kept: {}",
                 failed_items.join("; ")
             ));
         }
     }
-
-    state.is_transcribing.store(false, Ordering::SeqCst);
 
     // Emit final progress
     let _ = app.emit("retranscribe-progress", serde_json::json!({

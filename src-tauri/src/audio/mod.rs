@@ -58,6 +58,10 @@ pub enum AudioError {
     #[error("Unsupported audio format")]
     UnsupportedFormat,
 
+    /// A codec the importer can't decode; the message is shown to the user.
+    #[error("{0}")]
+    UnsupportedCodec(String),
+
     #[error("Failed to acquire lock")]
     LockError,
 

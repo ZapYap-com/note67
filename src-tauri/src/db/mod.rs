@@ -37,6 +37,19 @@ pub struct Database {
     pub conn: Mutex<Connection>,
 }
 
+/// Undo state that only a running process could have been in the middle of.
+/// Nothing is transcribing at launch, so an import still marked "processing"
+/// was interrupted (the app quit or crashed mid-pass): mark it failed so it
+/// offers Retry instead of spinning forever.
+fn repair_interrupted_work(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE uploaded_audio SET transcription_status = 'failed'
+         WHERE transcription_status = 'processing'",
+        [],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 impl Database {
     /// A migrated in-memory database, for tests that exercise real queries.
@@ -66,6 +79,7 @@ impl Database {
 
         // Run migrations
         run_migrations(&conn)?;
+        repair_interrupted_work(&conn)?;
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -113,36 +127,58 @@ impl Database {
         let now = Utc::now().to_rfc3339();
 
         let tx = conn.transaction()?;
-        let mut count = 0;
-
         tx.execute(
             "DELETE FROM transcript_segments WHERE note_id = ?1",
             [note_id],
         )?;
-
-        {
-            let mut stmt = tx.prepare_cached(
-                "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, source_type, source_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            )?;
-
-            for segment in segments {
-                stmt.execute(params![
-                    segment.note_id,
-                    segment.start_time,
-                    segment.end_time,
-                    segment.text,
-                    segment.speaker,
-                    segment.source_type,
-                    segment.source_id,
-                    &now
-                ])?;
-                count += 1;
-            }
-        }
-
+        let count = Self::insert_segments(&tx, segments, &now)?;
         tx.commit()?;
         Ok(count)
+    }
+
+    /// Replace the transcript lines of one source (an import or a recording
+    /// segment) in a single transaction, leaving the note's other lines alone.
+    pub fn replace_source_transcript(
+        &self,
+        source_type: &str,
+        source_id: i64,
+        segments: &[NewTranscriptSegment],
+    ) -> anyhow::Result<usize> {
+        let mut conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let now = Utc::now().to_rfc3339();
+
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM transcript_segments WHERE source_type = ?1 AND source_id = ?2",
+            params![source_type, source_id],
+        )?;
+        let count = Self::insert_segments(&tx, segments, &now)?;
+        tx.commit()?;
+        Ok(count)
+    }
+
+    fn insert_segments(
+        tx: &rusqlite::Transaction,
+        segments: &[NewTranscriptSegment],
+        now: &str,
+    ) -> rusqlite::Result<usize> {
+        let mut stmt = tx.prepare_cached(
+            "INSERT INTO transcript_segments (note_id, start_time, end_time, text, speaker, source_type, source_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )?;
+        for segment in segments {
+            stmt.execute(params![
+                segment.note_id,
+                segment.start_time,
+                segment.end_time,
+                segment.text,
+                segment.speaker,
+                segment.source_type,
+                segment.source_id,
+                now
+            ])?;
+        }
+        Ok(segments.len())
     }
 
     /// Add multiple transcript segments in a single transaction (batch insert)
@@ -1014,4 +1050,77 @@ fn get_db_path(app_handle: &AppHandle) -> anyhow::Result<PathBuf> {
         .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
 
     Ok(app_data_dir.join("note67.db"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn note_with_import(db: &Database) -> i64 {
+        db.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO notes (id, title, started_at, created_at, updated_at)
+                 VALUES ('n1', 'Call', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z', '2026-01-05T12:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let upload = db
+            .add_uploaded_audio("n1", "/tmp/n1_upload.wav", "call.m4a", Some(1000), "Uploaded")
+            .unwrap();
+        let first = NewTranscriptSegment::new("n1", 0.0, 1.0, "the original line")
+            .with_source("upload", upload);
+        db.replace_source_transcript("upload", upload, &[first]).unwrap();
+        upload
+    }
+
+    fn texts(db: &Database) -> Vec<String> {
+        db.get_transcript_segments("n1")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.text)
+            .collect()
+    }
+
+    #[test]
+    fn replacing_an_import_transcript_swaps_only_its_lines() {
+        let db = Database::in_memory();
+        let upload = note_with_import(&db);
+        db.add_transcript_segment(&NewTranscriptSegment::new("n1", 5.0, 6.0, "a live line"))
+            .unwrap();
+
+        let redo = NewTranscriptSegment::new("n1", 0.0, 1.0, "the better line")
+            .with_source("upload", upload);
+        db.replace_source_transcript("upload", upload, &[redo]).unwrap();
+
+        let mut lines = texts(&db);
+        lines.sort();
+        assert_eq!(lines, ["a live line", "the better line"]);
+    }
+
+    #[test]
+    fn a_failed_replace_keeps_the_previous_import_transcript() {
+        let db = Database::in_memory();
+        let upload = note_with_import(&db);
+        // A line for a note that doesn't exist fails its foreign key, the way
+        // a note deleted mid-transcription did.
+        let orphan = NewTranscriptSegment::new("gone", 0.0, 1.0, "new line")
+            .with_source("upload", upload);
+
+        assert!(db.replace_source_transcript("upload", upload, &[orphan]).is_err());
+        assert_eq!(texts(&db), ["the original line"]);
+    }
+
+    #[test]
+    fn imports_interrupted_mid_transcription_are_marked_failed() {
+        let db = Database::in_memory();
+        let upload = note_with_import(&db);
+        db.update_uploaded_audio_status(upload, "processing").unwrap();
+
+        repair_interrupted_work(&db.conn.lock().unwrap()).unwrap();
+
+        let status = db.get_uploaded_audio_by_id(upload).unwrap().transcription_status;
+        assert_eq!(status, "failed");
+    }
 }

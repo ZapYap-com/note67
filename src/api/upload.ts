@@ -11,14 +11,11 @@ export const uploadApi = {
     noteId: string,
     speakerLabel?: string
   ): Promise<UploadedAudio | null> => {
+    // The backend's list, so the picker never offers what import rejects.
+    const extensions = await invoke<string[]>("supported_audio_formats");
     const selected = await open({
       multiple: false,
-      filters: [
-        {
-          name: "Audio",
-          extensions: ["mp3", "m4a", "wav", "webm", "ogg", "flac", "aac", "wma"],
-        },
-      ],
+      filters: [{ name: "Audio", extensions }],
     });
 
     if (!selected) return null;

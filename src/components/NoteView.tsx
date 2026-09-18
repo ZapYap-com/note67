@@ -240,11 +240,20 @@ export function NoteView({
     uploads,
     isUploading,
     isTranscribing: isTranscribingUpload,
+    error: uploadError,
+    clearError: clearUploadError,
     uploadAudio,
     deleteUpload,
     transcribeUpload,
     loadUploads,
   } = useUploadedAudio(note.id);
+  // Bumped after each import so the player opens its file list on the new file.
+  const [importCount, setImportCount] = useState(0);
+  // A note whose only audio is imported has no playback track of its own, so
+  // the player defaults to its first import. Keyed on playingAudioPath alone,
+  // the player never appeared for such notes and their imports couldn't be
+  // played, transcribed or deleted.
+  const playerPath = playingAudioPath ?? uploads[0]?.file_path ?? null;
 
   const [audioSegments, setAudioSegments] = useState<AudioSegment[]>([]);
 
@@ -581,8 +590,10 @@ export function NoteView({
                 >
                   <button
                     onClick={() => {
-                      uploadAudio();
                       setShowMoreMenu(false);
+                      void uploadAudio().then((upload) => {
+                        if (upload) setImportCount((n) => n + 1);
+                      });
                     }}
                     disabled={isUploading}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-black/5 flex items-center gap-2 disabled:opacity-50"
@@ -818,9 +829,11 @@ export function NoteView({
               >
                 {isAutoRetranscribing || isRetranscribing
                   ? "Transcribing recorded audio…"
-                  : note.audio_path
+                  : note.audio_path || audioSegments.length > 0
                     ? "Transcribe this note to see the transcript"
-                    : "No audio recorded"}
+                    : uploads.length > 0
+                      ? "Transcribe the uploaded audio from the player below to see its transcript"
+                      : "No audio yet. Record, or use Upload Audio in the ⋯ menu."}
               </div>
             )}
           </>
@@ -861,11 +874,35 @@ export function NoteView({
         />
       )}
 
+      {/* Import errors: the file picker closes before conversion, so this is
+          the only place a failed import (e.g. Opus audio) can be reported. */}
+      {uploadError && (
+        <div
+          className="mx-6 mb-2 flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
+          style={{
+            backgroundColor: "var(--color-bg-subtle)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text)",
+          }}
+          role="alert"
+        >
+          <span className="flex-1">Couldn't upload that file. {uploadError}</span>
+          <button
+            onClick={clearUploadError}
+            className="text-xs shrink-0"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Audio Player - show when there's audio to play and not recording */}
-      {!isRecording && playingAudioPath && (
+      {!isRecording && playerPath && (
         <AudioPlayer
           ref={audioPlayerRef}
-          audioPath={playingAudioPath}
+          audioPath={playerPath}
+          openFilesKey={importCount}
           title={note.title}
           autoPlay={shouldAutoPlay}
           onAutoPlayHandled={() => setShouldAutoPlay(false)}
