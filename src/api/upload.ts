@@ -28,21 +28,6 @@ export const uploadApi = {
   },
 
   /**
-   * Upload an audio file from a known path (without file picker).
-   */
-  upload: (
-    noteId: string,
-    sourcePath: string,
-    speakerLabel?: string
-  ): Promise<UploadedAudio> => {
-    return invoke<UploadedAudio>("upload_audio", {
-      noteId,
-      sourcePath,
-      speakerLabel,
-    });
-  },
-
-  /**
    * Get all uploaded audio files for a note.
    */
   getUploads: (noteId: string): Promise<UploadedAudio[]> => {
@@ -62,22 +47,6 @@ export const uploadApi = {
    */
   transcribe: (uploadId: number): Promise<number> => {
     return invoke<number>("transcribe_uploaded_audio", { uploadId });
-  },
-
-  /**
-   * Retranscribe an uploaded audio file (deletes existing transcripts first).
-   * Returns the number of transcript segments created.
-   */
-  retranscribe: (uploadId: number): Promise<number> => {
-    // The backend command now handles deletion automatically
-    return invoke<number>("transcribe_uploaded_audio", { uploadId });
-  },
-
-  /**
-   * Update the speaker label for an uploaded audio file.
-   */
-  updateSpeaker: (uploadId: number, speakerLabel: string): Promise<void> => {
-    return invoke("update_uploaded_audio_speaker", { uploadId, speakerLabel });
   },
 
   /**

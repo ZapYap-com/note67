@@ -449,7 +449,6 @@ pub fn run() {
             commands::get_uploaded_audio,
             commands::delete_uploaded_audio,
             commands::transcribe_uploaded_audio,
-            commands::update_uploaded_audio_speaker,
             commands::reorder_audio_items,
             commands::supported_audio_formats,
             // Settings commands

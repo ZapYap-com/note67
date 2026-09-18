@@ -588,8 +588,17 @@ export function NoteView({
                   <button
                     onClick={() => {
                       setShowMoreMenu(false);
-                      void uploadAudio().then((upload) => {
-                        if (upload) setImportCount((n) => n + 1);
+                      void uploadAudio().then(async (upload) => {
+                        if (!upload) return;
+                        setImportCount((n) => n + 1);
+                        // Transcribe it straight away, unless there's no model
+                        // or it would compete with a recording; then its row
+                        // offers Transcribe. A pass already running (say, for
+                        // a recording just stopped) is waited for, not failed.
+                        if (loadedModel && !isSessionActive) {
+                          await transcribeUpload(upload.id);
+                          onTranscriptUpdated?.();
+                        }
                       });
                     }}
                     disabled={isUploading}

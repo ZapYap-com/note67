@@ -9,7 +9,9 @@ use uuid::Uuid;
 use crate::audio::converter::{
     convert_to_wav, get_audio_duration_ms, is_supported_format, SUPPORTED_EXTENSIONS,
 };
-use crate::commands::transcription::{batch_language, clamp_monotonic, TranscriptionState};
+use crate::commands::transcription::{
+    batch_language, clamp_monotonic, take_transcription_slot, TranscriptionState,
+};
 use crate::transcription::should_skip_segment;
 use crate::db::models::{NewTranscriptSegment, UploadedAudio};
 use crate::db::Database;
@@ -144,9 +146,7 @@ pub async fn transcribe_uploaded_audio(
         .get_uploaded_audio_by_id(upload_id)
         .map_err(|e| e.to_string())?;
 
-    if state.is_transcribing.swap(true, Ordering::SeqCst) {
-        return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
-    }
+    take_transcription_slot(&state.is_transcribing).await;
     // Cleared on every way out of this function.
     let _busy = scopeguard::guard((), |_| {
         state.is_transcribing.store(false, Ordering::SeqCst);
@@ -212,17 +212,6 @@ pub async fn transcribe_uploaded_audio(
 #[tauri::command]
 pub fn supported_audio_formats() -> Vec<&'static str> {
     SUPPORTED_EXTENSIONS.to_vec()
-}
-
-/// Update speaker label for uploaded audio
-#[tauri::command]
-pub fn update_uploaded_audio_speaker(
-    upload_id: i64,
-    speaker_label: String,
-    db: State<Database>,
-) -> Result<(), String> {
-    db.update_uploaded_audio_speaker(upload_id, &speaker_label)
-        .map_err(|e| e.to_string())
 }
 
 /// Item for reordering

@@ -25,6 +25,17 @@ pub(crate) fn clamp_monotonic(start: f64, end: f64, last_start: &mut f64) -> (f6
     (clamped_start, clamped_end)
 }
 
+/// Take the file-transcription slot, waiting for a pass already running
+/// (an upload being transcribed, or another note's pass) instead of failing.
+/// Failing meant the pass after a recording stops was skipped whenever an
+/// upload was still transcribing. Every holder releases the slot with a
+/// scope guard, so the wait always ends.
+pub(crate) async fn take_transcription_slot(slot: &AtomicBool) {
+    while slot.swap(true, Ordering::SeqCst) {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
 /// What a retranscription pass does with the note's existing transcript.
 #[derive(Debug, PartialEq)]
 enum PassOutcome {
@@ -669,10 +680,7 @@ pub async fn retranscribe_note(
     state: State<'_, TranscriptionState>,
     db: State<'_, Database>,
 ) -> Result<RetranscribeResult, String> {
-    // Check if already transcribing
-    if state.is_transcribing.swap(true, Ordering::SeqCst) {
-        return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
-    }
+    take_transcription_slot(&state.is_transcribing).await;
     // Cleared on every way out, including the `?` returns below.
     let _busy = scopeguard::guard((), |_| {
         state.is_transcribing.store(false, Ordering::SeqCst);
@@ -975,6 +983,21 @@ fn parse_model_size(size: &str) -> Result<ModelSize, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_pass_waits_for_the_one_running_instead_of_failing() {
+        let slot = Arc::new(AtomicBool::new(true)); // an upload is transcribing
+        let running = slot.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            running.store(false, Ordering::SeqCst);
+        });
+
+        let started = std::time::Instant::now();
+        take_transcription_slot(&slot).await;
+        assert!(started.elapsed() >= std::time::Duration::from_millis(250));
+        assert!(slot.load(Ordering::SeqCst), "the waiter now holds the slot");
+    }
 
     #[test]
     fn a_note_without_audio_items_keeps_its_transcript() {

@@ -835,16 +835,6 @@ impl Database {
         Ok(())
     }
 
-    /// Update speaker label for uploaded audio
-    pub fn update_uploaded_audio_speaker(&self, id: i64, speaker_label: &str) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute(
-            "UPDATE uploaded_audio SET speaker_label = ?1 WHERE id = ?2",
-            params![speaker_label, id],
-        )?;
-        Ok(())
-    }
-
     /// Delete uploaded audio by ID
     pub fn delete_uploaded_audio(&self, id: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;

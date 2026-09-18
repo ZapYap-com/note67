@@ -52,3 +52,50 @@ test.describe("imported audio", () => {
     await expect(page.getByRole("alert")).toBeHidden();
   });
 });
+
+test.describe("uploading audio", () => {
+  const upload = (overrides: Record<string, unknown>) => ({
+    list_notes: [note],
+    get_note: note,
+    "plugin:dialog|open": "/Users/me/call.m4a",
+    upload_audio: imported,
+    transcribe_uploaded_audio: 12,
+    ...overrides,
+  });
+
+  async function uploadFile(page: import("@playwright/test").Page) {
+    await openNote(page);
+    await page.getByTitle("More actions").click();
+    await page.getByRole("button", { name: /upload audio/i }).click();
+    await page.waitForFunction(() =>
+      ((window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []).includes(
+        "upload_audio"
+      )
+    );
+  }
+
+  const calls = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => (window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []);
+
+  test("is transcribed straight away when a model is loaded", async ({ page }) => {
+    await installTauriMock(page, upload({}));
+    await page.goto("/");
+    await uploadFile(page);
+
+    await page.waitForFunction(() =>
+      ((window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []).includes(
+        "transcribe_uploaded_audio"
+      )
+    );
+  });
+
+  test("offers Transcribe when no model is loaded", async ({ page }) => {
+    await installTauriMock(page, upload({ get_loaded_model: null }));
+    await page.goto("/");
+    await page.getByRole("button", { name: /skip for now/i }).click();
+    await uploadFile(page);
+
+    await expect(page.getByRole("button", { name: "Transcribe", exact: true })).toBeVisible();
+    expect(await calls(page)).not.toContain("transcribe_uploaded_audio");
+  });
+});

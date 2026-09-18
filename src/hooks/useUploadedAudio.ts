@@ -120,22 +120,6 @@ export function useUploadedAudio(noteId: string | null) {
     []
   );
 
-  const updateSpeaker = useCallback(
-    async (uploadId: number, speakerLabel: string) => {
-      try {
-        await uploadApi.updateSpeaker(uploadId, speakerLabel);
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.id === uploadId ? { ...u, speaker_label: speakerLabel } : u
-          )
-        );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    []
-  );
-
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -149,6 +133,5 @@ export function useUploadedAudio(noteId: string | null) {
     uploadAudio,
     deleteUpload,
     transcribeUpload,
-    updateSpeaker,
   };
 }
