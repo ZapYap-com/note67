@@ -95,6 +95,28 @@ impl Default for AiState {
     }
 }
 
+/// Settings key holding the chosen Ollama model.
+const OLLAMA_MODEL_SETTING: &str = "ollama_model";
+
+/// The model to generate with: the one picked this session, else the one
+/// saved in settings.
+///
+/// The selection used to live only in memory. The frontend restored it once,
+/// on its first status check, so when Ollama started after Note67 that check
+/// found nothing to restore and every summary failed with "No model selected"
+/// until the model was picked again.
+async fn resolve_model(ai_state: &AiState, db: &Database) -> Option<String> {
+    let mut selected = ai_state.selected_model.lock().await;
+    if selected.is_none() {
+        *selected = db
+            .get_setting(OLLAMA_MODEL_SETTING)
+            .ok()
+            .flatten()
+            .filter(|model| !model.is_empty());
+    }
+    selected.clone()
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OllamaStatus {
     pub running: bool,
@@ -118,7 +140,10 @@ pub struct GenerateSummaryResponse {
 
 /// Check if Ollama is running and get available models
 #[tauri::command]
-pub async fn get_ollama_status(state: State<'_, AiState>) -> Result<OllamaStatus, String> {
+pub async fn get_ollama_status(
+    state: State<'_, AiState>,
+    db: State<'_, Database>,
+) -> Result<OllamaStatus, String> {
     let running = state.client.is_running().await;
 
     let models = if running {
@@ -127,7 +152,16 @@ pub async fn get_ollama_status(state: State<'_, AiState>) -> Result<OllamaStatus
         vec![]
     };
 
-    let selected_model = state.selected_model.lock().await.clone();
+    let mut selected_model = resolve_model(&state, &db).await;
+    // A saved model that has since been removed from Ollama can't be used.
+    if running
+        && selected_model
+            .as_ref()
+            .is_some_and(|name| !models.iter().any(|m| &m.name == name))
+    {
+        selected_model = None;
+        *state.selected_model.lock().await = None;
+    }
 
     Ok(OllamaStatus {
         running,
@@ -151,6 +185,7 @@ pub async fn list_ollama_models(state: State<'_, AiState>) -> Result<Vec<OllamaM
 pub async fn select_ollama_model(
     model_name: String,
     state: State<'_, AiState>,
+    db: State<'_, Database>,
 ) -> Result<(), String> {
     let models = state
         .client
@@ -162,6 +197,8 @@ pub async fn select_ollama_model(
         return Err(format!("Model '{}' not found", model_name));
     }
 
+    db.set_setting(OLLAMA_MODEL_SETTING, &model_name)
+        .map_err(|e| e.to_string())?;
     *state.selected_model.lock().await = Some(model_name);
     Ok(())
 }
@@ -198,11 +235,8 @@ pub async fn generate_summary(
     });
 
     // Get selected model
-    let model = ai_state
-        .selected_model
-        .lock()
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     // Get transcript from database
@@ -375,11 +409,8 @@ pub async fn generate_summary_stream(
     });
 
     // Get selected model
-    let model = ai_state
-        .selected_model
-        .lock()
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     // Get transcript from database
@@ -659,11 +690,8 @@ pub async fn extract_action_items(
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<Vec<ActionItem>, String> {
-    let model = ai_state
-        .selected_model
-        .lock()
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     let segments = db
@@ -796,11 +824,8 @@ pub async fn generate_title(
     db: State<'_, Database>,
 ) -> Result<String, String> {
     // Get selected model
-    let model = ai_state
-        .selected_model
-        .lock()
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     // Get transcript from database
@@ -1149,12 +1174,25 @@ pub async fn generate_title_from_summary(
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<String, String> {
-    // Get selected model
-    let model = ai_state
-        .selected_model
+    // Only a note still called "Untitled" gets an AI title. This used to run
+    // on every Summarize and every re-recording, replacing titles users had
+    // typed, and it fell back to "Meeting Notes" whenever the model's titles
+    // failed validation.
+    let current_title: String = db
+        .conn
         .lock()
+        .map_err(|e| e.to_string())?
+        .query_row("SELECT title FROM notes WHERE id = ?1", [&note_id], |row| {
+            row.get(0)
+        })
+        .map_err(|e| e.to_string())?;
+    if !is_placeholder_title(&current_title) {
+        return Ok(current_title);
+    }
+
+    // Get selected model
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     // Truncate summary if too long
@@ -1179,26 +1217,16 @@ pub async fn generate_title_from_summary(
             .await
             .map_err(|e| e.to_string())?;
 
-        // Debug: Log raw LLM output
-        eprintln!(
-            "[DEBUG] title_from_summary Attempt {}/{} - Raw response:\n{}",
-            attempt, max_retries, response
-        );
-
         // Clean up the response
         title = clean_title_response(&response);
-
-        // Debug: Log cleaned title
-        eprintln!(
-            "[DEBUG] title_from_summary Attempt {}/{} - Cleaned: {}",
-            attempt, max_retries, title
-        );
 
         // Check if title is valid
         if title != "Meeting Notes" && is_valid_title(&title) {
             break;
         } else if attempt == max_retries {
-            title = "Meeting Notes".to_string();
+            // No usable title: leave the note as it is rather than renaming
+            // it to a generic "Meeting Notes".
+            return Ok(current_title);
         }
     }
 
@@ -1233,6 +1261,12 @@ pub async fn generate_title_from_summary(
     Ok(title)
 }
 
+/// Whether a title is the placeholder a new note gets, so it may be replaced.
+fn is_placeholder_title(title: &str) -> bool {
+    let title = title.trim();
+    title.is_empty() || title.eq_ignore_ascii_case("untitled")
+}
+
 /// Event payload for streaming AI writing updates
 #[derive(Clone, Serialize)]
 pub struct AIWriteStreamEvent {
@@ -1248,6 +1282,7 @@ pub async fn ai_write_stream(
     action: String,
     note_content: Option<String>,
     ai_state: State<'_, AiState>,
+    db: State<'_, Database>,
 ) -> Result<String, String> {
     // Check if already generating
     if ai_state.is_generating.swap(true, Ordering::SeqCst) {
@@ -1260,11 +1295,8 @@ pub async fn ai_write_stream(
     });
 
     // Get selected model
-    let model = ai_state
-        .selected_model
-        .lock()
+    let model = resolve_model(&ai_state, &db)
         .await
-        .clone()
         .ok_or("No model selected. Please select a model first.")?;
 
     // Build prompt based on action
@@ -1401,6 +1433,29 @@ mod tests {
             "İstanbul  trip"
         );
         assert_eq!(strip_thinking_tags("İİİ</think>Answer"), "Answer");
+    }
+
+    #[tokio::test]
+    async fn the_saved_model_is_used_when_none_was_picked_this_session() {
+        let db = Database::in_memory();
+        let ai = AiState::default();
+        assert_eq!(resolve_model(&ai, &db).await, None);
+
+        db.set_setting(OLLAMA_MODEL_SETTING, "gemma4:latest").unwrap();
+        assert_eq!(resolve_model(&ai, &db).await.as_deref(), Some("gemma4:latest"));
+
+        // A model picked this session wins over the saved one.
+        *ai.selected_model.lock().await = Some("llama3.2".to_string());
+        assert_eq!(resolve_model(&ai, &db).await.as_deref(), Some("llama3.2"));
+    }
+
+    #[test]
+    fn only_placeholder_titles_are_replaced() {
+        assert!(is_placeholder_title("Untitled"));
+        assert!(is_placeholder_title("  untitled "));
+        assert!(is_placeholder_title(""));
+        assert!(!is_placeholder_title("Q3 planning"));
+        assert!(!is_placeholder_title("Untitled draft of the roadmap"));
     }
 
     #[test]

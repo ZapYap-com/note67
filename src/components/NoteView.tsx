@@ -828,6 +828,7 @@ export function NoteView({
 
         {activeTab === "summary" && (
           <SummaryPanel
+            aiReady={ollamaRunning && hasOllamaModel}
             summaries={summaries}
             isGenerating={isGenerating}
             streamingContent={streamingContent}

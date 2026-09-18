@@ -137,24 +137,25 @@ export function ActionsTab({ noteId, canUseAI, onChanged, focusTaskId }: Actions
               </span>
             )}
           </h2>
-          {canUseAI && (
-            <button
-              onClick={generate}
-              disabled={extracting}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-bg-subtle)", color: "var(--color-text)" }}
-            >
-              {extracting ? (
-                <span
-                  className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
-                  style={{ borderColor: "var(--color-text-secondary)", borderTopColor: "transparent" }}
-                />
-              ) : (
-                <span>✦</span>
-              )}
-              {extracting ? "Finding…" : "Generate"}
-            </button>
-          )}
+          {/* Shown even without AI, so the feature can be found and the
+              tooltip says what it needs. */}
+          <button
+            onClick={generate}
+            disabled={extracting || !canUseAI}
+            title={canUseAI ? undefined : "Start Ollama to find tasks"}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-bg-subtle)", color: "var(--color-text)" }}
+          >
+            {extracting ? (
+              <span
+                className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: "var(--color-text-secondary)", borderTopColor: "transparent" }}
+              />
+            ) : (
+              <span>✦</span>
+            )}
+            {extracting ? "Finding…" : "Generate"}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-1">

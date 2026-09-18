@@ -10,6 +10,8 @@ interface SummaryPanelProps {
   streamingContent: string;
   onDelete: (summaryId: number) => void;
   onCopy: (content: string) => void;
+  /** Whether Ollama is running with a model selected. */
+  aiReady?: boolean;
 }
 
 const SUMMARY_TYPE_LABELS: Record<SummaryType, string> = {
@@ -25,6 +27,7 @@ export function SummaryPanel({
   streamingContent,
   onDelete,
   onCopy,
+  aiReady = true,
 }: SummaryPanelProps) {
   // Track explicit expand/collapse state per summary. undefined = use default (newest expanded, others collapsed)
   const [expandState, setExpandState] = useState<Map<number, boolean>>(new Map());
@@ -251,7 +254,9 @@ export function SummaryPanel({
       {/* Empty State */}
       {summaries.length === 0 && !isGenerating && (
         <p className="text-center py-6" style={{ color: "var(--color-text-tertiary)" }}>
-          No summaries yet.
+          {aiReady
+            ? "No summaries yet."
+            : "Summaries use a local AI model. Start Ollama and pick a model in Settings to summarize this meeting."}
         </p>
       )}
     </div>

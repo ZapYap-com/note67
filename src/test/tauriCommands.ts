@@ -68,8 +68,18 @@ export const defaultCommands: CommandMap = {
   is_ai_generating: false,
 
   // Whisper (a model is downloaded + loaded)
-  list_models: [{ size: "large-v3-turbo", downloaded: true }],
-  get_loaded_model: "large-v3-turbo",
+  // Shaped like the backend's ModelInfo: Settings reads every field, and a
+  // model without `name` crashed the page as soon as Settings opened.
+  list_models: [
+    {
+      size: "large-turbo-q8",
+      name: "large-turbo-q8",
+      downloaded: true,
+      path: "/models/ggml-large-v3-turbo-q8_0.bin",
+      size_mb: 874,
+    },
+  ],
+  get_loaded_model: "large-turbo-q8",
   is_downloading: false,
   get_download_progress: 0,
 
@@ -124,7 +134,9 @@ export const defaultCommands: CommandMap = {
  */
 export const needsSetupCommands: CommandMap = {
   get_loaded_model: null,
-  list_models: [{ size: "large-v3-turbo", downloaded: false }],
+  list_models: [
+    { size: "large-turbo-q8", name: "large-turbo-q8", downloaded: false, path: null, size_mb: 874 },
+  ],
   get_ollama_status: { running: false, models: [], selected_model: null },
   list_ollama_models: [],
   get_selected_model: null,

@@ -42,6 +42,7 @@ import { useRecordingStore } from "./stores/recordingStore";
 import { useLiveTranscriptionStore } from "./stores/liveTranscriptionStore";
 import { useSummaryUiStore } from "./stores/summaryUiStore";
 import { useNoteUiStore, flushPendingNoteSave } from "./stores/noteUiStore";
+import { useMeetingStore } from "./stores/meetingStore";
 import type { Note, TranscriptSegment } from "./types";
 
 // Lazy-loaded: GraphView pulls in d3, which is only needed on the graph view.
@@ -85,6 +86,7 @@ function App() {
     isRunning: ollamaRunning,
     selectedModel: ollamaModel,
     status: ollamaStatus,
+    checkStatus: checkOllamaStatus,
   } = useOllama();
   const { available: updateAvailable } = useUpdater();
   const {
@@ -106,10 +108,10 @@ function App() {
   // incomplete and the user hasn't dismissed it yet.
   const { dismissed: onboardingDismissed, dismiss: dismissOnboarding } =
     useOnboarding();
+  // Ollama is left out on purpose: it is optional (summaries, titles and
+  // tasks), and a skipped Ollama step must not bring the wizard back.
   const setupIncomplete =
     !loadedModel ||
-    !ollamaRunning ||
-    !ollamaModel ||
     (micAvailable && !micPermission) ||
     (systemAudioSupported && !systemAudioPermission);
   // Only evaluate setup once every source has actually reported, so a
@@ -358,6 +360,8 @@ function App() {
     // Only now: pointing the recording UI at the note before the start
     // succeeded is how a failed start used to take over a running session.
     setRecordingNoteId(note.id);
+    // Recording answers any meeting prompt; don't bring it back after Stop.
+    useMeetingStore.getState().dismissMeeting();
     // Show the recording (and its Stop control) even from Graph or Tasks.
     setCurrentView("notes");
     setActiveTab("transcript");
@@ -400,27 +404,49 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Ollama is often started after Note67, or restarted. Re-check while it is
+  // down (on window focus and every 15 s) and stop once it is up.
+  useEffect(() => {
+    if (ollamaRunning) return;
+    const intervalId = window.setInterval(() => void checkOllamaStatus(), 15_000);
+    const onFocus = () => void checkOllamaStatus();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [ollamaRunning, checkOllamaStatus]);
+
+  // A session is open while recording or paused; only one may exist.
+  const recordingSessionActive = isRecording || isPaused;
+
+  // Start recording from a shortcut or the meeting prompt. Recording needs a
+  // Whisper model and an audio input, nothing else: Ollama is only for the
+  // summary afterwards, and requiring it here meant users without it could
+  // not record at all. Without a model, open the settings that fix that
+  // instead of silently doing nothing.
+  const requestRecording = useCallback(() => {
+    if (recordingSessionActive) return;
+    if (!loadedModel) {
+      setSettingsTab("whisper");
+      setShowSettings(true);
+      return;
+    }
+    handleStartRecording();
+  }, [recordingSessionActive, loadedModel, handleStartRecording]);
+
   // Keyboard shortcut: Cmd/Ctrl + R for new note and start recording
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "r") {
         e.preventDefault();
-        // Only start if not already recording and setup is complete
-        if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
-          handleStartRecording();
-        }
+        requestRecording();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    isRecording,
-    loadedModel,
-    ollamaRunning,
-    ollamaModel,
-    handleStartRecording,
-  ]);
+  }, [requestRecording]);
 
   // Listen for tray "New Note" event
   useEffect(() => {
@@ -428,11 +454,10 @@ function App() {
     let mounted = true;
 
     listen("tray-new-note", () => {
-      // Start a new note if not already recording and setup is complete
-      if (!isRecording && loadedModel && ollamaRunning && ollamaModel) {
+      // Record into a new note when that's possible, otherwise just create one.
+      if (!recordingSessionActive && loadedModel) {
         handleStartRecording();
       } else {
-        // Just create a new note
         handleNewNote();
       }
     }).then((fn) => {
@@ -447,14 +472,7 @@ function App() {
       mounted = false;
       unlistenFn?.();
     };
-  }, [
-    isRecording,
-    loadedModel,
-    ollamaRunning,
-    ollamaModel,
-    handleStartRecording,
-    handleNewNote,
-  ]);
+  }, [recordingSessionActive, loadedModel, handleStartRecording, handleNewNote]);
 
   // Listen for tray "Settings" event
   useEffect(() => {
@@ -680,8 +698,18 @@ function App() {
         }
       }
 
+      // Ask Ollama now rather than trusting cached status: it may have been
+      // started, stopped or restarted during the meeting. Without it, the
+      // transcript is the result, and the Summary tab says how to get more.
+      const ai = await aiApi.getOllamaStatus().catch(() => null);
+      const aiReady = Boolean(ai?.running && ai.selected_model);
+      if (!aiReady) {
+        void checkOllamaStatus();
+        if (transcriptToUse.length > 0) setActiveTab("transcript");
+      }
+
       // Auto-generate summary and title if we have transcript
-      if (transcriptToUse.length > 0) {
+      if (aiReady && transcriptToUse.length > 0) {
         setActiveTab("summary");
         setIsGeneratingSummaryTitle(true);
         try {
@@ -1264,7 +1292,7 @@ function App() {
           />
         ) : currentView === "notes" ? (
           <EmptyState
-            needsSetup={!loadedModel || !ollamaRunning || !ollamaModel}
+            needsSetup={!loadedModel}
             onOpenSettings={() => {
               setSettingsTab("whisper");
               setShowSettings(true);
@@ -1358,15 +1386,15 @@ function App() {
             ) : (
               <button
                 onClick={handleStartRecording}
-                disabled={!loadedModel || !ollamaRunning || !ollamaModel}
+                disabled={!loadedModel}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-105"
                 style={{
                   backgroundColor: "var(--color-accent)",
                   color: "white",
                 }}
                 title={
-                  !loadedModel || !ollamaRunning || !ollamaModel
-                    ? "Complete setup in Settings first"
+                  !loadedModel
+                    ? "Load a transcription model in Settings first"
                     : undefined
                 }
               >
@@ -1444,7 +1472,10 @@ function App() {
       />
 
       {/* Meeting Detected Popup */}
-      <MeetingDetectedPopup onStartListening={handleStartRecording} />
+      {/* Hidden while a session is open: starting another would be refused. */}
+      {!recordingSessionActive && (
+        <MeetingDetectedPopup onStartListening={requestRecording} />
+      )}
 
       {/* First-run onboarding wizard */}
       {showOnboarding && (

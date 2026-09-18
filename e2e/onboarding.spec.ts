@@ -36,7 +36,7 @@ test.describe("first-run / needs setup (#7 onboarding)", () => {
     // Wizard gone; the app's own setup affordance remains behind it.
     await expect(page.getByRole("heading", { name: /welcome to note67/i })).toBeHidden();
     await expect(
-      page.getByRole("button", { name: /set up whisper & ollama/i })
+      page.getByRole("button", { name: /set up transcription/i })
     ).toBeVisible();
   });
 });

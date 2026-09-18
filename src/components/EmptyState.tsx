@@ -144,7 +144,7 @@ export function EmptyState({ needsSetup, onOpenSettings }: EmptyStateProps) {
                 clipRule="evenodd"
               />
             </svg>
-            Set up Whisper & Ollama
+            Set up transcription
           </button>
         )}
       </div>
