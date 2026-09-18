@@ -145,43 +145,6 @@ pub fn get_all_tags(db: State<Database>) -> Result<Vec<Tag>, String> {
     Ok(tags)
 }
 
-/// Get tags for a specific note
-#[tauri::command]
-pub fn get_note_tags(db: State<Database>, note_id: String) -> Result<Vec<NoteTag>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT t.id, t.name, t.color
-             FROM tags t
-             INNER JOIN note_tags nt ON t.id = nt.tag_id
-             WHERE nt.note_id = ?1
-             ORDER BY t.name ASC",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let tags = stmt
-        .query_map([&note_id], |row| {
-            Ok(NoteTag {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                color: row.get(2)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Ok(tags)
-}
-
-/// Sync note tags based on content - extracts #tags from content and updates database
-#[tauri::command]
-pub fn sync_note_tags(db: State<Database>, note_id: String, content: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    sync_note_tags_internal(&conn, &note_id, &content)
-}
-
 /// Get notes filtered by tag name
 #[tauri::command]
 pub fn get_notes_by_tag(
@@ -257,22 +220,6 @@ pub fn get_all_note_tags(db: State<Database>) -> Result<std::collections::HashMa
     }
 
     Ok(result)
-}
-
-/// Delete a tag globally (removes from all notes)
-#[tauri::command]
-pub fn delete_tag(db: State<Database>, tag_id: i64) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    // Delete tag associations first (handled by CASCADE but explicit is clearer)
-    conn.execute("DELETE FROM note_tags WHERE tag_id = ?1", [tag_id])
-        .map_err(|e| e.to_string())?;
-
-    // Delete the tag itself
-    conn.execute("DELETE FROM tags WHERE id = ?1", [tag_id])
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
 }
 
 fn parse_datetime(s: String) -> chrono::DateTime<chrono::Utc> {

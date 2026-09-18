@@ -5,9 +5,9 @@
 //    tauri::generate_handler![...] (src-tauri/src/lib.rs). A miss is a runtime
 //    "command not found", so it always fails.
 // 2. Every registered command should be invoked by production frontend code
-//    (tests and fixtures don't count). Commands known to be dead are listed with
-//    a reason in scripts/ipc-allowlist.json; anything else unreferenced is new
-//    dead surface. Report-only unless --strict.
+//    (tests and fixtures don't count). The few exceptions are listed with a
+//    reason in scripts/ipc-allowlist.json; anything else unreferenced is new
+//    dead surface. Report-only unless --strict (CI runs --strict).
 //
 // Usage: node scripts/check-ipc.mjs [--strict]
 

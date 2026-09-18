@@ -99,11 +99,6 @@ fn update_tray_for_update(app: &tauri::AppHandle, available: bool, version: Opti
     }
 }
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! Welcome to Note67.", name)
-}
-
 /// Show the main window for something the user should see (a detected
 /// meeting's prompt), without stealing focus. Ends a --minimized launch.
 pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
@@ -358,7 +353,6 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             show_main_window,
             commands::create_note,
             commands::get_note,
@@ -373,22 +367,15 @@ pub fn run() {
             commands::get_audio_level,
             commands::is_system_audio_supported,
             commands::has_system_audio_permission,
-            commands::request_system_audio_permission,
             commands::has_microphone_available,
             commands::has_microphone_permission,
             commands::get_microphone_auth_status,
             commands::request_microphone_permission,
-            commands::start_dual_recording,
-            commands::stop_dual_recording,
             commands::get_segment_playback_path,
             commands::playback_needs_rebuild,
             commands::rebuild_note_playback,
             commands::stop_dual_recording_with_segments,
-            commands::is_dual_recording,
             // Pause/Resume/Continue recording commands
-            commands::get_recording_phase,
-            commands::pause_recording_cmd,
-            commands::resume_recording_cmd,
             commands::pause_dual_recording,
             commands::resume_dual_recording,
             commands::start_dual_recording_with_segments,
@@ -398,39 +385,27 @@ pub fn run() {
             commands::pause_system_only_recording,
             commands::resume_system_only_recording,
             commands::continue_note_recording,
-            commands::reopen_note,
             commands::get_note_audio_segments,
-            commands::get_note_total_duration,
-            commands::delete_note_audio_segments,
             commands::migrate_legacy_audio,
             commands::list_models,
             commands::download_model,
             commands::get_download_progress,
-            commands::is_downloading,
             commands::delete_model,
             commands::load_model,
             commands::get_loaded_model,
-            commands::transcribe_audio,
-            commands::transcribe_dual_audio,
-            commands::is_transcribing,
             commands::get_transcript,
             commands::add_transcript_segment,
             commands::start_live_transcription,
             commands::stop_live_transcription,
             commands::is_live_transcribing,
-            commands::retranscribe_audio_segment,
             commands::retranscribe_note,
             // AI commands
             commands::get_ollama_status,
-            commands::list_ollama_models,
             commands::select_ollama_model,
-            commands::get_selected_model,
-            commands::is_ai_generating,
             commands::generate_summary,
             commands::generate_summary_stream,
             commands::get_note_summaries,
             commands::delete_summary,
-            commands::generate_title,
             commands::generate_title_from_summary,
             commands::ai_write_stream,
             commands::extract_action_items,
@@ -442,8 +417,6 @@ pub fn run() {
             commands::delete_action_item,
             // Export commands
             commands::export_note_markdown,
-            commands::save_export_to_file,
-            commands::get_export_directory,
             // Upload commands
             commands::upload_audio,
             commands::get_uploaded_audio,
@@ -466,23 +439,16 @@ pub fn run() {
             meeting_detection::is_meeting_detection_enabled,
             // Image commands
             commands::save_image,
-            commands::get_attachments_dir,
             commands::delete_note_attachments,
             // Tag commands
             commands::get_all_tags,
-            commands::get_note_tags,
             commands::get_all_note_tags,
-            commands::sync_note_tags,
             commands::get_notes_by_tag,
-            commands::delete_tag,
             // Link commands
             commands::get_backlinks,
-            commands::get_note_links,
             commands::search_notes_by_title,
-            commands::get_broken_link_titles,
             // Graph commands
             commands::get_graph_data,
-            commands::get_local_graph,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

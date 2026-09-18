@@ -28,18 +28,7 @@ pub fn take_system_audio_samples() -> Vec<f32> {
     Vec::new()
 }
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-/// Audio source type for recording
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AudioSource {
-    /// User's microphone input
-    Microphone,
-    /// System audio output (other participants)
-    SystemAudio,
-}
 
 #[derive(Error, Debug)]
 pub enum AudioError {

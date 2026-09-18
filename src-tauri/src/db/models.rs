@@ -165,16 +165,6 @@ pub struct AudioSegment {
     pub created_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-pub struct NewAudioSegment {
-    pub note_id: String,
-    pub segment_index: i32,
-    pub mic_path: Option<String>,
-    pub system_path: Option<String>,
-    pub start_offset_ms: i64,
-}
-
 /// Uploaded audio file for a note
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadedAudio {

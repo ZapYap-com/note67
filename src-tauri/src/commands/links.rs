@@ -7,14 +7,6 @@ use tauri::State;
 use crate::db::Database;
 
 #[derive(Debug, Serialize)]
-pub struct NoteLink {
-    pub id: i64,
-    pub source_note_id: String,
-    pub target_note_id: Option<String>,
-    pub target_title: String,
-}
-
-#[derive(Debug, Serialize)]
 pub struct BacklinkNote {
     pub id: String,
     pub title: String,
@@ -104,57 +96,6 @@ pub fn get_backlinks(db: State<Database>, note_id: String) -> Result<Vec<Backlin
         .collect();
 
     Ok(notes)
-}
-
-/// Get links FROM this note
-#[tauri::command]
-pub fn get_note_links(db: State<Database>, note_id: String) -> Result<Vec<NoteLink>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, source_note_id, target_note_id, target_title
-             FROM note_links
-             WHERE source_note_id = ?1
-             ORDER BY id ASC",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let links = stmt
-        .query_map([&note_id], |row| {
-            Ok(NoteLink {
-                id: row.get(0)?,
-                source_note_id: row.get(1)?,
-                target_note_id: row.get(2)?,
-                target_title: row.get(3)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Ok(links)
-}
-
-/// Get broken link titles - links that don't have a matching target note
-#[tauri::command]
-pub fn get_broken_link_titles(db: State<Database>, note_id: String) -> Result<Vec<String>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT target_title FROM note_links
-             WHERE source_note_id = ?1 AND target_note_id IS NULL",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let titles = stmt
-        .query_map([&note_id], |row| row.get::<_, String>(0))
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Ok(titles)
 }
 
 /// Search notes by title for autocomplete

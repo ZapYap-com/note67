@@ -29,7 +29,7 @@ export async function installTauriMock(
     let cbId = 0;
     const w = window as unknown as Record<string, unknown>;
 
-    // A tiny note store so write commands (update_note, create_note, …) echo a
+    // A tiny note store so write commands (update_note, create_note) echo a
     // valid Note instead of null — matching real backend behaviour. Seeded from
     // whatever list_notes / get_note return.
     const noteStore: Record<string, Record<string, unknown>> = {};
@@ -164,12 +164,6 @@ export async function installTauriMock(
             }
             return Promise.resolve(null);
           }
-        }
-        if (cmd === "reopen_note") {
-          const id = String(args.id);
-          const note = { ...NOTE_DEFAULTS, ...(noteStore[id] || {}), id };
-          noteStore[id] = note;
-          return Promise.resolve(note);
         }
 
         if (Object.prototype.hasOwnProperty.call(commands, cmd)) {

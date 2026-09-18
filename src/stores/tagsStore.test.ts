@@ -101,21 +101,3 @@ describe("tagsStore selection", () => {
     expect(useTagsStore.getState().selectedTag).toBeNull();
   });
 });
-
-describe("tagsStore.deleteTag", () => {
-  it("refreshes tags after a successful delete", async () => {
-    api.deleteTag.mockResolvedValue(undefined);
-
-    await useTagsStore.getState().deleteTag(7);
-
-    expect(api.deleteTag).toHaveBeenCalledWith(7);
-    expect(api.getAll).toHaveBeenCalled();
-    expect(api.getAllNoteTags).toHaveBeenCalled();
-  });
-
-  it("rethrows so the caller can surface the failure", async () => {
-    api.deleteTag.mockRejectedValue(new Error("in use"));
-
-    await expect(useTagsStore.getState().deleteTag(7)).rejects.toThrow("in use");
-  });
-});

@@ -345,14 +345,6 @@ impl Database {
         Ok(())
     }
 
-    /// Delete all summaries for a note
-    #[allow(dead_code)]
-    pub fn delete_note_summaries(&self, note_id: &str) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute("DELETE FROM summaries WHERE note_id = ?1", [note_id])?;
-        Ok(())
-    }
-
     /// Get a note's action items (all, including subtasks; the frontend nests
     /// them by parent_id). The table is the source of truth.
     pub fn get_action_items(&self, note_id: &str) -> anyhow::Result<Vec<ActionItem>> {
@@ -561,7 +553,6 @@ impl Database {
         segment_index: i32,
         mic_path: Option<&str>,
         system_path: Option<&str>,
-        start_offset_ms: i64,
     ) -> anyhow::Result<i64> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         let now = Utc::now();
@@ -580,7 +571,9 @@ impl Database {
         conn.execute(
             "INSERT INTO audio_segments (note_id, segment_index, mic_path, system_path, start_offset_ms, display_order, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![note_id, segment_index, mic_path, system_path, start_offset_ms, display_order, now.to_rfc3339()],
+            // start_offset_ms is kept as 0: nothing reads it, and offsets
+            // follow from the segments' durations.
+            params![note_id, segment_index, mic_path, system_path, 0, display_order, now.to_rfc3339()],
         )?;
 
         Ok(conn.last_insert_rowid())
@@ -641,87 +634,6 @@ impl Database {
             .ok()
             .flatten();
         Ok(max_index.map(|i| i + 1).unwrap_or(0))
-    }
-
-    /// Get total duration of all segments for a note (in ms)
-    pub fn get_total_segment_duration(&self, note_id: &str) -> anyhow::Result<i64> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        let total: Option<i64> = conn
-            .query_row(
-                "SELECT COALESCE(SUM(duration_ms), 0) FROM audio_segments WHERE note_id = ?1",
-                [note_id],
-                |row| row.get(0),
-            )
-            .ok()
-            .flatten();
-        Ok(total.unwrap_or(0))
-    }
-
-    /// Delete all audio segments for a note
-    pub fn delete_audio_segments(&self, note_id: &str) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute(
-            "DELETE FROM audio_segments WHERE note_id = ?1",
-            [note_id],
-        )?;
-        Ok(())
-    }
-
-    /// Get the latest (most recent) segment for a note
-    #[allow(dead_code)]
-    pub fn get_latest_segment(&self, note_id: &str) -> anyhow::Result<Option<AudioSegment>> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-
-        let segment = conn
-            .query_row(
-                "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
-                 FROM audio_segments
-                 WHERE note_id = ?1
-                 ORDER BY segment_index DESC
-                 LIMIT 1",
-                [note_id],
-                |row| {
-                    Ok(AudioSegment {
-                        id: row.get(0)?,
-                        note_id: row.get(1)?,
-                        segment_index: row.get(2)?,
-                        mic_path: row.get(3)?,
-                        system_path: row.get(4)?,
-                        start_offset_ms: row.get(5)?,
-                        duration_ms: row.get(6)?,
-                        display_order: row.get(7)?,
-                        created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
-                    })
-                },
-            )
-            .ok();
-
-        Ok(segment)
-    }
-
-    /// Get an audio segment by ID
-    pub fn get_audio_segment_by_id(&self, id: i64) -> anyhow::Result<AudioSegment> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-
-        conn.query_row(
-            "SELECT id, note_id, segment_index, mic_path, system_path, start_offset_ms, duration_ms, display_order, created_at
-             FROM audio_segments WHERE id = ?1",
-            [id],
-            |row| {
-                Ok(AudioSegment {
-                    id: row.get(0)?,
-                    note_id: row.get(1)?,
-                    segment_index: row.get(2)?,
-                    mic_path: row.get(3)?,
-                    system_path: row.get(4)?,
-                    start_offset_ms: row.get(5)?,
-                    duration_ms: row.get(6)?,
-                    display_order: row.get(7)?,
-                    created_at: row.get::<_, String>(8)?.parse().unwrap_or_else(|_| Utc::now()),
-                })
-            },
-        )
-        .map_err(|e| anyhow::anyhow!("Audio segment not found: {}", e))
     }
 
     // ========== Uploaded Audio ==========
@@ -839,14 +751,6 @@ impl Database {
     pub fn delete_uploaded_audio(&self, id: i64) -> anyhow::Result<()> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
         conn.execute("DELETE FROM uploaded_audio WHERE id = ?1", [id])?;
-        Ok(())
-    }
-
-    /// Delete all uploaded audio for a note
-    #[allow(dead_code)]
-    pub fn delete_note_uploaded_audio(&self, note_id: &str) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-        conn.execute("DELETE FROM uploaded_audio WHERE note_id = ?1", [note_id])?;
         Ok(())
     }
 

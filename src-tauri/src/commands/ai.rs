@@ -127,20 +127,6 @@ pub struct OllamaStatus {
     pub selected_model: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GenerateSummaryRequest {
-    pub note_id: String,
-    pub summary_type: String,
-    pub custom_prompt: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GenerateSummaryResponse {
-    pub summary: Summary,
-}
-
 /// Check if Ollama is running and get available models
 #[tauri::command]
 pub async fn get_ollama_status(
@@ -173,16 +159,6 @@ pub async fn get_ollama_status(
     })
 }
 
-/// List available Ollama models
-#[tauri::command]
-pub async fn list_ollama_models(state: State<'_, AiState>) -> Result<Vec<OllamaModel>, String> {
-    state
-        .client
-        .list_models()
-        .await
-        .map_err(|e| e.to_string())
-}
-
 /// Select a model to use for summaries
 #[tauri::command]
 pub async fn select_ollama_model(
@@ -206,24 +182,10 @@ pub async fn select_ollama_model(
     Ok(())
 }
 
-/// Get the currently selected model
-#[tauri::command]
-pub async fn get_selected_model(state: State<'_, AiState>) -> Result<Option<String>, String> {
-    Ok(state.selected_model.lock().await.clone())
-}
-
-/// Check if AI is currently generating
-#[tauri::command]
-pub fn is_ai_generating(state: State<'_, AiState>) -> bool {
-    state.is_generating.load(Ordering::SeqCst)
-}
-
 /// Generate a summary for a note
 #[tauri::command]
 pub async fn generate_summary(
     note_id: String,
-    summary_type: String,
-    custom_prompt: Option<String>,
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<Summary, String> {
@@ -267,9 +229,8 @@ pub async fn generate_summary(
         return Err("No content to summarize. Please add notes or record audio first.".to_string());
     }
 
-    // Parse summary type
-    let stype = SummaryType::from_str(&summary_type);
-    let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
+    // Every summary is an overview; the other types never had a UI.
+    let stype = SummaryType::Overview;
 
     // Check if we need to use chunked summarization
     let response = if has_transcript && transcript.len() > MAX_CONTENT_LENGTH {
@@ -280,20 +241,7 @@ pub async fn generate_summary(
         // Summarize each chunk
         let mut chunk_summaries = Vec::new();
         for (i, chunk) in chunks.iter().enumerate() {
-            let chunk_prompt = match stype {
-                SummaryType::Overview => {
-                    SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks)
-                }
-                SummaryType::ActionItems => {
-                    SummaryPrompts::chunk_action_items(chunk, i + 1, total_chunks)
-                }
-                SummaryType::KeyDecisions => {
-                    SummaryPrompts::chunk_key_decisions(chunk, i + 1, total_chunks)
-                }
-                SummaryType::Custom => {
-                    SummaryPrompts::chunk_custom(chunk, &user_prompt_str, i + 1, total_chunks)
-                }
-            };
+            let chunk_prompt = SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks);
 
             let chunk_response = ai_state
                 .client
@@ -305,20 +253,7 @@ pub async fn generate_summary(
         }
 
         // Merge chunk summaries
-        let merge_prompt = match stype {
-            SummaryType::Overview => {
-                SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::ActionItems => {
-                SummaryPrompts::merge_action_items(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::KeyDecisions => {
-                SummaryPrompts::merge_key_decisions(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::Custom => {
-                SummaryPrompts::merge_custom(&chunk_summaries, &user_prompt_str, notes.as_deref())
-            }
-        };
+        let merge_prompt = SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref());
 
         ai_state
             .client
@@ -327,18 +262,7 @@ pub async fn generate_summary(
             .map_err(|e| e.to_string())?
     } else if has_transcript {
         // Build prompt based on summary type (single pass with transcript)
-        let prompt = match stype {
-            SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
-            SummaryType::ActionItems => {
-                SummaryPrompts::action_items(&transcript, notes.as_deref())
-            }
-            SummaryType::KeyDecisions => {
-                SummaryPrompts::key_decisions(&transcript, notes.as_deref())
-            }
-            SummaryType::Custom => {
-                SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
-            }
-        };
+        let prompt = SummaryPrompts::overview(&transcript, notes.as_deref());
 
         // Generate with Ollama
         ai_state
@@ -349,14 +273,7 @@ pub async fn generate_summary(
     } else {
         // Notes only (no transcript)
         let notes_content = notes.as_ref().unwrap();
-        let prompt = match stype {
-            SummaryType::Overview => SummaryPrompts::overview_notes_only(notes_content),
-            SummaryType::ActionItems => SummaryPrompts::action_items_notes_only(notes_content),
-            SummaryType::KeyDecisions => SummaryPrompts::key_decisions_notes_only(notes_content),
-            SummaryType::Custom => {
-                SummaryPrompts::custom_notes_only(notes_content, &user_prompt_str)
-            }
-        };
+        let prompt = SummaryPrompts::overview_notes_only(notes_content);
 
         // Generate with Ollama
         ai_state
@@ -396,8 +313,6 @@ pub struct SummaryStreamEvent {
 pub async fn generate_summary_stream(
     app: AppHandle,
     note_id: String,
-    summary_type: String,
-    custom_prompt: Option<String>,
     ai_state: State<'_, AiState>,
     db: State<'_, Database>,
 ) -> Result<Summary, String> {
@@ -441,9 +356,8 @@ pub async fn generate_summary_stream(
         return Err("No content to summarize. Please add notes or record audio first.".to_string());
     }
 
-    // Parse summary type
-    let stype = SummaryType::from_str(&summary_type);
-    let user_prompt_str = custom_prompt.unwrap_or_else(|| "Summarize this note.".to_string());
+    // Every summary is an overview; the other types never had a UI.
+    let stype = SummaryType::Overview;
 
     // Check if we need to use chunked summarization
     let response = if has_transcript && transcript.len() > MAX_CONTENT_LENGTH {
@@ -470,20 +384,7 @@ pub async fn generate_summary_stream(
             };
             let _ = app.emit("summary-stream", progress_event);
 
-            let chunk_prompt = match stype {
-                SummaryType::Overview => {
-                    SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks)
-                }
-                SummaryType::ActionItems => {
-                    SummaryPrompts::chunk_action_items(chunk, i + 1, total_chunks)
-                }
-                SummaryType::KeyDecisions => {
-                    SummaryPrompts::chunk_key_decisions(chunk, i + 1, total_chunks)
-                }
-                SummaryType::Custom => {
-                    SummaryPrompts::chunk_custom(chunk, &user_prompt_str, i + 1, total_chunks)
-                }
-            };
+            let chunk_prompt = SummaryPrompts::chunk_overview(chunk, i + 1, total_chunks);
 
             let chunk_response = ai_state
                 .client
@@ -503,20 +404,7 @@ pub async fn generate_summary_stream(
         let _ = app.emit("summary-stream", merge_event);
 
         // Merge chunk summaries with streaming
-        let merge_prompt = match stype {
-            SummaryType::Overview => {
-                SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::ActionItems => {
-                SummaryPrompts::merge_action_items(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::KeyDecisions => {
-                SummaryPrompts::merge_key_decisions(&chunk_summaries, notes.as_deref())
-            }
-            SummaryType::Custom => {
-                SummaryPrompts::merge_custom(&chunk_summaries, &user_prompt_str, notes.as_deref())
-            }
-        };
+        let merge_prompt = SummaryPrompts::merge_overview(&chunk_summaries, notes.as_deref());
 
         // Create channel for streaming the merge
         let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
@@ -543,31 +431,11 @@ pub async fn generate_summary_stream(
     } else {
         // Build prompt based on summary type (single pass)
         let prompt = if has_transcript {
-            match stype {
-                SummaryType::Overview => SummaryPrompts::overview(&transcript, notes.as_deref()),
-                SummaryType::ActionItems => {
-                    SummaryPrompts::action_items(&transcript, notes.as_deref())
-                }
-                SummaryType::KeyDecisions => {
-                    SummaryPrompts::key_decisions(&transcript, notes.as_deref())
-                }
-                SummaryType::Custom => {
-                    SummaryPrompts::custom(&transcript, &user_prompt_str, notes.as_deref())
-                }
-            }
+            SummaryPrompts::overview(&transcript, notes.as_deref())
         } else {
             // Notes only (no transcript)
             let notes_content = notes.as_ref().unwrap();
-            match stype {
-                SummaryType::Overview => SummaryPrompts::overview_notes_only(notes_content),
-                SummaryType::ActionItems => SummaryPrompts::action_items_notes_only(notes_content),
-                SummaryType::KeyDecisions => {
-                    SummaryPrompts::key_decisions_notes_only(notes_content)
-                }
-                SummaryType::Custom => {
-                    SummaryPrompts::custom_notes_only(notes_content, &user_prompt_str)
-                }
-            }
+            SummaryPrompts::overview_notes_only(notes_content)
         };
 
         // Create channel for streaming
@@ -988,114 +856,6 @@ pub fn update_action_item(
 #[tauri::command]
 pub fn delete_action_item(id: i64, db: State<'_, Database>) -> Result<(), String> {
     db.delete_action_item(id).map_err(|e| e.to_string())
-}
-
-/// Generate a title for a note based on its transcript
-#[tauri::command]
-pub async fn generate_title(
-    note_id: String,
-    ai_state: State<'_, AiState>,
-    db: State<'_, Database>,
-) -> Result<String, String> {
-    // Get selected model
-    let model = resolve_model(&ai_state, &db)
-        .await
-        .ok_or("No model selected. Please select a model first.")?;
-
-    // Get transcript from database
-    let segments = db
-        .get_transcript_segments(&note_id)
-        .map_err(|e| e.to_string())?;
-
-    if segments.is_empty() {
-        return Err("No transcript found for this note.".to_string());
-    }
-
-    // Combine segments, filtering out blank audio markers (limit to ~2000 chars)
-    let transcript: String = segments
-        .iter()
-        .map(|s| s.text.clone())
-        .filter(|text| !text.contains("[BLANK_AUDIO]"))
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    if transcript.trim().is_empty() {
-        return Err("No meaningful transcript found (only silence detected).".to_string());
-    }
-
-    let truncated = if transcript.len() > 2000 {
-        format!("{}...", truncate_on_char_boundary(&transcript, 2000))
-    } else {
-        transcript
-    };
-
-    // Build prompt
-    let prompt = SummaryPrompts::title(&truncated);
-
-    // Retry logic: try up to 3 times to get a valid title
-    let max_retries = 3;
-    let mut title = String::new();
-
-    for attempt in 1..=max_retries {
-        // Generate with Ollama (low temperature for consistent output)
-        let response = ai_state
-            .client
-            .generate(&model, &prompt, 0.3, Some(100))
-            .await
-            .map_err(|e| e.to_string())?;
-
-        // Debug: Log raw LLM output
-        eprintln!(
-            "[DEBUG] Attempt {}/{} - Raw LLM title response:\n{}",
-            attempt, max_retries, response
-        );
-
-        // Clean up the response - remove thinking tags, quotes, and trim
-        title = clean_title_response(&response);
-
-        // Debug: Log cleaned title
-        eprintln!(
-            "[DEBUG] Attempt {}/{} - Cleaned title: {}",
-            attempt, max_retries, title
-        );
-
-        // Check if title is valid
-        if title != "Meeting Notes" && is_valid_title(&title) {
-            break;
-        } else if attempt == max_retries {
-            title = "Meeting Notes".to_string();
-        }
-    }
-
-    // Update note title in database and sync incoming links
-    {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-        // Get old title for link updates
-        let old_title: Option<String> = conn
-            .query_row(
-                "SELECT title FROM notes WHERE id = ?1",
-                [&note_id],
-                |row| row.get(0),
-            )
-            .ok();
-
-        let now = chrono::Utc::now();
-        conn.execute(
-            "UPDATE notes SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            rusqlite::params![&title, now.to_rfc3339(), &note_id],
-        )
-        .map_err(|e| e.to_string())?;
-
-        // Update incoming links if title changed
-        if let Some(old) = old_title
-            && old != title
-        {
-            update_incoming_links_internal(&conn, &note_id, &old, &title)?;
-        }
-    }
-
-    Ok(title)
 }
 
 /// Check if a title is valid (not nonsense)

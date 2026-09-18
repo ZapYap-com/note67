@@ -47,17 +47,9 @@ struct GenerateOptions {
     num_ctx: Option<u32>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GenerateResponse {
     response: String,
-    done: bool,
-    #[serde(default)]
-    context: Vec<i64>,
-    #[serde(default)]
-    total_duration: u64,
-    #[serde(default)]
-    eval_count: u32,
 }
 
 pub struct OllamaClient {
@@ -255,45 +247,6 @@ impl OllamaClient {
         Ok(full_response)
     }
 
-    /// Pull (download) a model
-    #[allow(dead_code)]
-    pub async fn pull_model(&self, model: &str) -> Result<(), OllamaError> {
-        let url = format!("{}/api/pull", self.base_url);
-
-        #[derive(Serialize)]
-        struct PullRequest {
-            name: String,
-            stream: bool,
-        }
-
-        let request = PullRequest {
-            name: model.to_string(),
-            stream: false,
-        };
-
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_connect() {
-                    OllamaError::NotRunning
-                } else {
-                    OllamaError::RequestFailed(e.to_string())
-                }
-            })?;
-
-        if !response.status().is_success() {
-            return Err(OllamaError::RequestFailed(format!(
-                "Failed to pull model: {}",
-                response.status()
-            )));
-        }
-
-        Ok(())
-    }
 }
 
 impl Default for OllamaClient {

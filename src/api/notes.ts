@@ -32,24 +32,9 @@ export const notesApi = {
 
   // ========== Pause/Resume/Continue Recording Support ==========
 
-  /** Reopen a note for continued recording (clears ended_at) */
-  reopen: (id: string): Promise<Note> => {
-    return invoke("reopen_note", { id });
-  },
-
   /** Get all audio segments for a note */
   getAudioSegments: (noteId: string): Promise<AudioSegment[]> => {
     return invoke("get_note_audio_segments", { noteId });
-  },
-
-  /** Get total recording duration for a note in milliseconds */
-  getTotalDuration: (noteId: string): Promise<number> => {
-    return invoke("get_note_total_duration", { noteId });
-  },
-
-  /** Delete all audio segments for a note */
-  deleteAudioSegments: (noteId: string): Promise<void> => {
-    return invoke("delete_note_audio_segments", { noteId });
   },
 
   /** Migrate legacy audio_path to audio_segments table */

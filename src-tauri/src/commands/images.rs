@@ -36,18 +36,6 @@ pub async fn save_image(
     Ok(file_path.to_string_lossy().to_string())
 }
 
-/// Get the attachments directory path for a note
-#[tauri::command]
-pub fn get_attachments_dir(app_handle: tauri::AppHandle, note_id: String) -> Result<String, String> {
-    let app_data = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-
-    let attachments_dir = app_data.join("attachments").join(&note_id);
-    Ok(attachments_dir.to_string_lossy().to_string())
-}
-
 /// Delete all attachments for a note (called when note is deleted)
 #[tauri::command]
 pub async fn delete_note_attachments(

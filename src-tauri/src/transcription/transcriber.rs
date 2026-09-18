@@ -50,12 +50,6 @@ impl Transcriber {
         })
     }
 
-    /// Check if currently transcribing
-    #[allow(dead_code)]
-    pub fn is_transcribing(&self) -> bool {
-        self.is_transcribing.load(Ordering::SeqCst)
-    }
-
     /// Transcribe an audio file. `language` is a Whisper language code such as
     /// "en" or "zh"; None auto-detects.
     pub fn transcribe(

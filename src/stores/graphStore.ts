@@ -21,13 +21,11 @@ interface GraphState {
 
   // Actions
   fetchGraphData: () => Promise<void>;
-  fetchLocalGraph: (noteId: string, depth?: number) => Promise<void>;
   setHoveredNode: (id: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setSearchQuery: (query: string) => void;
   setTagFilter: (tag: string | null) => void;
   setShowOrphans: (show: boolean) => void;
-  setLocalCenterNote: (noteId: string | null) => void;
   setLocalDepth: (depth: number) => void;
   reset: () => void;
 }
@@ -61,22 +59,6 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
     }
   },
 
-  fetchLocalGraph: async (noteId: string, depth?: number) => {
-    const actualDepth = depth ?? get().localDepth;
-    set({ loading: true, error: null, localCenterNoteId: noteId });
-    try {
-      const data = await graphApi.getLocalGraph(noteId, actualDepth);
-      set({
-        nodes: data.nodes,
-        edges: data.edges,
-        loading: false,
-      });
-    } catch (error) {
-      console.error("Failed to fetch local graph:", error);
-      set({ error: String(error), loading: false });
-    }
-  },
-
   setHoveredNode: (id) => set({ hoveredNodeId: id }),
 
   setViewMode: (mode) => {
@@ -98,23 +80,9 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
     }
   },
 
-  setLocalCenterNote: (noteId) => {
-    if (noteId) {
-      set({ viewMode: "local" });
-      get().fetchLocalGraph(noteId);
-    } else {
-      set({ localCenterNoteId: null, viewMode: "global" });
-      get().fetchGraphData();
-    }
-  },
-
-  setLocalDepth: (depth) => {
-    set({ localDepth: depth });
-    const { viewMode, localCenterNoteId } = get();
-    if (viewMode === "local" && localCenterNoteId) {
-      get().fetchLocalGraph(localCenterNoteId, depth);
-    }
-  },
+  // Local mode was never wired up (nothing set a center note); the depth is
+  // kept only for the control. The graph view goes away in 0.2.0.
+  setLocalDepth: (depth) => set({ localDepth: depth }),
 
   reset: () => {
     set({

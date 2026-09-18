@@ -56,19 +56,12 @@ fn macos_version() -> (u32, u32, u32) {
 // CoreGraphics functions for screen capture permission checking
 unsafe extern "C" {
     fn CGPreflightScreenCaptureAccess() -> bool;
-    fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 /// Check if screen recording permission is granted using CGPreflightScreenCaptureAccess.
 /// This is more reliable than SCShareableContent for checking permission status in notarized apps.
 fn has_screen_capture_permission() -> bool {
     unsafe { CGPreflightScreenCaptureAccess() }
-}
-
-/// Request screen recording permission using CGRequestScreenCaptureAccess.
-/// Returns true if permission was granted (or was already granted).
-fn request_screen_capture_permission() -> bool {
-    unsafe { CGRequestScreenCaptureAccess() }
 }
 
 /// Shared state for audio writing, accessible from the callback
@@ -101,21 +94,11 @@ pub fn take_system_audio_samples() -> Vec<f32> {
     }}
 }
 
-/// Clear the system audio buffer
-#[allow(dead_code)]
-pub fn clear_system_audio_buffer() {
-    if let Ok(mut buffer) = get_system_audio_buffer().lock() {
-        buffer.clear();
-    }
-}
-
 /// Process audio samples from CMSampleBuffer and write to WAV file
 fn process_audio_buffer(sample_buffer: CMSampleBufferRef) {
     unsafe {
         unsafe extern "C" {
             fn CMSampleBufferGetDataBuffer(sbuf: CMSampleBufferRef) -> *mut c_void;
-            #[allow(dead_code)]
-            fn CMBlockBufferGetDataLength(block_buffer: *mut c_void) -> usize;
             fn CMBlockBufferGetDataPointer(
                 block_buffer: *mut c_void,
                 offset: usize,
@@ -433,8 +416,6 @@ impl MacOSSystemAudioCapture {
             let _: () = msg_send![config, setSampleRate: 48000_i32];
             let _: () = msg_send![config, setChannelCount: 2_i32];
 
-            eprintln!("ScreenCaptureKit: Created stream configuration");
-
             Retained::retain(config)
                 .ok_or_else(|| AudioError::PermissionDenied("Failed to retain config".to_string()))
         }
@@ -448,7 +429,6 @@ impl MacOSSystemAudioCapture {
         output_path: PathBuf,
     ) -> Result<CaptureSession, AudioError> {
         unsafe {
-            eprintln!("ScreenCaptureKit: Creating stream...");
             let stream_class = class!(SCStream);
 
             // Allocate and initialize the stream
@@ -464,13 +444,11 @@ impl MacOSSystemAudioCapture {
                 eprintln!("ScreenCaptureKit: Failed to create stream");
                 return Err(AudioError::PermissionDenied("Failed to create stream".to_string()));
             }
-            eprintln!("ScreenCaptureKit: Stream created successfully");
 
             let stream = Retained::retain(stream)
                 .ok_or_else(|| AudioError::PermissionDenied("Failed to retain stream".to_string()))?;
 
             // Create the output delegate
-            eprintln!("ScreenCaptureKit: Creating output delegate...");
             let output_class = create_stream_output_class();
             if output_class.is_null() {
                 eprintln!("ScreenCaptureKit: Failed to create output class");
@@ -486,7 +464,6 @@ impl MacOSSystemAudioCapture {
                     "Failed to create output delegate".to_string(),
                 ));
             }
-            eprintln!("ScreenCaptureKit: Output delegate created");
 
             let output_delegate = Retained::retain(output_delegate)
                 .ok_or_else(|| AudioError::PermissionDenied("Failed to retain delegate".to_string()))?;
@@ -497,10 +474,8 @@ impl MacOSSystemAudioCapture {
                 fn dispatch_queue_create(label: *const i8, attr: *const c_void) -> *mut c_void;
             }
             let queue = dispatch_queue_create(queue_label, std::ptr::null());
-            eprintln!("ScreenCaptureKit: Dispatch queue created");
 
             // Add output to stream - SCStreamOutputType.audio = 1
-            eprintln!("ScreenCaptureKit: Adding stream output...");
             let mut error: *mut NSError = std::ptr::null_mut();
             let success: Bool = msg_send![
                 &*stream,
@@ -531,7 +506,6 @@ impl MacOSSystemAudioCapture {
                     format!("Failed to add stream output: {}", error_msg),
                 ));
             }
-            eprintln!("ScreenCaptureKit: Stream output added successfully");
 
             // Initialize the WAV writer
             let spec = WavSpec {
@@ -588,8 +562,6 @@ impl MacOSSystemAudioCapture {
 
             rx.recv_timeout(std::time::Duration::from_secs(10))
                 .map_err(|_| AudioError::PermissionDenied("Timeout starting capture".to_string()))??;
-
-            eprintln!("ScreenCaptureKit: Capture started successfully!");
 
             Ok(CaptureSession {
                 stream,
@@ -651,12 +623,6 @@ impl SystemAudioCapture for MacOSSystemAudioCapture {
         Ok(has_screen_capture_permission())
     }
 
-    fn request_permission(&self) -> SystemAudioResult<bool> {
-        // Use CGRequestScreenCaptureAccess to trigger the permission dialog
-        // This is more reliable for notarized apps
-        Ok(request_screen_capture_permission())
-    }
-
     fn start(&self, output_path: PathBuf) -> SystemAudioResult<()> {
         if self.is_capturing.load(Ordering::SeqCst) {
             return Err(AudioError::AlreadyRecording);
@@ -693,10 +659,6 @@ impl SystemAudioCapture for MacOSSystemAudioCapture {
 
         self.is_capturing.store(false, Ordering::SeqCst);
         Ok(output_path)
-    }
-
-    fn is_capturing(&self) -> bool {
-        self.is_capturing.load(Ordering::SeqCst)
     }
 }
 

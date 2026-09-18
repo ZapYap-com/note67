@@ -31,7 +31,6 @@ uuid = { version = "1", features = ["v4"] }
 cpal = "0.15"
 hound = "3.5"
 symphonia = { version = "0.5", features = ["mp3", "aac", "alac", "flac", "ogg", "wav", "isomp4", "mkv"] }
-ringbuf = "0.4"
 whisper-rs = "0.13"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs", "macros", "time"] }
 reqwest = { version = "0.12", features = ["stream", "json"] }
@@ -43,11 +42,7 @@ regex = "1"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSArray", "NSDictionary", "NSNotification", "NSThread"] }
-objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication"] }
-objc2-core-media = { version = "0.3", features = ["CMSampleBuffer", "CMFormatDescription", "CMTime"] }
-objc2-core-audio-types = "0.3"
 block2 = "0.6"
-dispatch = "0.2"
 core-graphics = "0.24"
 core-foundation = "0.10"
 

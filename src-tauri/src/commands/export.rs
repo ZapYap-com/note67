@@ -1,6 +1,4 @@
-use std::fs;
-
-use tauri::{AppHandle, Manager, State};
+use tauri::State;
 
 use crate::db::models::SummaryType;
 use crate::db::Database;
@@ -111,37 +109,6 @@ pub fn export_note_markdown(
     let filename = format!("{}.md", safe_title);
 
     Ok(ExportData { markdown: md, filename })
-}
-
-#[tauri::command]
-pub fn save_export_to_file(
-    app: AppHandle,
-    content: String,
-    filename: String,
-) -> Result<String, String> {
-    let documents_dir = app
-        .path()
-        .document_dir()
-        .map_err(|e| e.to_string())?;
-
-    let export_dir = documents_dir.join("Note67");
-    fs::create_dir_all(&export_dir).map_err(|e| e.to_string())?;
-
-    let file_path = export_dir.join(&filename);
-    fs::write(&file_path, content).map_err(|e| e.to_string())?;
-
-    Ok(file_path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub fn get_export_directory(app: AppHandle) -> Result<String, String> {
-    let documents_dir = app
-        .path()
-        .document_dir()
-        .map_err(|e| e.to_string())?;
-
-    let export_dir = documents_dir.join("Note67");
-    Ok(export_dir.to_string_lossy().to_string())
 }
 
 fn format_datetime(datetime_str: &str) -> String {

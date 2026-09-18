@@ -1,34 +1,6 @@
 {
-  "_comment": "Registered commands that production frontend code never reaches. Each entry is either scheduled for removal or kept on purpose (see plans/simplify.md). check-ipc.mjs flags unreferenced commands missing from this list and entries that are no longer registered.",
+  "_comment": "Registered commands that production frontend code doesn't invoke, each with a reason. check-ipc.mjs --strict (run by CI) fails on any other unreferenced command and on entries that are no longer registered.",
   "commands": {
-    "greet": "Tauri template leftover",
-    "request_system_audio_permission": "unused; permission is requested from the frontend flow",
-    "start_dual_recording": "superseded by start_dual_recording_with_segments",
-    "stop_dual_recording": "superseded by stop_dual_recording_with_segments",
-    "is_dual_recording": "unused",
-    "get_recording_phase": "unused",
-    "pause_recording_cmd": "unused, not wrapped",
-    "resume_recording_cmd": "unused, not wrapped",
-    "reopen_note": "unused wrapper",
-    "get_note_total_duration": "unused wrapper",
-    "delete_note_audio_segments": "unused wrapper",
-    "is_downloading": "unused wrapper",
-    "transcribe_audio": "superseded by live transcription + retranscribe_note",
-    "transcribe_dual_audio": "superseded by retranscribe_note",
-    "retranscribe_audio_segment": "superseded by retranscribe_note",
-    "list_ollama_models": "unused wrapper",
-    "get_selected_model": "unused wrapper",
-    "is_ai_generating": "unused wrapper",
-    "generate_summary_stream": "only reached through an unused hook value; becomes the one summary command in 0.2.0",
-    "generate_title": "superseded by generate_title_from_summary",
-    "save_export_to_file": "unused since PDF export",
-    "get_export_directory": "unused wrapper",
-    "get_attachments_dir": "unused wrapper",
-    "get_note_tags": "unused wrapper",
-    "sync_note_tags": "unused; update_note syncs tags itself",
-    "delete_tag": "unused store action",
-    "get_note_links": "unused wrapper",
-    "get_broken_link_titles": "unused wrapper",
-    "get_local_graph": "graph Local mode was never wired"
+    "generate_summary_stream": "only reached through an unused hook value; becomes the one summary command in 0.2.0"
   }
 }

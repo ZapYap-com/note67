@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 import { useTranscription } from "./useTranscription";
 import { transcriptionApi } from "../api";
@@ -40,90 +40,7 @@ function storedSegment(text: string, speaker: string | null): TranscriptSegment 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.isTranscribing.mockResolvedValue(false);
   api.getTranscript.mockResolvedValue([]);
-});
-
-describe("useTranscription — transcribe", () => {
-  it("maps raw result segments into TranscriptSegment shape", async () => {
-    api.transcribeAudio.mockResolvedValue({
-      full_text: "hello world",
-      language: "en",
-      segments: [
-        { start_time: 0, end_time: 1, text: "hello" },
-        { start_time: 1, end_time: 2, text: "world" },
-      ],
-    });
-
-    const { result } = renderHook(() => useTranscription());
-    await act(async () => {
-      await result.current.transcribe("/a.wav", "note-1");
-    });
-
-    expect(result.current.transcript).toHaveLength(2);
-    expect(result.current.transcript[0]).toMatchObject({
-      id: 0,
-      note_id: "note-1",
-      text: "hello",
-      speaker: null,
-      source_type: null,
-    });
-    expect(result.current.transcript[1].id).toBe(1);
-  });
-
-  it("clears isTranscribing even when transcription fails", async () => {
-    api.transcribeAudio.mockRejectedValue(new Error("model missing"));
-
-    const { result } = renderHook(() => useTranscription());
-    let returned: unknown = "unset";
-    await act(async () => {
-      returned = await result.current.transcribe("/a.wav", "note-1");
-    });
-
-    expect(returned).toBeNull();
-    expect(result.current.error).toBe("model missing");
-    expect(result.current.isTranscribing).toBe(false);
-  });
-});
-
-describe("useTranscription — transcribeDual", () => {
-  it("reloads the stored transcript so both speakers are present", async () => {
-    api.transcribeDualAudio.mockResolvedValue({
-      micResult: { segments: [], full_text: "me", language: "en" },
-      systemResult: { segments: [], full_text: "them", language: "en" },
-      totalSegments: 2,
-    });
-    api.getTranscript.mockResolvedValue([
-      storedSegment("me", "You"),
-      storedSegment("them", "Others"),
-    ]);
-
-    const { result } = renderHook(() => useTranscription());
-    await act(async () => {
-      await result.current.transcribeDual("/mic.wav", "/sys.wav", "note-1");
-    });
-
-    // The dual result itself has no segments — the transcript comes from the DB.
-    expect(api.getTranscript).toHaveBeenCalledWith("note-1");
-    expect(result.current.transcript.map((s) => s.speaker)).toEqual([
-      "You",
-      "Others",
-    ]);
-  });
-
-  it("records an error and returns null on failure", async () => {
-    api.transcribeDualAudio.mockRejectedValue(new Error("bad wav"));
-
-    const { result } = renderHook(() => useTranscription());
-    let returned: unknown = "unset";
-    await act(async () => {
-      returned = await result.current.transcribeDual("/mic.wav", null, "note-1");
-    });
-
-    expect(returned).toBeNull();
-    expect(result.current.error).toBe("bad wav");
-    expect(result.current.isTranscribing).toBe(false);
-  });
 });
 
 describe("useTranscription — loadTranscript", () => {
@@ -155,11 +72,3 @@ describe("useTranscription — loadTranscript", () => {
   });
 });
 
-describe("useTranscription — initial status", () => {
-  it("reflects an in-progress transcription found on mount", async () => {
-    api.isTranscribing.mockResolvedValue(true);
-
-    const { result } = renderHook(() => useTranscription());
-    await waitFor(() => expect(result.current.isTranscribing).toBe(true));
-  });
-});

@@ -175,13 +175,6 @@ export interface NoteTag {
   color: string | null;
 }
 
-// Wiki-style link from one note to another
-export interface NoteLink {
-  id: number;
-  source_note_id: string;
-  target_note_id: string | null;
-  target_title: string;
-}
 
 // Note info for backlinks display
 export interface BacklinkNote {

@@ -18,7 +18,6 @@ export type {
   RetranscribeResult,
   Tag,
   NoteTag,
-  NoteLink,
   BacklinkNote,
   GraphNode,
   GraphEdge,

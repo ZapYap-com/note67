@@ -27,7 +27,6 @@ interface TagsState {
   fetchNoteTags: () => Promise<void>;
   selectTag: (tagName: string | null) => void;
   clearSelection: () => void;
-  deleteTag: (tagId: number) => Promise<void>;
   getTagsForNote: (noteId: string) => NoteTag[];
   getTagColor: (tagName: string) => string;
 }
@@ -68,21 +67,6 @@ export const useTagsStore = create<TagsState>()((set, get) => ({
 
   clearSelection: () => {
     set({ selectedTag: null });
-  },
-
-  deleteTag: async (tagId: number) => {
-    try {
-      await tagsApi.deleteTag(tagId);
-      // Refresh tags after deletion
-      const [tags, noteTagsMap] = await Promise.all([
-        tagsApi.getAll(),
-        tagsApi.getAllNoteTags(),
-      ]);
-      set({ tags, noteTagsMap });
-    } catch (error) {
-      console.error("Failed to delete tag:", error);
-      throw error;
-    }
   },
 
   getTagsForNote: (noteId: string) => {

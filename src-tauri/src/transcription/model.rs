@@ -129,12 +129,6 @@ impl ModelManager {
         Self { models_dir }
     }
 
-    /// Get the models directory path
-    #[allow(dead_code)]
-    pub fn models_dir(&self) -> &PathBuf {
-        &self.models_dir
-    }
-
     /// Ensure the models directory exists
     pub async fn init(&self) -> Result<(), TranscriptionError> {
         fs::create_dir_all(&self.models_dir).await?;

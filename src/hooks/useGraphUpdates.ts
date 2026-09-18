@@ -3,8 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useGraphStore } from "../stores/graphStore";
 
 export function useGraphUpdates() {
-  const { fetchGraphData, viewMode, localCenterNoteId, fetchLocalGraph } =
-    useGraphStore();
+  const { fetchGraphData } = useGraphStore();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -23,11 +22,7 @@ export function useGraphUpdates() {
       timeoutRef.current = setTimeout(() => {
         if (!mounted) return;
 
-        if (viewMode === "local" && localCenterNoteId) {
-          fetchLocalGraph(localCenterNoteId);
-        } else {
-          fetchGraphData();
-        }
+        fetchGraphData();
       }, 1000);
     };
 
@@ -56,5 +51,5 @@ export function useGraphUpdates() {
       }
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [fetchGraphData, fetchLocalGraph, viewMode, localCenterNoteId]);
+  }, [fetchGraphData]);
 }

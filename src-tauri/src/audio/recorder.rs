@@ -45,14 +45,8 @@ pub struct RecordingState {
     // === Pause/Resume/Continue fields ===
     /// Current recording phase (Idle, Recording, Paused)
     pub phase: AtomicU8,
-    /// Current segment index (0-based)
-    pub current_segment_index: AtomicU32,
-    /// Start offset in milliseconds from the note start (for continued recordings)
-    pub segment_start_offset_ms: AtomicI64,
     /// When the current segment started recording (for duration calculation)
     pub segment_start_time: std::sync::Mutex<Option<Instant>>,
-    /// Current note ID being recorded
-    pub current_note_id: std::sync::Mutex<Option<String>>,
     /// Current segment ID in database (for updating duration)
     pub current_segment_db_id: AtomicI64,
     /// Set once the recording thread has dropped the stream and finalized the
@@ -73,10 +67,7 @@ impl RecordingState {
             channels: AtomicU32::new(0),
             // Pause/Resume/Continue fields
             phase: AtomicU8::new(RecordingPhase::Idle as u8),
-            current_segment_index: AtomicU32::new(0),
-            segment_start_offset_ms: AtomicI64::new(0),
             segment_start_time: std::sync::Mutex::new(None),
-            current_note_id: std::sync::Mutex::new(None),
             current_segment_db_id: AtomicI64::new(0),
             // Nothing has been recorded yet, so there is nothing to wait for.
             file_finalized: AtomicBool::new(true),
@@ -105,14 +96,9 @@ impl RecordingState {
 
     /// Reset state for a new recording session
     pub fn reset_for_new_session(&self) {
-        self.current_segment_index.store(0, Ordering::SeqCst);
-        self.segment_start_offset_ms.store(0, Ordering::SeqCst);
         self.current_segment_db_id.store(0, Ordering::SeqCst);
         if let Ok(mut start_time) = self.segment_start_time.lock() {
             *start_time = None;
-        }
-        if let Ok(mut note_id) = self.current_note_id.lock() {
-            *note_id = None;
         }
     }
 
@@ -125,15 +111,6 @@ impl RecordingState {
         }}
     }
 
-    /// Get the current buffer length without clearing
-    #[allow(dead_code)]
-    pub fn buffer_len(&self) -> usize {
-        match self.audio_buffer.lock() { Ok(buffer) => {
-            buffer.len()
-        } _ => {
-            0
-        }}
-    }
 }
 
 impl Default for RecordingState {
@@ -207,10 +184,6 @@ pub fn resume_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Res
         return Err(AudioError::NotPaused);
     }
 
-    // Increment segment index
-    let new_index = state.current_segment_index.fetch_add(1, Ordering::SeqCst) + 1;
-    state.current_segment_index.store(new_index, Ordering::SeqCst);
-
     // Start recording with the new path
     start_recording(state, output_path)
 }
@@ -250,20 +223,6 @@ pub fn stop_recording(state: &RecordingState) -> Result<Option<PathBuf>, AudioEr
 
     let path = state.output_path.lock().map_err(|_| AudioError::LockError)?;
     Ok(path.clone())
-}
-
-/// Stop recording but preserve state for continue (used when ending a note that can be continued)
-#[allow(dead_code)]
-pub fn stop_recording_preserving_state(state: &RecordingState) -> Result<(Option<PathBuf>, i64), AudioError> {
-    // Calculate duration before stopping
-    let duration_ms = state.get_segment_elapsed_ms();
-
-    state.is_recording.store(false, Ordering::SeqCst);
-    state.audio_level.store(0, Ordering::SeqCst);
-    state.set_phase(RecordingPhase::Idle);
-
-    let path = state.output_path.lock().map_err(|_| AudioError::LockError)?;
-    Ok((path.clone(), duration_ms))
 }
 
 fn run_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Result<(), AudioError> {

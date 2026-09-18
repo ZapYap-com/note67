@@ -207,19 +207,11 @@ pub enum TranscriptionError {
     #[error("Audio file not found: {0}")]
     AudioNotFound(String),
 
-    #[allow(dead_code)]
-    #[error("Unsupported audio format")]
-    UnsupportedFormat,
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
     #[error("Already transcribing")]
     AlreadyTranscribing,
-
-    #[allow(dead_code)]
-    #[error("Not transcribing")]
-    NotTranscribing,
 }
 
 #[cfg(test)]

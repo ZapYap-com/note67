@@ -36,11 +36,9 @@ export const defaultCommands: CommandMap = {
   get_note: null,
   get_all_tags: [],
   get_all_note_tags: {},
-  get_note_tags: [],
   get_notes_by_tag: [],
   search_notes: [],
   search_notes_by_title: [],
-  sync_note_tags: null,
 
   // permissions & system (all granted by default)
   has_microphone_available: true,
@@ -50,7 +48,6 @@ export const defaultCommands: CommandMap = {
   open_microphone_settings: null,
   is_system_audio_supported: true,
   has_system_audio_permission: true,
-  request_system_audio_permission: true,
   open_screen_recording_settings: null,
   get_autostart_enabled: false,
   set_autostart_enabled: null,
@@ -63,10 +60,7 @@ export const defaultCommands: CommandMap = {
     models: [{ name: "gemma3:4b" }],
     selected_model: "gemma3:4b",
   },
-  list_ollama_models: [{ name: "gemma3:4b" }],
-  get_selected_model: "gemma3:4b",
   select_ollama_model: null,
-  is_ai_generating: false,
 
   // Whisper (a model is downloaded + loaded)
   // Shaped like the backend's ModelInfo: Settings reads every field, and a
@@ -81,15 +75,11 @@ export const defaultCommands: CommandMap = {
     },
   ],
   get_loaded_model: "large-turbo-q8",
-  is_downloading: false,
   get_download_progress: 0,
 
   // recording / transcription (idle)
   get_recording_status: false,
-  get_recording_phase: null,
   is_live_transcribing: false,
-  is_dual_recording: false,
-  is_transcribing: false,
   get_audio_level: 0,
 
   // action items (#3)
@@ -122,8 +112,6 @@ export const defaultCommands: CommandMap = {
 
   // links / graph
   get_backlinks: [],
-  get_broken_link_titles: [],
-  get_note_links: [],
   get_graph_data: { nodes: [], edges: [] },
 };
 
@@ -138,8 +126,6 @@ export const needsSetupCommands: CommandMap = {
     { size: "large-turbo-q8", name: "large-turbo-q8", downloaded: false, path: null, size_mb: 874 },
   ],
   get_ollama_status: { running: false, models: [], selected_model: null },
-  list_ollama_models: [],
-  get_selected_model: null,
   has_microphone_permission: false,
   get_microphone_auth_status: 0, // NotDetermined
   has_system_audio_permission: false,

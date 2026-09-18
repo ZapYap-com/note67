@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { transcriptionApi } from "../api";
-import type { DualTranscriptionResult } from "../api/transcription";
 import { useWhisperStore } from "../stores/whisperStore";
 import { useLiveTranscriptionStore } from "../stores/liveTranscriptionStore";
 import type {
@@ -73,83 +72,14 @@ export function useModels(): UseModelsReturn {
 }
 
 interface UseTranscriptionReturn {
-  isTranscribing: boolean;
   transcript: TranscriptSegment[];
   error: string | null;
-  transcribe: (audioPath: string, noteId: string) => Promise<TranscriptionResult | null>;
-  /** Transcribe dual audio files (mic + system) with speaker labels */
-  transcribeDual: (
-    micPath: string,
-    systemPath: string | null,
-    noteId: string
-  ) => Promise<DualTranscriptionResult | null>;
   loadTranscript: (noteId: string) => Promise<TranscriptSegment[]>;
 }
 
 export function useTranscription(): UseTranscriptionReturn {
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const transcribe = useCallback(
-    async (audioPath: string, noteId: string): Promise<TranscriptionResult | null> => {
-      try {
-        setError(null);
-        setIsTranscribing(true);
-        const result = await transcriptionApi.transcribeAudio(audioPath, noteId);
-        // Convert result segments to TranscriptSegment format
-        const segments: TranscriptSegment[] = result.segments.map((s, idx) => ({
-          id: idx,
-          note_id: noteId,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          text: s.text,
-          speaker: null,
-          source_type: null,
-          source_id: null,
-          created_at: new Date().toISOString(),
-        }));
-        setTranscript(segments);
-        return result;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        return null;
-      } finally {
-        setIsTranscribing(false);
-      }
-    },
-    []
-  );
-
-  const transcribeDual = useCallback(
-    async (
-      micPath: string,
-      systemPath: string | null,
-      noteId: string
-    ): Promise<DualTranscriptionResult | null> => {
-      try {
-        setError(null);
-        setIsTranscribing(true);
-        const result = await transcriptionApi.transcribeDualAudio(
-          micPath,
-          systemPath,
-          noteId
-        );
-
-        // Load the transcript from database (includes both "You" and "Others" segments)
-        const segments = await transcriptionApi.getTranscript(noteId);
-        setTranscript(segments);
-
-        return result;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        return null;
-      } finally {
-        setIsTranscribing(false);
-      }
-    },
-    []
-  );
 
   const loadTranscript = useCallback(async (noteId: string): Promise<TranscriptSegment[]> => {
     try {
@@ -163,17 +93,9 @@ export function useTranscription(): UseTranscriptionReturn {
     }
   }, []);
 
-  // Check initial transcribing status
-  useEffect(() => {
-    transcriptionApi.isTranscribing().then(setIsTranscribing).catch(console.error);
-  }, []);
-
   return {
-    isTranscribing,
     transcript,
     error,
-    transcribe,
-    transcribeDual,
     loadTranscript,
   };
 }

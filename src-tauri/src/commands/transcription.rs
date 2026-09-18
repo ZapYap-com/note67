@@ -180,12 +180,6 @@ pub fn get_download_progress(state: State<TranscriptionState>) -> u8 {
     state.download_progress.load(Ordering::SeqCst)
 }
 
-/// Check if currently downloading
-#[tauri::command]
-pub fn is_downloading(state: State<TranscriptionState>) -> bool {
-    state.is_downloading.load(Ordering::SeqCst)
-}
-
 /// Delete a downloaded model
 #[tauri::command]
 pub async fn delete_model(
@@ -278,196 +272,6 @@ pub fn get_loaded_model(state: State<TranscriptionState>) -> Option<String> {
     current.as_ref().map(|m| m.as_str().to_string())
 }
 
-/// Transcribe an audio file
-#[tauri::command]
-pub async fn transcribe_audio(
-    audio_path: String,
-    note_id: String,
-    speaker: Option<String>,
-    state: State<'_, TranscriptionState>,
-    db: State<'_, Database>,
-) -> Result<TranscriptionResult, String> {
-    // Check if already transcribing
-    if state.is_transcribing.swap(true, Ordering::SeqCst) {
-        return Err("Already transcribing".to_string());
-    }
-
-    // Get the transcriber
-    let transcriber = {
-        let guard = state.transcriber.lock().map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-        guard.clone().ok_or_else(|| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            "No model loaded. Please load a model first.".to_string()
-        })?
-    };
-
-    // Run transcription in a blocking task (since whisper-rs is synchronous)
-    let path = PathBuf::from(&audio_path);
-    let lang = batch_language(&db);
-    let result = tokio::task::spawn_blocking(move || transcriber.transcribe(&path, lang.as_deref()))
-        .await
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-
-    // Save segments to database (skip blank/noise segments)
-    for segment in &result.segments {
-        if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
-            db.add_transcript_segment(
-                &NewTranscriptSegment::new(
-                    &note_id,
-                    segment.start_time,
-                    segment.end_time,
-                    &segment.text,
-                )
-                .with_speaker(speaker.clone()),
-            )
-            .map_err(|e| e.to_string())?;
-        }
-    }
-
-    state.is_transcribing.store(false, Ordering::SeqCst);
-    Ok(result)
-}
-
-/// Check if currently transcribing
-#[tauri::command]
-pub fn is_transcribing(state: State<TranscriptionState>) -> bool {
-    state.is_transcribing.load(Ordering::SeqCst)
-}
-
-/// Result of dual transcription
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DualTranscriptionResult {
-    /// Transcription result from mic audio ("You")
-    pub mic_result: TranscriptionResult,
-    /// Transcription result from system audio ("Others"), if available
-    pub system_result: Option<TranscriptionResult>,
-    /// Total number of segments saved
-    pub total_segments: usize,
-}
-
-/// Transcribe dual audio files (mic and system) with speaker labels
-///
-/// - mic_path: Path to the microphone recording (labeled as "You")
-/// - system_path: Optional path to system audio recording (labeled as "Others")
-/// - note_id: The note ID to associate segments with
-#[tauri::command]
-pub async fn transcribe_dual_audio(
-    mic_path: String,
-    system_path: Option<String>,
-    note_id: String,
-    state: State<'_, TranscriptionState>,
-    db: State<'_, Database>,
-) -> Result<DualTranscriptionResult, String> {
-    // Check if already transcribing
-    if state.is_transcribing.swap(true, Ordering::SeqCst) {
-        return Err("Already transcribing".to_string());
-    }
-
-    // Get the transcriber
-    let transcriber = {
-        let guard = state.transcriber.lock().map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-        guard.clone().ok_or_else(|| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            "No model loaded. Please load a model first.".to_string()
-        })?
-    };
-
-    let mut total_segments = 0;
-
-    // Transcribe mic audio (labeled as "You")
-    let mic_path_buf = PathBuf::from(&mic_path);
-    let transcriber_clone = transcriber.clone();
-    let lang = batch_language(&db);
-    let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf, lang.as_deref()))
-        .await
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-
-    // Save mic segments to database with "You" speaker label (skip blank/noise)
-    for segment in &mic_result.segments {
-        if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
-            db.add_transcript_segment(
-                &NewTranscriptSegment::new(
-                    &note_id,
-                    segment.start_time,
-                    segment.end_time,
-                    &segment.text,
-                )
-                .with_speaker(Some("You".to_string())),
-            )
-            .map_err(|e| e.to_string())?;
-            total_segments += 1;
-        }
-    }
-
-    // Transcribe system audio if provided (labeled as "Others")
-    let system_result = if let Some(sys_path) = system_path {
-        let sys_path_buf = PathBuf::from(&sys_path);
-        let transcriber_clone = transcriber.clone();
-
-        let lang = batch_language(&db);
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf, lang.as_deref())).await {
-            Ok(Ok(result)) => {
-                // Save system segments to database with "Others" speaker label (skip blank/noise)
-                for segment in &result.segments {
-                    if !should_skip_segment(&segment.text, segment.start_time, segment.end_time) {
-                        db.add_transcript_segment(
-                            &NewTranscriptSegment::new(
-                                &note_id,
-                                segment.start_time,
-                                segment.end_time,
-                                &segment.text,
-                            )
-                            .with_speaker(Some("Others".to_string())),
-                        )
-                        .map_err(|e| e.to_string())?;
-                        total_segments += 1;
-                    }
-                }
-                Some(result)
-            }
-            Ok(Err(e)) => {
-                eprintln!("Failed to transcribe system audio: {}", e);
-                None
-            }
-            Err(e) => {
-                eprintln!("Failed to spawn system audio transcription task: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    state.is_transcribing.store(false, Ordering::SeqCst);
-
-    Ok(DualTranscriptionResult {
-        mic_result,
-        system_result,
-        total_segments,
-    })
-}
-
 /// Get transcript segments for a note
 #[tauri::command]
 pub fn get_transcript(
@@ -549,129 +353,6 @@ pub struct RetranscribeResult {
     pub total_segments: usize,
 }
 
-/// Retranscribe an audio segment (recorded segment)
-#[tauri::command]
-pub async fn retranscribe_audio_segment(
-    segment_id: i64,
-    state: State<'_, TranscriptionState>,
-    db: State<'_, Database>,
-) -> Result<usize, String> {
-    // Get the segment info
-    let segment = db
-        .get_audio_segment_by_id(segment_id)
-        .map_err(|e| e.to_string())?;
-
-    // Check if already transcribing
-    if state.is_transcribing.swap(true, Ordering::SeqCst) {
-        return Err("Already transcribing. Please wait for the current transcription to finish.".to_string());
-    }
-
-    // Delete existing transcript segments for this segment
-    db.delete_transcript_segments_by_source("segment", segment_id)
-        .map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-
-    // Get the transcriber
-    let transcriber = {
-        let guard = state.transcriber.lock().map_err(|e| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            e.to_string()
-        })?;
-        guard.clone().ok_or_else(|| {
-            state.is_transcribing.store(false, Ordering::SeqCst);
-            "No model loaded. Please load a Whisper model first.".to_string()
-        })?
-    };
-
-    let mut total_segments = 0;
-    let mut system_segments_for_echo: Vec<(f64, f64, String)> = Vec::new();
-
-    // Transcribe SYSTEM audio FIRST to collect segments for echo detection
-    if let Some(sys_path) = &segment.system_path {
-        let sys_path_buf = PathBuf::from(sys_path);
-        let transcriber_clone = transcriber.clone();
-
-        let lang = batch_language(&db);
-        match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_buf, lang.as_deref())).await {
-            Ok(Ok(result)) => {
-                for seg in &result.segments {
-                    if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
-                        // Store for echo detection
-                        system_segments_for_echo.push((seg.start_time, seg.end_time, seg.text.clone()));
-
-                        db.add_transcript_segment(
-                            &NewTranscriptSegment::new(
-                                &segment.note_id,
-                                seg.start_time,
-                                seg.end_time,
-                                &seg.text,
-                            )
-                            .with_speaker(Some("Others".to_string()))
-                            .with_source("segment", segment_id),
-                        )
-                        .map_err(|e| e.to_string())?;
-                        total_segments += 1;
-                    }
-                }
-            }
-            Ok(Err(e)) => {
-                eprintln!("Failed to transcribe system audio: {}", e);
-            }
-            Err(e) => {
-                eprintln!("Failed to spawn system audio transcription task: {}", e);
-            }
-        }
-    }
-
-    // Now transcribe mic audio and filter out echoes (if mic recording exists)
-    if let Some(ref mic_path) = segment.mic_path {
-        let mic_path_buf = PathBuf::from(mic_path);
-        let transcriber_clone = transcriber.clone();
-        let lang = batch_language(&db);
-        let mic_result = tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_buf, lang.as_deref()))
-            .await
-            .map_err(|e| {
-                state.is_transcribing.store(false, Ordering::SeqCst);
-                e.to_string()
-            })?
-            .map_err(|e| {
-                state.is_transcribing.store(false, Ordering::SeqCst);
-                e.to_string()
-            })?;
-
-        // Save mic segments to database with "You" speaker label, filtering out echoes
-        for seg in &mic_result.segments {
-            if should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
-                continue;
-            }
-
-            // Filter out segments that are echoes of system audio
-            if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
-                continue;
-            }
-
-            db.add_transcript_segment(
-                &NewTranscriptSegment::new(
-                    &segment.note_id,
-                    seg.start_time,
-                    seg.end_time,
-                    &seg.text,
-                )
-                .with_speaker(Some("You".to_string()))
-                .with_source("segment", segment_id),
-            )
-            .map_err(|e| e.to_string())?;
-            total_segments += 1;
-        }
-    }
-
-    state.is_transcribing.store(false, Ordering::SeqCst);
-
-    Ok(total_segments)
-}
-
 /// Retranscribe all audio sources in a note
 #[tauri::command]
 pub async fn retranscribe_note(
@@ -696,13 +377,6 @@ pub async fn retranscribe_note(
     let segments = db.get_audio_segments(&note_id).map_err(|e| e.to_string())?;
 
     let uploads = db.get_uploaded_audio(&note_id).map_err(|e| e.to_string())?;
-
-    println!("[retranscribe_note] note_id: {}", note_id);
-    println!("[retranscribe_note] Found {} audio segments", segments.len());
-    for seg in &segments {
-        println!("[retranscribe_note]   Segment {}: mic_path={:?}", seg.id, seg.mic_path);
-    }
-    println!("[retranscribe_note] Found {} uploads", uploads.len());
 
     let total_items = segments.len() + uploads.len();
     let mut completed_items = 0;
@@ -753,9 +427,6 @@ pub async fn retranscribe_note(
                         let mic_file = parent.join(format!("{}_mic.wav", stem_str));
                         let system_file = parent.join(format!("{}_system.wav", stem_str));
 
-                        println!("[retranscribe_note] Legacy merged file detected: {:?}", stored_mic_path);
-                        println!("[retranscribe_note] Looking for separate files: mic={:?}, system={:?}", mic_file, system_file);
-
                         let mic = if mic_file.exists() { mic_file } else { stored_mic_path.clone() };
                         let system = if system_file.exists() { Some(system_file) } else { None };
                         (Some(mic), system)
@@ -781,14 +452,12 @@ pub async fn retranscribe_note(
         let mut system_segments_for_echo: Vec<(f64, f64, String)> = Vec::new();
 
         if let Some(sys_path) = &actual_system_path {
-            println!("[retranscribe_note] Transcribing system FIRST: {:?}", sys_path);
             let sys_path_clone = sys_path.clone();
             let transcriber_clone = transcriber.clone();
 
             let lang = batch_language(&db);
             match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&sys_path_clone, lang.as_deref())).await {
                 Ok(Ok(result)) => {
-                    println!("[retranscribe_note] System transcription succeeded, {} segments", result.segments.len());
                     let mut last_start = 0.0_f64;
                     for seg in &result.segments {
                         if !should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
@@ -819,15 +488,12 @@ pub async fn retranscribe_note(
 
         // Now transcribe mic audio and filter out echoes (if mic recording exists)
         if let Some(mic_path) = actual_mic_path {
-            println!("[retranscribe_note] Transcribing mic: {:?}", mic_path);
             let mic_path_for_task = mic_path.clone();
             let transcriber_clone = transcriber.clone();
 
             let lang = batch_language(&db);
             match tokio::task::spawn_blocking(move || transcriber_clone.transcribe(&mic_path_for_task, lang.as_deref())).await {
                 Ok(Ok(result)) => {
-                    println!("[retranscribe_note] Mic transcription succeeded, {} segments", result.segments.len());
-                    let mut echo_filtered = 0;
                     let mut last_start = 0.0_f64;
                     for seg in &result.segments {
                         if should_skip_segment(&seg.text, seg.start_time, seg.end_time) {
@@ -837,8 +503,6 @@ pub async fn retranscribe_note(
                         // Filter out segments that are echoes of system audio
                         // (using raw Whisper times for overlap matching)
                         if is_echo_of_system(&seg.text, seg.start_time, seg.end_time, &system_segments_for_echo) {
-                            println!("[retranscribe_note] Filtered echo: \"{}\"", seg.text);
-                            echo_filtered += 1;
                             continue;
                         }
 
@@ -851,21 +515,14 @@ pub async fn retranscribe_note(
                         );
                         total_segments_created += 1;
                     }
-                    if echo_filtered > 0 {
-                        println!("[retranscribe_note] Filtered {} echo segments from mic", echo_filtered);
-                    }
                 }
                 Ok(Err(e)) => {
-                    println!("[retranscribe_note] Mic transcription error: {}", e);
                     failed_items.push(format!("{} (mic): {}", item_name, e));
                 }
                 Err(e) => {
-                    println!("[retranscribe_note] Mic task error: {}", e);
                     failed_items.push(format!("{} (mic): {}", item_name, e));
                 }
             }
-        } else {
-            println!("[retranscribe_note] Listen-only segment (no mic recording)");
         }
 
         completed_items += 1;

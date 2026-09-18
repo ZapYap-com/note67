@@ -54,37 +54,9 @@ export const audioApi = {
     return invoke("has_system_audio_permission");
   },
 
-  /** Request permission to capture system audio (triggers system dialog on macOS) */
-  requestSystemAudioPermission: (): Promise<boolean> => {
-    return invoke("request_system_audio_permission");
-  },
-
-  // Dual recording (mic + system audio)
-  /** Start recording both mic and system audio */
-  startDualRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("start_dual_recording", { noteId });
-  },
-
-  /** Stop dual recording and merge files for playback */
-  stopDualRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("stop_dual_recording", { noteId });
-  },
-
   /** Stop dual recording with segment tracking - updates segment duration in database */
   stopDualRecordingWithSegments: (noteId: string): Promise<DualRecordingResult> => {
     return invoke("stop_dual_recording_with_segments", { noteId });
-  },
-
-  /** Check if dual recording is currently active */
-  isDualRecording: (): Promise<boolean> => {
-    return invoke("is_dual_recording");
-  },
-
-  // ========== Pause/Resume/Continue Recording ==========
-
-  /** Get the current recording phase (0=Idle, 1=Recording, 2=Paused) */
-  getRecordingPhase: (): Promise<number> => {
-    return invoke("get_recording_phase");
   },
 
   /** Pause dual recording - returns duration of paused segment in ms */

@@ -21,19 +21,12 @@ pub trait SystemAudioCapture: Send + Sync {
     /// Check if the app has permission to capture system audio
     fn has_permission(&self) -> SystemAudioResult<bool>;
 
-    /// Request permission to capture system audio
-    /// Returns true if permission was granted
-    fn request_permission(&self) -> SystemAudioResult<bool>;
-
     /// Start capturing system audio to the specified file
     fn start(&self, output_path: PathBuf) -> SystemAudioResult<()>;
 
     /// Stop capturing system audio
     /// Returns the path to the recorded file
     fn stop(&self) -> SystemAudioResult<Option<PathBuf>>;
-
-    /// Check if currently capturing
-    fn is_capturing(&self) -> bool;
 }
 
 /// Get the system audio capture implementation for the current platform

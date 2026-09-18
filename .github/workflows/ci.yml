@@ -27,7 +27,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: IPC parity
-        run: node scripts/check-ipc.mjs
+        run: node scripts/check-ipc.mjs --strict
 
   e2e:
     runs-on: ubuntu-latest

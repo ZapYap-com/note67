@@ -7,16 +7,6 @@ import type {
   RetranscribeResult,
 } from "../types";
 
-/** Result of dual transcription (mic + system audio) */
-export interface DualTranscriptionResult {
-  /** Transcription result from mic audio ("You") */
-  micResult: TranscriptionResult;
-  /** Transcription result from system audio ("Others"), if available */
-  systemResult: TranscriptionResult | null;
-  /** Total number of segments saved */
-  totalSegments: number;
-}
-
 export const transcriptionApi = {
   // Model management
   listModels: (): Promise<ModelInfo[]> => {
@@ -29,10 +19,6 @@ export const transcriptionApi = {
 
   getDownloadProgress: (): Promise<number> => {
     return invoke("get_download_progress");
-  },
-
-  isDownloading: (): Promise<boolean> => {
-    return invoke("is_downloading");
   },
 
   deleteModel: (size: ModelSize): Promise<void> => {
@@ -48,27 +34,6 @@ export const transcriptionApi = {
   },
 
   // Transcription
-  transcribeAudio: (
-    audioPath: string,
-    noteId: string,
-    speaker?: string
-  ): Promise<TranscriptionResult> => {
-    return invoke("transcribe_audio", { audioPath, noteId, speaker });
-  },
-
-  /** Transcribe dual audio files (mic and system) with speaker labels */
-  transcribeDualAudio: (
-    micPath: string,
-    systemPath: string | null,
-    noteId: string
-  ): Promise<DualTranscriptionResult> => {
-    return invoke("transcribe_dual_audio", { micPath, systemPath, noteId });
-  },
-
-  isTranscribing: (): Promise<boolean> => {
-    return invoke("is_transcribing");
-  },
-
   getTranscript: (noteId: string): Promise<TranscriptSegment[]> => {
     return invoke("get_transcript", { noteId });
   },
@@ -109,11 +74,6 @@ export const transcriptionApi = {
   },
 
   // Retranscription
-  /** Retranscribe a recorded audio segment */
-  retranscribeSegment: (segmentId: number): Promise<number> => {
-    return invoke("retranscribe_audio_segment", { segmentId });
-  },
-
   /** Retranscribe all audio sources in a note */
   retranscribeNote: (noteId: string): Promise<RetranscribeResult> => {
     return invoke("retranscribe_note", { noteId });

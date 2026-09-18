@@ -366,11 +366,6 @@ impl SystemAudioCapture for WindowsSystemAudioCapture {
         Ok(true)
     }
 
-    fn request_permission(&self) -> SystemAudioResult<bool> {
-        // No permission needed on Windows
-        Ok(true)
-    }
-
     fn start(&self, output_path: PathBuf) -> SystemAudioResult<()> {
         if self.is_capturing.load(Ordering::SeqCst) {
             return Err(AudioError::AlreadyRecording);
@@ -428,10 +423,6 @@ impl SystemAudioCapture for WindowsSystemAudioCapture {
         };
 
         Ok(output_path)
-    }
-
-    fn is_capturing(&self) -> bool {
-        self.is_capturing.load(Ordering::Relaxed)
     }
 }
 
