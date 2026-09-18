@@ -54,7 +54,8 @@ export const defaultCommands: CommandMap = {
   open_screen_recording_settings: null,
   get_autostart_enabled: false,
   set_autostart_enabled: null,
-  is_meeting_detection_enabled: false,
+  // On unless switched off, as in the app.
+  is_meeting_detection_enabled: true,
 
   // Ollama (running + model selected)
   get_ollama_status: {
@@ -116,6 +117,7 @@ export const defaultCommands: CommandMap = {
   get_note_audio_segments: [],
   migrate_legacy_audio: null,
   get_uploaded_audio: [],
+  set_meeting_detection_enabled: null,
   supported_audio_formats: ["mp3", "m4a", "aac", "flac", "ogg", "wav", "mkv", "mp4"],
 
   // links / graph

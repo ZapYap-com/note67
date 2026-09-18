@@ -1,44 +1,49 @@
-//! Meeting detection module for detecting when meeting apps start
-//! Supports browser-based meetings (Google Meet, etc.) via window title monitoring
+//! Meeting detection: notices when a call starts and offers to record it.
+//! Works from on-screen window titles (Google Meet, Zoom, Teams, Slack
+//! huddles), which macOS only exposes with Screen Recording permission.
 
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Patterns to detect active meetings (not just app/page open)
+use crate::audio::RecordingPhase;
+use crate::commands::AudioState;
+use crate::db::Database;
+
+/// Settings key for the on/off switch. Absent means on, the default.
+const ENABLED_SETTING: &str = "meeting_detection_enabled";
+
+/// How long an app must show no meeting before a new meeting in it prompts again.
+const ABSENT_BEFORE_REPROMPT: Duration = Duration::from_secs(120);
+
+/// Window titles that mean an app is in a meeting (not just open).
 const MEETING_PATTERNS: &[(&str, &str)] = &[
-    // Google Meet - only when actually in a meeting (has meeting code)
-    // Format when in meeting: "Meet - abc-defg-hij"
-    ("Meet – ", "Google Meet"), // Note: this is an en-dash in actual titles
+    // Google Meet in a meeting: "Meet – abc-defg-hij" (en dash) or a hyphen
+    ("Meet – ", "Google Meet"),
     ("Meet - ", "Google Meet"),
-    // Zoom - only when in actual meeting
     ("Zoom Meeting", "Zoom"),
-    (" - Zoom Meeting", "Zoom"),
-    // Microsoft Teams - when in a call/meeting
-    // Format: "Microsoft Teams meeting | Microsoft Teams" or "Name | Personal | email | Microsoft Teams"
     ("Microsoft Teams meeting", "Microsoft Teams"),
     ("Teams meeting", "Microsoft Teams"),
-    ("| Personal |", "Microsoft Teams"),  // Personal meetings in desktop app
-    // Slack - when in a huddle
-    // Format: "Huddle: #channel – Workspace – Slack 🎤"
+    // "Huddle: #channel – Workspace – Slack 🎤"
     ("Huddle:", "Slack Huddle"),
-    // Other meeting apps
-    ("Discord | ", "Discord"),
 ];
 
-/// Patterns that indicate active audio/call (speaker icon in title)
+/// Shown in a title while the app is playing call audio.
 const AUDIO_ACTIVE_INDICATOR: &str = "🔊";
 
-/// App names to check for audio indicator
+/// Apps that count as in a meeting only while their title carries 🔊. Teams'
+/// "| Personal |" and any "Discord | " window used to count on their own, so
+/// merely having Teams or Discord open prompted to record.
 const AUDIO_APPS: &[(&str, &str)] = &[
     ("Microsoft Teams", "Microsoft Teams"),
     ("Slack", "Slack"),
+    ("Discord", "Discord"),
 ];
 
-/// Patterns that indicate app is open but NOT in a meeting (to filter out false positives)
+/// Titles of an app that is open but not in a meeting.
 const NOT_IN_MEETING_PATTERNS: &[&str] = &[
     "New meeting",
     "Join a meeting",
@@ -57,11 +62,68 @@ pub struct MeetingDetected {
     pub is_browser: bool,
 }
 
+/// The meeting app a window title belongs to, if the window is a meeting.
+fn meeting_app(title: &str) -> Option<&'static str> {
+    if NOT_IN_MEETING_PATTERNS.iter().any(|p| title.contains(p)) {
+        return None;
+    }
+    if let Some((_, app)) = MEETING_PATTERNS.iter().find(|(p, _)| title.contains(p)) {
+        return Some(app);
+    }
+    if title.contains(AUDIO_ACTIVE_INDICATOR) {
+        return AUDIO_APPS
+            .iter()
+            .find(|(p, _)| title.contains(p))
+            .map(|(_, app)| *app);
+    }
+    None
+}
+
+/// Decides when a meeting is worth a prompt: once per meeting, keyed by app.
+///
+/// Detections used to be keyed by the full window title, which changes during
+/// a call (a browser tab switch, the 🔊 and 🎤 indicators), so the same call
+/// prompted again. An app's meeting ends only after it has shown no meeting
+/// window for `ABSENT_BEFORE_REPROMPT`, so dismissing the prompt also holds
+/// until then.
+#[derive(Default)]
+struct PromptGate {
+    last_seen: HashMap<&'static str, Instant>,
+}
+
+struct Tick {
+    /// Apps whose meeting just started.
+    started: Vec<&'static str>,
+    /// Apps that showed a meeting last poll and don't now.
+    gone: Vec<&'static str>,
+}
+
+impl PromptGate {
+    fn tick(
+        &mut self,
+        now: Instant,
+        in_meeting: &HashSet<&'static str>,
+        last: &HashSet<&'static str>,
+    ) -> Tick {
+        self.last_seen
+            .retain(|_, seen| now.duration_since(*seen) < ABSENT_BEFORE_REPROMPT);
+        let mut started = Vec::new();
+        for app in in_meeting {
+            if self.last_seen.insert(app, now).is_none() {
+                started.push(*app);
+            }
+        }
+        let gone = last.difference(in_meeting).copied().collect();
+        Tick { started, gone }
+    }
+}
+
 /// State for meeting detection
 pub struct MeetingDetectionState {
     enabled: AtomicBool,
     running: AtomicBool,
-    detected_meetings: std::sync::Mutex<std::collections::HashSet<String>>,
+    gate: Mutex<PromptGate>,
+    in_meeting: Mutex<HashSet<&'static str>>,
 }
 
 impl Default for MeetingDetectionState {
@@ -69,7 +131,8 @@ impl Default for MeetingDetectionState {
         Self {
             enabled: AtomicBool::new(true),
             running: AtomicBool::new(false),
-            detected_meetings: std::sync::Mutex::new(std::collections::HashSet::new()),
+            gate: Mutex::new(PromptGate::default()),
+            in_meeting: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -83,12 +146,27 @@ impl MeetingDetectionState {
         self.enabled.load(Ordering::SeqCst)
     }
 
-    /// Clear all detected meetings
-    pub fn clear_all_detected(&self) {
-        if let Ok(mut detected) = self.detected_meetings.lock() {
-            detected.clear();
+    /// One poll. `window_titles` runs only when detection is on: while it is
+    /// off, no window is read at all.
+    fn poll(&self, now: Instant, window_titles: impl FnOnce() -> Vec<String>) -> Tick {
+        if !self.is_enabled() {
+            return Tick {
+                started: Vec::new(),
+                gone: Vec::new(),
+            };
         }
+        let current: HashSet<&'static str> =
+            window_titles().iter().filter_map(|t| meeting_app(t)).collect();
+        let mut last = self.in_meeting.lock().unwrap();
+        let tick = self.gate.lock().unwrap().tick(now, &current, &last);
+        *last = current;
+        tick
     }
+}
+
+/// Whether detection is switched on in settings (absent = on).
+fn enabled_in_settings(db: &Database) -> bool {
+    db.get_setting(ENABLED_SETTING).ok().flatten().as_deref() != Some("false")
 }
 
 /// Start meeting detection (call from setup)
@@ -99,14 +177,56 @@ pub fn start_meeting_detection(app: &AppHandle) {
         // Already running
         return;
     }
+    if let Some(db) = app.try_state::<Database>() {
+        state.set_enabled(enabled_in_settings(&db));
+    }
 
-    // Start window title monitoring for meetings
+    // Window titles are only readable this way on macOS.
     #[cfg(target_os = "macos")]
-    start_window_title_detection(app.clone());
+    {
+        let app = app.clone();
+        std::thread::spawn(move || loop {
+            if let Some(state) = app.try_state::<Arc<MeetingDetectionState>>() {
+                let tick = state.poll(Instant::now(), macos::window_titles);
+                report(&app, tick);
+            }
+            std::thread::sleep(Duration::from_secs(3));
+        });
+    }
+}
+
+/// Tell the frontend about meetings that started or ended.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn report(app: &AppHandle, tick: Tick) {
+    for app_name in tick.gone {
+        let _ = app.emit("meeting-ended", app_name);
+    }
+    // Never while a session is open: the meeting is probably the one being
+    // recorded, and a second recording can't start anyway.
+    let session_open = app
+        .try_state::<AudioState>()
+        .is_some_and(|audio| audio.recording.get_phase() != RecordingPhase::Idle);
+    if session_open {
+        return;
+    }
+    for app_name in tick.started {
+        // Once per meeting, and without the window title: titles name the
+        // meeting and whoever is in it.
+        println!("[meeting-detection] Detected a {} meeting", app_name);
+        let meeting = MeetingDetected {
+            app_name: app_name.to_string(),
+            bundle_id: None,
+            is_browser: true,
+        };
+        let _ = app.emit("meeting-detected", &meeting);
+        // The prompt lives in the main window, which is usually hidden in the
+        // tray during a call; show it (without stealing focus).
+        crate::reveal_main_window(app);
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn start_window_title_detection(app: AppHandle) {
+mod macos {
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFGetTypeID, TCFType};
     use core_foundation::string::{CFString, CFStringGetTypeID};
@@ -114,146 +234,52 @@ fn start_window_title_detection(app: AppHandle) {
         kCGNullWindowID, kCGWindowListOptionOnScreenOnly, CGWindowListCopyWindowInfo,
     };
 
-    thread::spawn(move || {
-        loop {
-            let state = match app.try_state::<Arc<MeetingDetectionState>>() {
-                Some(s) => s,
-                None => {
-                    thread::sleep(Duration::from_secs(5));
-                    continue;
-                }
-            };
+    /// Titles of all on-screen windows. Other apps' titles are withheld
+    /// without Screen Recording permission, so detection then finds nothing.
+    pub fn window_titles() -> Vec<String> {
+        let windows_ptr =
+            unsafe { CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) };
+        if windows_ptr.is_null() {
+            return Vec::new();
+        }
+        let windows: CFArray<*const std::ffi::c_void> =
+            unsafe { CFArray::wrap_under_create_rule(windows_ptr) };
+        let name_key = CFString::new("kCGWindowName");
 
-            if !state.is_enabled() {
-                thread::sleep(Duration::from_secs(5));
+        let mut titles = Vec::new();
+        for i in 0..windows.len() {
+            let Some(window_dict) = windows.get(i) else {
+                continue;
+            };
+            let name_ptr = unsafe {
+                core_foundation::dictionary::CFDictionaryGetValue(
+                    *window_dict as *const _,
+                    name_key.as_concrete_TypeRef() as *const _,
+                )
+            };
+            if name_ptr.is_null()
+                || unsafe { CFGetTypeID(name_ptr) } != unsafe { CFStringGetTypeID() }
+            {
                 continue;
             }
-
-            let detected_meetings = &state.detected_meetings;
-            let mut active_meetings: std::collections::HashSet<String> =
-                std::collections::HashSet::new();
-
-            // Get all on-screen windows
-            let windows_ptr = unsafe {
-                CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
-            };
-
-            if !windows_ptr.is_null() {
-                let windows: CFArray<*const std::ffi::c_void> =
-                    unsafe { CFArray::wrap_under_create_rule(windows_ptr) };
-
-                for i in 0..windows.len() {
-                    // Get window dictionary
-                    let window_dict = windows.get(i);
-                    if window_dict.is_none() {
-                        continue;
-                    }
-                    let window_dict = window_dict.unwrap();
-
-                    // Get window title
-                    let name_key = CFString::new("kCGWindowName");
-                    let name_ptr = unsafe {
-                        core_foundation::dictionary::CFDictionaryGetValue(
-                            *window_dict as *const _,
-                            name_key.as_concrete_TypeRef() as *const _,
-                        )
-                    };
-
-                    if !name_ptr.is_null() {
-                        let type_id = unsafe { CFGetTypeID(name_ptr) };
-                        if type_id == unsafe { CFStringGetTypeID() } {
-                            let window_title: CFString =
-                                unsafe { CFString::wrap_under_get_rule(name_ptr as *const _) };
-                            let title_str = window_title.to_string();
-
-                            // Skip if this matches a "not in meeting" pattern
-                            let is_not_meeting = NOT_IN_MEETING_PATTERNS
-                                .iter()
-                                .any(|p| title_str.contains(p));
-                            if is_not_meeting {
-                                continue;
-                            }
-
-                            // Check for meeting patterns in window title
-                            let mut detected_app: Option<&str> = None;
-
-                            // First check explicit meeting patterns
-                            for (pattern, meeting_name) in MEETING_PATTERNS {
-                                if title_str.contains(pattern) {
-                                    detected_app = Some(*meeting_name);
-                                    break;
-                                }
-                            }
-
-                            // If no explicit pattern, check for audio indicator (🔊)
-                            if detected_app.is_none() && title_str.contains(AUDIO_ACTIVE_INDICATOR)
-                            {
-                                for (app_pattern, meeting_name) in AUDIO_APPS {
-                                    if title_str.contains(app_pattern) {
-                                        detected_app = Some(*meeting_name);
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if let Some(meeting_name) = detected_app {
-                                // Use title without emoji as key (emoji changes during call)
-                                let key = title_str
-                                    .replace(AUDIO_ACTIVE_INDICATOR, "")
-                                    .replace("🎤", "")
-                                    .trim()
-                                    .to_string();
-                                active_meetings.insert(key.clone());
-
-                                let should_emit = {
-                                    let mut detected = detected_meetings.lock().unwrap();
-                                    if !detected.contains(&key) {
-                                        detected.insert(key.clone());
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                };
-
-                                if should_emit {
-                                    // Once per meeting, and without the window
-                                    // title: titles name the meeting and whoever
-                                    // is in it. (Every matching title used to be
-                                    // printed on every 3 s tick.)
-                                    println!("[meeting-detection] Detected a {} meeting", meeting_name);
-
-                                    let meeting = MeetingDetected {
-                                        app_name: meeting_name.to_string(),
-                                        bundle_id: None,
-                                        is_browser: true,
-                                    };
-
-                                    let _ = app.emit("meeting-detected", &meeting);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Remove meetings from cache that are no longer active
-            {
-                let mut detected = detected_meetings.lock().unwrap();
-                detected.retain(|key| active_meetings.contains(key));
-            }
-
-            thread::sleep(Duration::from_secs(3));
+            let title: CFString = unsafe { CFString::wrap_under_get_rule(name_ptr as *const _) };
+            titles.push(title.to_string());
         }
-    });
+        titles
+    }
 }
 
-/// Tauri command to enable/disable meeting detection
+/// Turn meeting detection on or off; the choice is saved.
 #[tauri::command]
 pub fn set_meeting_detection_enabled(
     state: tauri::State<Arc<MeetingDetectionState>>,
+    db: tauri::State<Database>,
     enabled: bool,
-) {
+) -> Result<(), String> {
+    db.set_setting(ENABLED_SETTING, if enabled { "true" } else { "false" })
+        .map_err(|e| e.to_string())?;
     state.set_enabled(enabled);
+    Ok(())
 }
 
 /// Tauri command to check if meeting detection is enabled
@@ -262,9 +288,93 @@ pub fn is_meeting_detection_enabled(state: tauri::State<Arc<MeetingDetectionStat
     state.is_enabled()
 }
 
-/// Tauri command to clear all detected meetings (allows re-detection)
-#[tauri::command]
-pub fn clear_detected_meetings(state: tauri::State<Arc<MeetingDetectionState>>) {
-    state.clear_all_detected();
-    println!("[meeting-detection] Cleared all detected meetings");
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meetings_are_recognised_from_window_titles() {
+        assert_eq!(meeting_app("Meet – abc-defg-hij"), Some("Google Meet"));
+        assert_eq!(meeting_app("Zoom Meeting"), Some("Zoom"));
+        assert_eq!(meeting_app("Huddle: #design – Acme – Slack 🎤"), Some("Slack Huddle"));
+        assert_eq!(meeting_app("🔊 Weekly | Microsoft Teams"), Some("Microsoft Teams"));
+
+        assert_eq!(meeting_app("Home | Microsoft Teams"), None);
+        assert_eq!(meeting_app("Meet - Join a meeting"), None);
+        // An open app is not a call.
+        assert_eq!(meeting_app("Jane | Personal | jane@acme.com | Microsoft Teams"), None);
+        assert_eq!(meeting_app("Discord | #general | Friends"), None);
+        assert_eq!(meeting_app("🔊 Discord | #voice"), Some("Discord"));
+    }
+
+    fn apps(list: &[&'static str]) -> HashSet<&'static str> {
+        list.iter().copied().collect()
+    }
+
+    #[test]
+    fn a_meeting_prompts_once_even_as_its_title_changes() {
+        let state = MeetingDetectionState::default();
+        let t0 = Instant::now();
+        let started = |at: Instant, titles: &[&str]| {
+            let titles: Vec<String> = titles.iter().map(|t| t.to_string()).collect();
+            state.poll(at, || titles).started
+        };
+
+        assert_eq!(started(t0, &["Meet – abc-defg-hij"]), ["Google Meet"]);
+        // Same call, different title (tab switch, speaking indicator).
+        assert!(started(t0 + Duration::from_secs(3), &["Meet – abc-defg-hij 🔊"]).is_empty());
+        // Gone for a minute, then back: still the same meeting.
+        assert!(started(t0 + Duration::from_secs(6), &[]).is_empty());
+        assert!(started(t0 + Duration::from_secs(66), &["Meet - abc-defg-hij"]).is_empty());
+        // Gone for over two minutes: a new meeting prompts again.
+        assert!(started(t0 + Duration::from_secs(69), &[]).is_empty());
+        assert_eq!(
+            started(t0 + Duration::from_secs(69 + 125), &["Meet – xyz-abcd-efg"]),
+            ["Google Meet"]
+        );
+    }
+
+    #[test]
+    fn a_meeting_window_closing_is_reported() {
+        let state = MeetingDetectionState::default();
+        let t0 = Instant::now();
+        state.poll(t0, || vec!["Zoom Meeting".to_string()]);
+        let tick = state.poll(t0 + Duration::from_secs(3), Vec::new);
+        assert_eq!(tick.gone, ["Zoom"]);
+    }
+
+    #[test]
+    fn when_off_no_window_is_read() {
+        let state = MeetingDetectionState::default();
+        state.set_enabled(false);
+        let tick = state.poll(Instant::now(), || panic!("read windows while off"));
+        assert!(tick.started.is_empty());
+    }
+
+    #[test]
+    fn the_setting_round_trips_and_defaults_to_on() {
+        let db = Database::in_memory();
+        assert!(enabled_in_settings(&db));
+        db.set_setting(ENABLED_SETTING, "false").unwrap();
+        assert!(!enabled_in_settings(&db));
+        db.set_setting(ENABLED_SETTING, "true").unwrap();
+        assert!(enabled_in_settings(&db));
+    }
+
+    #[test]
+    fn the_gate_forgets_apps_only_after_two_minutes_away() {
+        let mut gate = PromptGate::default();
+        let t0 = Instant::now();
+        let none = apps(&[]);
+        assert_eq!(gate.tick(t0, &apps(&["Zoom"]), &none).started, ["Zoom"]);
+        assert!(gate
+            .tick(t0 + Duration::from_secs(119), &apps(&["Zoom"]), &none)
+            .started
+            .is_empty());
+        assert_eq!(
+            gate.tick(t0 + Duration::from_secs(119 + 121), &apps(&["Zoom"]), &none)
+                .started,
+            ["Zoom"]
+        );
+    }
 }

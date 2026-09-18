@@ -18,27 +18,24 @@ export function MeetingDetectedPopup({
   const { detectedMeeting, dismissed, setDetectedMeeting, dismissMeeting } =
     useMeetingStore();
 
-  // Listen for meeting-detected events from Rust
+  // Listen for meetings starting and ending (Rust sends both).
   useEffect(() => {
-    let unlistenFn: (() => void) | null = null;
+    const unlisteners: (() => void)[] = [];
     let mounted = true;
+    const keep = (fn: () => void) => (mounted ? unlisteners.push(fn) : fn());
 
-    listen<MeetingDetectedPayload>(
-      "meeting-detected",
-      (event) => {
-        setDetectedMeeting(event.payload);
-      }
-    ).then((fn) => {
-      if (mounted) {
-        unlistenFn = fn;
-      } else {
-        fn();
-      }
-    });
+    listen<MeetingDetectedPayload>("meeting-detected", (event) => {
+      setDetectedMeeting(event.payload);
+    }).then(keep);
+    // The call's window closed: a prompt for it is stale.
+    listen<string>("meeting-ended", (event) => {
+      const shown = useMeetingStore.getState().detectedMeeting;
+      if (shown?.app_name === event.payload) setDetectedMeeting(null);
+    }).then(keep);
 
     return () => {
       mounted = false;
-      unlistenFn?.();
+      unlisteners.forEach((fn) => fn());
     };
   }, [setDetectedMeeting]);
 

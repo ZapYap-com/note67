@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useMeetingStore } from "../../stores/meetingStore";
 
 interface SystemTabProps {
   onPermissionChange?: () => void;
@@ -7,6 +8,13 @@ interface SystemTabProps {
 
 export function SystemTab({ onPermissionChange }: SystemTabProps) {
   const [autostart, setAutostart] = useState(false);
+  const isMac = navigator.userAgent.includes("Mac");
+  const detectionEnabled = useMeetingStore((s) => s.isEnabled);
+  const setDetectionEnabled = useMeetingStore((s) => s.setEnabled);
+  const loadDetectionEnabled = useMeetingStore((s) => s.loadEnabled);
+  useEffect(() => {
+    void loadDetectionEnabled();
+  }, [loadDetectionEnabled]);
   const [autostartLoading, setAutostartLoading] = useState(true);
   const [systemAudioSupported, setSystemAudioSupported] = useState(false);
   const [systemAudioPermission, setSystemAudioPermission] = useState(false);
@@ -235,6 +243,80 @@ export function SystemTab({ onPermissionChange }: SystemTabProps) {
           />
         </div>
       </button>
+
+      {/* Meeting detection reads window titles, which only macOS exposes. */}
+      {isMac && (
+        <div>
+          <button
+            onClick={() => setDetectionEnabled(!detectionEnabled)}
+            className="w-full flex items-center justify-between p-3 rounded-xl transition-colors"
+            style={{ backgroundColor: "var(--color-bg-subtle)" }}
+          >
+            <div className="flex items-center gap-3">
+              <span
+                className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{
+                  backgroundColor: detectionEnabled
+                    ? "var(--color-accent-light)"
+                    : "var(--color-bg-elevated)",
+                  color: detectionEnabled
+                    ? "var(--color-accent)"
+                    : "var(--color-text-secondary)",
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              </span>
+              <div className="text-left">
+                <p className="font-medium" style={{ color: "var(--color-text)" }}>
+                  Detect meetings
+                </p>
+                <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                  Offer to record when a Meet, Zoom, Teams or Slack call starts
+                </p>
+              </div>
+            </div>
+            <div
+              className="w-11 h-6 rounded-full transition-colors relative"
+              style={{
+                backgroundColor: detectionEnabled
+                  ? "var(--color-accent)"
+                  : "var(--color-border)",
+              }}
+            >
+              <div
+                className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform"
+                style={{
+                  transform: detectionEnabled ? "translateX(22px)" : "translateX(2px)",
+                }}
+              />
+            </div>
+          </button>
+          {/* Without Screen Recording permission macOS hides other apps'
+              window titles, so detection would silently never fire. */}
+          {detectionEnabled && !systemAudioLoading && !systemAudioPermission && (
+            <p
+              className="flex items-center gap-2 text-xs mt-2 px-1"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Needs Screen Recording permission to see meeting windows.
+              <button
+                onClick={handleOpenSystemSettings}
+                className="underline"
+                style={{ color: "var(--color-accent)" }}
+              >
+                Open Settings
+              </button>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Microphone Section */}
       <div className="pt-4">

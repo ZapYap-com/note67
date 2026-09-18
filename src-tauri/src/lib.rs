@@ -104,6 +104,18 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Note67.", name)
 }
 
+/// Show the main window for something the user should see (a detected
+/// meeting's prompt), without stealing focus. Ends a --minimized launch.
+pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
+    STARTED_MINIMIZED.store(false, Ordering::Relaxed);
+    if let Some(window) = app.get_webview_window("main") {
+        if !window.is_visible().unwrap_or(true) {
+            let _ = window.show();
+        }
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    }
+}
+
 /// Clean up orphaned .tmp files from interrupted upload conversions
 fn cleanup_temp_files(app: &tauri::AppHandle) {
     if let Ok(app_data) = app.path().app_data_dir() {
@@ -125,8 +137,10 @@ fn cleanup_temp_files(app: &tauri::AppHandle) {
 /// Only shows if the app was NOT started with --minimized flag.
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) {
-    // Don't show window if started with --minimized (autostart)
-    if STARTED_MINIMIZED.load(Ordering::Relaxed) {
+    // A launch at login (--minimized) stays hidden, but only for this first
+    // call. The flag was never cleared, so for the whole session this command
+    // did nothing (a webview reload left the window hidden).
+    if STARTED_MINIMIZED.swap(false, Ordering::Relaxed) {
         return;
     }
 
@@ -451,7 +465,6 @@ pub fn run() {
             // Meeting detection commands
             meeting_detection::set_meeting_detection_enabled,
             meeting_detection::is_meeting_detection_enabled,
-            meeting_detection::clear_detected_meetings,
             // Image commands
             commands::save_image,
             commands::get_attachments_dir,

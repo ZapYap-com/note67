@@ -51,3 +51,34 @@ test.describe("without a transcription model", () => {
     await expect(page.getByRole("heading", { name: "Whisper" })).toBeVisible();
   });
 });
+
+test.describe("meeting detection setting", () => {
+  async function openSystemSettings(page: import("@playwright/test").Page) {
+    // Shortcuts are registered once the app has rendered.
+    await expect(page.getByRole("button", { name: /start listening/i })).toBeVisible();
+    await page.keyboard.press("Control+,");
+    await page.getByRole("button", { name: "System", exact: true }).click();
+  }
+
+  test("can be switched off, and the choice is saved", async ({ page }) => {
+    await installTauriMock(page);
+    await page.goto("/");
+    await openSystemSettings(page);
+
+    await page.getByRole("button", { name: /detect meetings/i }).click();
+    await page.waitForFunction(() =>
+      ((window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []).includes(
+        "set_meeting_detection_enabled"
+      )
+    );
+  });
+
+  test("says when Screen Recording permission is missing", async ({ page }) => {
+    await installTauriMock(page, { has_system_audio_permission: false });
+    await page.goto("/");
+    await page.getByRole("button", { name: /skip for now/i }).click();
+    await openSystemSettings(page);
+
+    await expect(page.getByText(/needs screen recording permission to see meeting windows/i)).toBeVisible();
+  });
+});
