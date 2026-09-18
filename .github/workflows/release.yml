@@ -47,6 +47,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The release notes, and the notes the in-app updater shows, come from
+      # this version's section of CHANGELOG.md.
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes=$(awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
+            echo "::warning::CHANGELOG.md has no section for $version"
+            notes="See the assets to download and install this version."
+          fi
+          {
+            echo "body<<NOTES_EOF"
+            echo "$notes"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Import Apple certificate
         if: matrix.platform == 'macos-latest'
         env:
@@ -89,7 +111,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'Note67 v__VERSION__'
-          releaseBody: 'See the assets to download and install this version.'
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

@@ -74,7 +74,13 @@ This updates:
 
 ### 2. Update What's New
 
-Edit `src/components/settings/UpdatesTab.tsx` and add a new entry to `recentChanges`:
+Write the version's section in `CHANGELOG.md` (`## [0.2.0] - <date>`). The
+release workflow copies it into the GitHub release, and from there into the
+notes the in-app updater shows (Settings > Updates). A tag without a section
+gets a warning and generic notes.
+
+Until the in-app changelog is replaced by a link, also edit
+`src/components/settings/UpdatesTab.tsx` and add a new entry to `recentChanges`:
 
 ```typescript
 const recentChanges = [
