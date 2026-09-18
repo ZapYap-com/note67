@@ -880,6 +880,16 @@ impl Database {
 
     // ========== Legacy Audio Migration ==========
 
+    /// Forget a segment's system-audio file: capture never started for it.
+    pub fn clear_segment_system_path(&self, segment_id: i64) -> anyhow::Result<()> {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        conn.execute(
+            "UPDATE audio_segments SET system_path = NULL WHERE id = ?1",
+            [segment_id],
+        )?;
+        Ok(())
+    }
+
     /// The note's combined playback track (`notes.audio_path`), if any.
     pub fn get_note_audio_path(&self, note_id: &str) -> anyhow::Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("{}", e))?;

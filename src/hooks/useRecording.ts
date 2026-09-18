@@ -76,9 +76,13 @@ export function useRecording(): UseRecordingReturn {
             recordingMode: "dual",
           });
         } else if (micOk) {
+          // Through the segment command, like every other mode. The legacy
+          // unsegmented path recorded {note_id}.wav with no segment row while
+          // pause/resume used segments, so everything before the first pause
+          // dropped out of the note's audio and its transcript.
           console.log("Starting mic-only recording");
-          const path = await audioApi.startRecording(noteId);
-          patch({ audioPath: path, recordingMode: "mic-only" });
+          const result = await audioApi.startDualRecordingWithSegments(noteId, false);
+          patch({ audioPath: result.micPath, recordingMode: "mic-only" });
         } else if (systemOk) {
           console.log("Starting listen-only recording (system audio only)");
           const result = await audioApi.startSystemOnlyRecordingWithSegments(
@@ -93,6 +97,9 @@ export function useRecording(): UseRecordingReturn {
         patch({ isRecording: true });
       } catch (e) {
         patch({ error: e instanceof Error ? e.message : String(e) });
+        // Callers undo what they set up for this recording (the note they
+        // created, the recording note id), so they need to know it failed.
+        throw e;
       }
     },
     [patch]
@@ -106,8 +113,8 @@ export function useRecording(): UseRecordingReturn {
 
         let path: string | null = null;
 
-        if (recordingMode === "dual" && id) {
-          console.log("Stopping dual recording with segments");
+        if ((recordingMode === "dual" || recordingMode === "mic-only") && id) {
+          console.log("Stopping recording with segments");
           const result = await audioApi.stopDualRecordingWithSegments(id);
           path = result.playbackPath || result.systemPath || result.micPath;
         } else if (recordingMode === "system-only" && id) {
@@ -168,7 +175,10 @@ export function useRecording(): UseRecordingReturn {
           patch({ audioPath: result.systemPath });
         } else {
           console.log("Resuming dual recording");
-          const result = await audioApi.resumeDualRecording(noteId);
+          const result = await audioApi.resumeDualRecording(
+            noteId,
+            recordingMode !== "mic-only"
+          );
           patch({
             audioPath:
               result.playbackPath || result.systemPath || result.micPath,
@@ -202,7 +212,7 @@ export function useRecording(): UseRecordingReturn {
           patch({ audioPath: result.systemPath, recordingMode: "system-only" });
         } else if (micOk) {
           console.log("Continuing recording on ended note");
-          const result = await audioApi.continueNoteRecording(noteId);
+          const result = await audioApi.continueNoteRecording(noteId, systemOk);
           patch({
             audioPath:
               result.playbackPath || result.systemPath || result.micPath,
@@ -221,6 +231,7 @@ export function useRecording(): UseRecordingReturn {
         currentNoteIdRef.current = noteId;
       } catch (e) {
         patch({ error: e instanceof Error ? e.message : String(e) });
+        throw e;
       }
     },
     [patch]

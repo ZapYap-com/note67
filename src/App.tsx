@@ -345,16 +345,27 @@ function App() {
     }
 
     const note = await createNote("Untitled");
+    try {
+      await startRecording(note.id);
+    } catch (error) {
+      // Nothing was recorded (another session is running, or capture failed):
+      // don't leave an empty note behind.
+      console.error("Start recording failed:", error);
+      await deleteNote(note.id).catch(console.error);
+      return;
+    }
     setSelectedNoteId(note.id);
+    // Only now: pointing the recording UI at the note before the start
+    // succeeded is how a failed start used to take over a running session.
     setRecordingNoteId(note.id);
     // Show the recording (and its Stop control) even from Graph or Tasks.
     setCurrentView("notes");
     setActiveTab("transcript");
-    await startRecording(note.id);
     // Live transcription handles both mic and system-audio buffers; safe in listen-only mode.
     await startLiveTranscription(note.id, profile.name || "Me");
   }, [
     createNote,
+    deleteNote,
     startRecording,
     startLiveTranscription,
     profile.name,
@@ -711,6 +722,36 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Resume a paused recording. Shared by the note's Resume button and the
+  // floating pill: the pill used to resume without checking inputs and
+  // restarted live transcription with no segments and no speaker name, which
+  // wiped the pre-pause lines off the screen and relabelled the mic "Me".
+  const handleResumeRecording = async () => {
+    try {
+      // At least one audio input (mic or system audio) must be available.
+      const status = await refreshSystemStatus();
+      const canMic = status.micAvailable && status.micPermission;
+      const canSystem =
+        status.systemAudioSupported && status.systemAudioPermission;
+      if (!canMic && !canSystem) {
+        setSettingsTab("system");
+        setShowSettings(true);
+        return;
+      }
+
+      if (recordingNoteId) {
+        await resumeRecording(recordingNoteId);
+        await startLiveTranscription(
+          recordingNoteId,
+          profile?.name || "Me",
+          liveSegments
+        );
+      }
+    } catch (error) {
+      console.error("Resume recording failed:", error);
+    }
+  };
 
   // Regenerate summary and title for the selected note
   const handleRegenerateSummaryTitle = async () => {
@@ -1146,32 +1187,7 @@ function App() {
                 console.error("Pause recording failed:", error);
               }
             }}
-            onResumeRecording={async () => {
-              try {
-                // At least one audio input (mic or system audio) must be available.
-                const status = await refreshSystemStatus();
-                const canMic =
-                  status.micAvailable && status.micPermission;
-                const canSystem =
-                  status.systemAudioSupported && status.systemAudioPermission;
-                if (!canMic && !canSystem) {
-                  setSettingsTab("system");
-                  setShowSettings(true);
-                  return;
-                }
-
-                if (recordingNoteId) {
-                  await resumeRecording(recordingNoteId);
-                  await startLiveTranscription(
-                    recordingNoteId,
-                    profile?.name || "Me",
-                    liveSegments
-                  );
-                }
-              } catch (error) {
-                console.error("Resume recording failed:", error);
-              }
-            }}
+            onResumeRecording={handleResumeRecording}
             onContinueRecording={async () => {
               try {
                 // At least one audio input (mic or system audio) must be available.
@@ -1186,10 +1202,11 @@ function App() {
                   return;
                 }
 
-                setRecordingNoteId(selectedNote.id);
                 // Load existing transcripts before starting
                 const existingSegments = await loadTranscript(selectedNote.id);
                 await continueRecording(selectedNote.id);
+                // Only after the start succeeded (see handleStartRecording).
+                setRecordingNoteId(selectedNote.id);
                 await startLiveTranscription(
                   selectedNote.id,
                   profile?.name || "Me",
@@ -1284,16 +1301,7 @@ function App() {
             ) : isPaused && recordingNote ? (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={async () => {
-                    try {
-                      if (recordingNoteId) {
-                        await resumeRecording(recordingNoteId);
-                        await startLiveTranscription(recordingNoteId);
-                      }
-                    } catch (error) {
-                      console.error("Resume recording failed:", error);
-                    }
-                  }}
+                  onClick={handleResumeRecording}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm shadow-md transition-transform hover:scale-105"
                   style={{
                     backgroundColor: "var(--color-accent)",

@@ -166,17 +166,6 @@ fn start_window_title_detection(app: AppHandle) {
                                 unsafe { CFString::wrap_under_get_rule(name_ptr as *const _) };
                             let title_str = window_title.to_string();
 
-                            // Debug: print window titles to help diagnose detection
-                            if !title_str.is_empty()
-                                && (title_str.to_lowercase().contains("meet")
-                                    || title_str.to_lowercase().contains("zoom")
-                                    || title_str.to_lowercase().contains("teams")
-                                    || title_str.to_lowercase().contains("slack")
-                                    || title_str.to_lowercase().contains("huddle"))
-                            {
-                                println!("[meeting-detection] Found window: '{}'", title_str);
-                            }
-
                             // Skip if this matches a "not in meeting" pattern
                             let is_not_meeting = NOT_IN_MEETING_PATTERNS
                                 .iter()
@@ -227,10 +216,11 @@ fn start_window_title_detection(app: AppHandle) {
                                 };
 
                                 if should_emit {
-                                    println!(
-                                        "[meeting-detection] Detected {} meeting: '{}'",
-                                        meeting_name, title_str
-                                    );
+                                    // Once per meeting, and without the window
+                                    // title: titles name the meeting and whoever
+                                    // is in it. (Every matching title used to be
+                                    // printed on every 3 s tick.)
+                                    println!("[meeting-detection] Detected a {} meeting", meeting_name);
 
                                     let meeting = MeetingDetected {
                                         app_name: meeting_name.to_string(),

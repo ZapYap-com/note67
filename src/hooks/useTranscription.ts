@@ -295,7 +295,15 @@ export function useLiveTranscription(): UseLiveTranscriptionReturn {
       await transcriptionApi.startLiveTranscription(noteId, langParam);
       setIsLiveTranscribing(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      // The live loop only notices a pause on its next 3 s tick, so a quick
+      // resume finds it still running on this session. It carries on over the
+      // resumed audio; dropping the note id here froze the live view instead.
+      if (/already transcribing/i.test(message)) {
+        setIsLiveTranscribing(true);
+        return;
+      }
+      setError(message);
       currentNoteIdRef.current = null;
     }
   }, [setError, setIsLiveTranscribing, setLiveSegments]);

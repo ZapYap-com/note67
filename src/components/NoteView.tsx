@@ -17,6 +17,7 @@ import { useLiveTranscriptionStore } from "../stores/liveTranscriptionStore";
 import { useSummaryUiStore } from "../stores/summaryUiStore";
 import { useNoteUiStore } from "../stores/noteUiStore";
 import type { Note, TranscriptSegment, AudioSegment } from "../types";
+import { RecordingPhase } from "../types";
 
 export interface NoteViewProps {
   note: Note;
@@ -75,6 +76,11 @@ export function NoteView({
   const isRecording =
     useRecordingStore((s) => s.isRecording) && isThisNoteRecording;
   const isPaused = useRecordingStore((s) => s.isPaused) && isThisNoteRecording;
+  // Any session, on any note, recording or paused. Starting another recording
+  // while one is open is refused by the backend; the button shouldn't offer it.
+  const isSessionActive = useRecordingStore(
+    (s) => s.isRecording || s.isPaused || s.recordingPhase !== RecordingPhase.Idle
+  );
   const audioLevel = useRecordingStore((s) => s.audioLevel);
   const recordingMode = useRecordingStore((s) => s.recordingMode);
 
@@ -425,8 +431,8 @@ export function NoteView({
               </button>
             </>
           )}
-          {/* Ended/idle note controls - show Listen for any note not currently recording or generating */}
-          {!isRecording && !isPaused && !isRegenerating && !isGenerating && (
+          {/* Ended/idle note controls - show Listen when no session is open and nothing is generating */}
+          {!isSessionActive && !isRegenerating && !isGenerating && (
             <>
               <button
                 onClick={onContinueRecording}

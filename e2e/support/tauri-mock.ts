@@ -59,6 +59,12 @@ export async function installTauriMock(
         return id;
       },
       invoke(cmd: string, args: Record<string, unknown> = {}) {
+        // Every app command is logged so specs can wait for a flow to finish.
+        if (!cmd.startsWith("plugin:")) {
+          const calls = (w.__tauriCalls as string[] | undefined) ?? [];
+          calls.push(cmd);
+          w.__tauriCalls = calls;
+        }
         // Event plugin — let listen()/emit() work so streaming can be simulated.
         if (cmd === "plugin:event|listen") {
           const event = args.event as string;
@@ -98,6 +104,10 @@ export async function installTauriMock(
 
         if (Object.prototype.hasOwnProperty.call(commands, cmd)) {
           const result = commands[cmd];
+          // `{ __reject: "message" }` makes the command fail, like a Rust Err.
+          if (result && typeof result === "object" && "__reject" in result) {
+            return Promise.reject((result as { __reject: string }).__reject);
+          }
           // Seed the note store from reads so subsequent writes can echo.
           if (cmd === "list_notes" && Array.isArray(result)) result.forEach(rememberNote);
           if (cmd === "get_note") rememberNote(result);

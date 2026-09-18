@@ -107,8 +107,9 @@ describe("useRecording — mode selection from the micOk x systemOk matrix", () 
       await result.current.startRecording("note-1");
     });
 
-    expect(api.startRecording).toHaveBeenCalledWith("note-1");
-    expect(api.startDualRecordingWithSegments).not.toHaveBeenCalled();
+    // Segmented like every other mode, without trying system audio.
+    expect(api.startDualRecordingWithSegments).toHaveBeenCalledWith("note-1", false);
+    expect(api.startRecording).not.toHaveBeenCalled();
     expect(result.current.recordingMode).toBe("mic-only");
     expect(result.current.isDualRecording).toBe(false);
   });
@@ -130,7 +131,9 @@ describe("useRecording — mode selection from the micOk x systemOk matrix", () 
     const { result } = renderHook(() => useRecording());
 
     await act(async () => {
-      await result.current.startRecording("note-1");
+      await expect(result.current.startRecording("note-1")).rejects.toThrow(
+        /no audio input available/i
+      );
     });
 
     expect(result.current.isRecording).toBe(false);
@@ -194,7 +197,7 @@ describe("useRecording — stop dispatches on the current mode", () => {
     expect(api.stopSystemOnlyRecordingWithSegments).toHaveBeenCalledWith("note-1");
   });
 
-  it("stops mic-only via the plain API", async () => {
+  it("stops mic-only via the segment API", async () => {
     setInputs({ mic: true, system: false });
     const { result } = renderHook(() => useRecording());
 
@@ -205,8 +208,8 @@ describe("useRecording — stop dispatches on the current mode", () => {
       await result.current.stopRecording();
     });
 
-    expect(api.stopRecording).toHaveBeenCalled();
-    expect(api.stopDualRecordingWithSegments).not.toHaveBeenCalled();
+    expect(api.stopDualRecordingWithSegments).toHaveBeenCalledWith("note-1");
+    expect(api.stopRecording).not.toHaveBeenCalled();
   });
 
   it("resets all recording state on stop", async () => {
@@ -249,7 +252,7 @@ describe("useRecording — pause/resume round-trips preserve mode", () => {
       await result.current.resumeRecording("note-1");
     });
 
-    expect(api.resumeDualRecording).toHaveBeenCalledWith("note-1");
+    expect(api.resumeDualRecording).toHaveBeenCalledWith("note-1", true);
     expect(result.current.isRecording).toBe(true);
     expect(result.current.isPaused).toBe(false);
     expect(result.current.recordingMode).toBe("dual");
@@ -275,6 +278,23 @@ describe("useRecording — pause/resume round-trips preserve mode", () => {
 
     expect(api.resumeSystemOnlyRecording).toHaveBeenCalledWith("note-1");
     expect(result.current.recordingMode).toBe("system-only");
+  });
+
+  it("resumes a mic-only recording without trying system audio", async () => {
+    setInputs({ mic: true, system: false });
+    const { result } = renderHook(() => useRecording());
+
+    await act(async () => {
+      await result.current.startRecording("note-1");
+    });
+    await act(async () => {
+      await result.current.pauseRecording();
+    });
+    await act(async () => {
+      await result.current.resumeRecording("note-1");
+    });
+
+    expect(api.resumeDualRecording).toHaveBeenCalledWith("note-1", false);
   });
 
   it("downgrades dual to mic-only when resume returns no system path", async () => {
@@ -308,7 +328,7 @@ describe("useRecording — continue on an ended note", () => {
       await result.current.continueRecording("note-1");
     });
 
-    expect(api.continueNoteRecording).toHaveBeenCalledWith("note-1");
+    expect(api.continueNoteRecording).toHaveBeenCalledWith("note-1", true);
     expect(result.current.isRecording).toBe(true);
     expect(result.current.recordingMode).toBe("dual");
   });
@@ -331,7 +351,9 @@ describe("useRecording — continue on an ended note", () => {
     const { result } = renderHook(() => useRecording());
 
     await act(async () => {
-      await result.current.continueRecording("note-1");
+      await expect(result.current.continueRecording("note-1")).rejects.toThrow(
+        /no audio input available/i
+      );
     });
 
     expect(result.current.error).toMatch(/no audio input available/i);
@@ -395,7 +417,8 @@ describe("useRecording — error handling", () => {
 
     const { result } = renderHook(() => useRecording());
     await act(async () => {
-      await result.current.startRecording("note-1");
+      // Rethrown so the caller can undo what it set up for the recording.
+      await expect(result.current.startRecording("note-1")).rejects.toThrow("device busy");
     });
 
     expect(result.current.error).toBe("device busy");

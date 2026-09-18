@@ -770,6 +770,13 @@ pub async fn retranscribe_note(
             None => (None, segment.system_path.as_ref().map(PathBuf::from)),
         };
 
+        // Older builds recorded a system path even when capture never started.
+        // Next to a mic recording, a system file that doesn't exist is no
+        // system audio rather than a failed pass. For a listen-only segment it
+        // is the whole recording, so a missing one still fails.
+        let actual_system_path =
+            actual_system_path.filter(|p| actual_mic_path.is_none() || p.exists());
+
         // Transcribe SYSTEM audio FIRST to collect segments for echo detection
         let mut system_segments_for_echo: Vec<(f64, f64, String)> = Vec::new();
 

@@ -93,20 +93,28 @@ export const audioApi = {
   },
 
   /** Resume dual recording after pause */
-  resumeDualRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("resume_dual_recording", { noteId });
+  /** captureSystem: false keeps a mic-only session from trying system audio. */
+  resumeDualRecording: (
+    noteId: string,
+    captureSystem = true
+  ): Promise<DualRecordingResult> => {
+    return invoke("resume_dual_recording", { noteId, captureSystem });
   },
 
   /** Start dual recording with segment tracking */
   startDualRecordingWithSegments: (
-    noteId: string
+    noteId: string,
+    captureSystem = true
   ): Promise<DualRecordingResult> => {
-    return invoke("start_dual_recording_with_segments", { noteId });
+    return invoke("start_dual_recording_with_segments", { noteId, captureSystem });
   },
 
   /** Continue recording on an ended note */
-  continueNoteRecording: (noteId: string): Promise<DualRecordingResult> => {
-    return invoke("continue_note_recording", { noteId });
+  continueNoteRecording: (
+    noteId: string,
+    captureSystem = true
+  ): Promise<DualRecordingResult> => {
+    return invoke("continue_note_recording", { noteId, captureSystem });
   },
 
   // ========== Listen-only (system-audio-only) recording ==========

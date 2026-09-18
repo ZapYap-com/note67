@@ -46,3 +46,26 @@ test.describe("opening notes", () => {
     await expect(page.getByRole("heading", { name: "Tasks" })).toBeHidden();
   });
 });
+
+test.describe("starting a recording", () => {
+  test("a start that fails leaves no empty note behind", async ({ page }) => {
+    // What the backend now answers when a session is already open.
+    await installTauriMock(page, {
+      start_dual_recording_with_segments: {
+        __reject: "A recording is already in progress. Stop it before starting another.",
+      },
+    });
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /start listening/i }).click();
+
+    // The note is created first, then deleted once the start fails.
+    await page.waitForFunction(() =>
+      ((window as unknown as { __tauriCalls?: string[] }).__tauriCalls ?? []).includes(
+        "delete_note"
+      )
+    );
+    await expect(page.getByRole("button", { name: /^untitled/i })).toHaveCount(0);
+    await expect(noteTabBar(page)).toBeHidden();
+  });
+});

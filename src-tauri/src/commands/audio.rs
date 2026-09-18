@@ -50,6 +50,8 @@ pub fn start_recording(
     state: State<AudioState>,
     note_id: String,
 ) -> Result<String, String> {
+    ensure_no_session(&state.recording)?;
+
     // Get app data directory for storing recordings
     let app_data_dir = app
         .path()
@@ -666,6 +668,7 @@ pub fn resume_dual_recording(
     state: State<AudioState>,
     db: State<Database>,
     note_id: String,
+    capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
     let current_phase = state.recording.get_phase();
     if current_phase != RecordingPhase::Paused {
@@ -729,26 +732,13 @@ pub fn resume_dual_recording(
     audio::resume_recording(state.recording.clone(), mic_path.clone())
         .map_err(|e| e.to_string())?;
 
-    // Try to start system audio recording
-    let system_started = {
-        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
-
-        if let Some(cap) = capture.as_ref() {
-            match cap.start(system_path.clone()) {
-                Ok(()) => {
-                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
-                    *sys_path = Some(system_path.clone());
-                    true
-                }
-                Err(e) => {
-                    eprintln!("Failed to start system audio capture: {}", e);
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    };
+    let system_started = start_segment_system_capture(
+        &state,
+        &db,
+        segment_id,
+        &system_path,
+        capture_system.unwrap_or(true),
+    )?;
 
     Ok(DualRecordingResult {
         mic_path: Some(mic_path.to_string_lossy().to_string()),
@@ -769,7 +759,10 @@ pub fn continue_note_recording(
     state: State<AudioState>,
     db: State<Database>,
     note_id: String,
+    capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
+    ensure_no_session(&state.recording)?;
+
     // First, reopen the note (clear ended_at)
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -863,26 +856,13 @@ pub fn continue_note_recording(
     audio::start_recording(state.recording.clone(), mic_path.clone())
         .map_err(|e| e.to_string())?;
 
-    // Try to start system audio recording
-    let system_started = {
-        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
-
-        if let Some(cap) = capture.as_ref() {
-            match cap.start(system_path.clone()) {
-                Ok(()) => {
-                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
-                    *sys_path = Some(system_path.clone());
-                    true
-                }
-                Err(e) => {
-                    eprintln!("Failed to start system audio capture: {}", e);
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    };
+    let system_started = start_segment_system_capture(
+        &state,
+        &db,
+        segment_id,
+        &system_path,
+        capture_system.unwrap_or(true),
+    )?;
 
     Ok(DualRecordingResult {
         mic_path: Some(mic_path.to_string_lossy().to_string()),
@@ -903,7 +883,10 @@ pub fn start_dual_recording_with_segments(
     state: State<AudioState>,
     db: State<Database>,
     note_id: String,
+    capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
+    ensure_no_session(&state.recording)?;
+
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -959,26 +942,13 @@ pub fn start_dual_recording_with_segments(
     audio::start_recording(state.recording.clone(), mic_path.clone())
         .map_err(|e| e.to_string())?;
 
-    // Try to start system audio recording
-    let system_started = {
-        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
-
-        if let Some(cap) = capture.as_ref() {
-            match cap.start(system_path.clone()) {
-                Ok(()) => {
-                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
-                    *sys_path = Some(system_path.clone());
-                    true
-                }
-                Err(e) => {
-                    eprintln!("Failed to start system audio capture: {}", e);
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    };
+    let system_started = start_segment_system_capture(
+        &state,
+        &db,
+        segment_id,
+        &system_path,
+        capture_system.unwrap_or(true),
+    )?;
 
     Ok(DualRecordingResult {
         mic_path: Some(mic_path.to_string_lossy().to_string()),
@@ -994,6 +964,56 @@ pub fn start_dual_recording_with_segments(
 // ========== System-audio-only ("listen-only") recording ==========
 // Used when the microphone is unavailable or denied but system audio is supported.
 // The user is just listening into a meeting; only system audio is captured.
+
+/// Refuse to start while a session is recording or paused.
+///
+/// Every start path resets the session and writes a segment row for its note
+/// before the recorder itself notices it is busy. Starting over a running (or
+/// paused) session therefore re-pointed that session at the new note: its
+/// audio and its Stop were filed under the wrong note, and the real one was
+/// never ended. So check first, before any state or database write.
+fn ensure_no_session(state: &RecordingState) -> Result<(), String> {
+    match state.get_phase() {
+        RecordingPhase::Idle => Ok(()),
+        _ => Err("A recording is already in progress. Stop it before starting another.".to_string()),
+    }
+}
+
+/// Start system-audio capture for a segment whose row already names
+/// `system_path`, unless `wanted` is false (a mic-only session).
+///
+/// When capture doesn't start, the row's system_path is cleared. Rows used to
+/// keep the path of a file that was never written, and retranscription and
+/// playback then looked for it.
+fn start_segment_system_capture(
+    state: &AudioState,
+    db: &Database,
+    segment_id: i64,
+    system_path: &std::path::Path,
+    wanted: bool,
+) -> Result<bool, String> {
+    let started = wanted && {
+        let capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+        match capture.as_ref() {
+            Some(cap) => match cap.start(system_path.to_path_buf()) {
+                Ok(()) => {
+                    let mut sys_path = state.system_output_path.lock().map_err(|e| e.to_string())?;
+                    *sys_path = Some(system_path.to_path_buf());
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to start system audio capture: {}", e);
+                    false
+                }
+            },
+            None => false,
+        }
+    };
+    if !started {
+        let _ = db.clear_segment_system_path(segment_id);
+    }
+    Ok(started)
+}
 
 /// The segment a stop should close: its database id and how long it ran.
 ///
@@ -1024,6 +1044,8 @@ pub fn start_system_only_recording_with_segments(
     db: State<Database>,
     note_id: String,
 ) -> Result<DualRecordingResult, String> {
+    ensure_no_session(&state.recording)?;
+
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -1253,6 +1275,23 @@ mod tests {
         let state = running_segment(7, Duration::from_secs(600));
         state.set_phase(RecordingPhase::Paused);
         assert_eq!(open_segment_timing(&state), None);
+    }
+
+    #[test]
+    fn a_new_session_is_refused_while_one_is_recording_or_paused() {
+        let state = RecordingState::new();
+        assert!(ensure_no_session(&state).is_ok());
+
+        state.set_phase(RecordingPhase::Recording);
+        assert!(ensure_no_session(&state).is_err());
+
+        // Paused is still an open session: a start from here used to begin a
+        // new session for another note and leave the paused one never ended.
+        state.set_phase(RecordingPhase::Paused);
+        assert!(ensure_no_session(&state).is_err());
+
+        state.set_phase(RecordingPhase::Idle);
+        assert!(ensure_no_session(&state).is_ok());
     }
 
     #[test]
