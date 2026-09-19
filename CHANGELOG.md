@@ -46,6 +46,8 @@ audio, meeting detection and launch at login.
 
 - About 2,500 lines of unused code, 33 unused internal commands and five
   unused libraries removed.
+- The secure-connection library the updater uses (rustls) is updated for a
+  security advisory (RUSTSEC-2026-0285).
 
 ## [0.1.27] - Unreleased
 
