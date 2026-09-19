@@ -8,7 +8,22 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.26)
+## What's New (v0.1.27)
+
+- Fixed the app quitting after a recording when the summary contained Chinese, Japanese or Korean text, or an emoji or em dash in the wrong place
+- Fixed the app quitting when opening a note that another note mentions near non-English text (the "unlinked mentions" panel behind it is removed)
+- Fixed microphone-only recordings ending with an empty transcript and losing everything recorded before a pause, and continuing an older recording overwriting it
+- Non-English meetings are no longer re-transcribed in English after Stop — your transcription language is used everywhere
+- Notes typed during a meeting are saved as you type and before the summary is written, and clearing a note's text now sticks
+- Only one recording runs at a time, so a second one can no longer file a meeting's audio under the wrong note
+- Recording no longer needs Ollama — a transcription model is enough, and Ollama adds summaries, titles and tasks when it's running
+- Summarize no longer renames notes you've titled yourself, and search works with hyphens, apostrophes, dots and email addresses
+- Finding tasks reads the whole of a long meeting without adding the same task twice, and tasks you add yourself no longer turn overdue the next day
+- Uploaded audio plays and transcribes on notes without a recording, and mono `.m4a` files such as voice memos convert at full length
+- Right-click in the editor shows the normal Cut, Copy, Paste and spelling menu
+- Coming in 0.2 — Note67 focuses on meeting notes: the graph view, hashtags, backlinks, the Cmd+J writing sidebar and PDF export are going away (Markdown export stays), and nothing you wrote is deleted
+
+### v0.1.26
 
 - Security — updated bundled third-party components to patch five known vulnerabilities, including the sanitizer that cleans pasted content in the editor
 
