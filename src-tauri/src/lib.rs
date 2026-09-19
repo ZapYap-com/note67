@@ -2,6 +2,8 @@ mod ai;
 mod audio;
 mod commands;
 mod db;
+#[cfg(test)]
+mod frontend_access_tests;
 mod meeting_detection;
 mod transcription;
 
@@ -143,6 +145,13 @@ fn show_main_window(app: tauri::AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// The app's config, capabilities and frontend assets. Built in one place:
+/// on macOS the macro also embeds Info.plist under a fixed symbol, so a second
+/// call (the capability tests) can't link.
+pub(crate) fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -450,7 +459,7 @@ pub fn run() {
             // Graph commands
             commands::get_graph_data,
         ])
-        .build(tauri::generate_context!())
+        .build(app_context())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // Prevent app from exiting when Cmd+Q is pressed (hide window instead)

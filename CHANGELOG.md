@@ -48,6 +48,9 @@ audio, meeting detection and launch at login.
   unused libraries removed.
 - The secure-connection library the updater uses (rustls) is updated for a
   security advisory (RUSTSEC-2026-0285).
+- Note67's window can reach less of your disk: it reads only your
+  recordings and saves only where you choose. It could read and write
+  anything in Note67's data folder before, including the notes database.
 
 ## [0.1.27] - Unreleased
 

@@ -50,6 +50,10 @@ core-foundation = "0.10"
 [target.'cfg(target_os = "windows")'.dependencies]
 wasapi = "0.16"
 
+[dev-dependencies]
+# The mock runtime, to check the capability file against the real config.
+tauri = { version = "2", features = ["test"] }
+
 [profile.dev]
 incremental = true
 
