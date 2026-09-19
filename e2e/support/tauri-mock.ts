@@ -103,10 +103,15 @@ export async function installTauriMock(
       },
       invoke(cmd: string, args: Record<string, unknown> = {}) {
         // Every app command is logged so specs can wait for a flow to finish.
+        // Plugin calls get their own log (events aside, they are too chatty).
         if (!cmd.startsWith("plugin:")) {
           const calls = (w.__tauriCalls as string[] | undefined) ?? [];
           calls.push(cmd);
           w.__tauriCalls = calls;
+        } else if (!cmd.startsWith("plugin:event|")) {
+          const calls = (w.__tauriPluginCalls as string[] | undefined) ?? [];
+          calls.push(cmd);
+          w.__tauriPluginCalls = calls;
         }
         // Event plugin — let listen()/emit() work so streaming can be simulated.
         if (cmd === "plugin:event|listen") {

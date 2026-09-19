@@ -29,6 +29,10 @@ audio, meeting detection and launch at login.
   Deleting a note tells you how many tasks go with it.
 - Overdue tasks are highlighted in a note's Tasks tab too, and task
   checkboxes work with the keyboard and screen readers.
+- Images from the web no longer load in notes or summaries, so Note67
+  makes no requests for them, and an AI summary can't use one to send your
+  notes somewhere. Images you paste into a note are stored with it and
+  still show.
 
 ### Fixed
 
@@ -51,6 +55,8 @@ audio, meeting detection and launch at login.
 - Note67's window can reach less of your disk: it reads only your
   recordings and saves only where you choose. It could read and write
   anything in Note67's data folder before, including the notes database.
+- Note67's window has a Content Security Policy, so HTML that ends up in a
+  note, a transcript or an AI summary can't run code.
 
 ## [0.1.27] - Unreleased
 
