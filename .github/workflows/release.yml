@@ -54,10 +54,20 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
+          # This version's section, then any section marked
+          # "## [x.y.z] - Included in <this version>": a version that was
+          # never released on its own reaches users with this one.
           notes=$(awk -v v="$version" '
-            index($0, "## [" v "]") == 1 { found = 1; next }
-            found && /^## / { exit }
-            found { print }
+            /^## / {
+              included = "Included in " v
+              take = index($0, "## [" v "]") == 1
+              if (!take && substr($0, length($0) - length(included) + 1) == included) {
+                take = 1
+                print "## Also in this release"
+              }
+              next
+            }
+            take { print }
           ' CHANGELOG.md)
           if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
             echo "::warning::CHANGELOG.md has no section for $version"

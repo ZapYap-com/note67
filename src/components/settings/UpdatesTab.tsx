@@ -42,7 +42,7 @@ export function UpdatesTab() {
     },
     {
       version: "0.1.27",
-      date: "September 2026",
+      date: "Included in 0.1.28",
       changes: [
         "Fixed the app quitting after a recording when the summary contained Chinese, Japanese or Korean text, or an emoji or em dash in the wrong place",
         "Fixed the app quitting when opening a note that another note mentions near non-English text (the \"unlinked mentions\" panel behind it is removed)",

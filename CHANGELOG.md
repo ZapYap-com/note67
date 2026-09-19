@@ -7,7 +7,7 @@ the people using the app.
 Earlier versions are listed on the
 [GitHub releases page](https://github.com/ZapYap-com/note67/releases).
 
-## [0.1.28] - Unreleased
+## [0.1.28] - 2026-09-19
 
 Cleanup, and fixes to the features Note67 is keeping: tasks, uploaded
 audio, meeting detection and launch at login.
@@ -64,7 +64,7 @@ audio, meeting detection and launch at login.
 - HTML in AI summaries is cleaned before it's shown, so a summary can't
   hide parts of the app, embed a page or send the window somewhere else.
 
-## [0.1.27] - Unreleased
+## [0.1.27] - Included in 0.1.28
 
 A reliability release: fixes for crashes and for ways a recording, its
 transcript or your notes could be lost.

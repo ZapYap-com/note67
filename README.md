@@ -23,7 +23,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - Security — updated the secure-connection library the updater uses for a security advisory
 - About 2,500 lines of unused code and five unused libraries removed
 
-### v0.1.27
+### v0.1.27 (included in 0.1.28)
 
 - Fixed the app quitting after a recording when the summary contained Chinese, Japanese or Korean text, or an emoji or em dash in the wrong place
 - Fixed the app quitting when opening a note that another note mentions near non-English text (the "unlinked mentions" panel behind it is removed)

@@ -79,6 +79,10 @@ release workflow copies it into the GitHub release, and from there into the
 notes the in-app updater shows (Settings > Updates). A tag without a section
 gets a warning and generic notes.
 
+A version that won't be released on its own can keep its section, marked
+`## [0.1.27] - Included in 0.1.28`: the notes for 0.1.28 then include it
+under "Also in this release".
+
 Until the in-app changelog is replaced by a link, also edit
 `src/components/settings/UpdatesTab.tsx` and add a new entry to `recentChanges`:
 
