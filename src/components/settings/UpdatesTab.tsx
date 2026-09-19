@@ -23,6 +23,24 @@ export function UpdatesTab() {
 
   const recentChanges = [
     {
+      version: "0.1.28",
+      date: "September 2026",
+      changes: [
+        "Meeting detection can be turned off in Settings > System - it prompts once per call, never during a recording, and not just because Teams or Discord is open",
+        "The meeting prompt shows even when Note67 is closed to the menu bar, and goes away a couple of minutes after the call ends",
+        "Uploaded audio is transcribed as soon as it's added, and stopping a recording while an upload is transcribing no longer skips the recording's final transcription",
+        "Deleting a task can be undone for a few seconds, subtasks included, and deleting a note tells you how many tasks go with it",
+        "Overdue tasks are highlighted in a note's Tasks tab too, and task checkboxes work with the keyboard and screen readers",
+        "Links in summaries, Settings and first-run setup open in your browser (the Settings and setup links had done nothing since 0.1.22)",
+        "When Retranscribe fails, Note67 says why and keeps the transcript you had",
+        "Fixed Note67's window not coming back after it started at login, and clicking through a task's details marking it as edited",
+        "Security - Note67's window reaches only your recordings and the files you choose to save, and HTML in a note, transcript or AI summary can't run code or send the window elsewhere",
+        "Privacy - images from the web no longer load in notes or summaries, so an AI summary can't use one to send your notes somewhere; images you paste still show",
+        "Security - updated the secure-connection library the updater uses for a security advisory",
+        "About 2,500 lines of unused code and five unused libraries removed",
+      ],
+    },
+    {
       version: "0.1.27",
       date: "September 2026",
       changes: [
