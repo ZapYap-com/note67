@@ -19,7 +19,7 @@ use std::sync::Arc;
 static STARTED_MINIMIZED: AtomicBool = AtomicBool::new(false);
 use tauri::{
     image::Image,
-    menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder},
+    menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     Emitter, Listener, Manager, RunEvent, WindowEvent,
 };
@@ -207,7 +207,7 @@ pub fn run() {
             // Create custom application menu (macOS) with Hide instead of Quit on Cmd+Q
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::PredefinedMenuItem;
+                use tauri::menu::{MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
 
                 let hide_window = MenuItem::with_id(app, "hide_window", "Hide Window", true, Some("CmdOrCtrl+Q"))?;
                 let quit = MenuItem::with_id(app, "quit_app", "Quit Note67", true, Some("CmdOrCtrl+Shift+Q"))?;

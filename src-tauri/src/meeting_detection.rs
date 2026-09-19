@@ -2,6 +2,9 @@
 //! Works from on-screen window titles (Google Meet, Zoom, Teams, Slack
 //! huddles), which macOS only exposes with Screen Recording permission.
 
+// Elsewhere nothing polls, so the detector is compiled (and tested) unused.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -197,7 +200,6 @@ pub fn start_meeting_detection(app: &AppHandle) {
 }
 
 /// Tell the frontend about meetings that started or ended.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn report(app: &AppHandle, tick: Tick) {
     for app_name in tick.gone {
         let _ = app.emit("meeting-ended", app_name);
