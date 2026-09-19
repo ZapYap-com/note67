@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
+import { aiRehypePlugins } from "../utils/aiMarkdown";
 
 interface Message {
   id: string;
@@ -318,7 +318,7 @@ export function AISidebar({
                 <div className="max-w-none overflow-hidden" style={{ color: "var(--color-text)" }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
+                    rehypePlugins={aiRehypePlugins}
                     components={{
                       h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h1>,
                       h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h2>,
@@ -356,7 +356,7 @@ export function AISidebar({
                 <div className="max-w-none overflow-hidden" style={{ color: "var(--color-text)" }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
+                    rehypePlugins={aiRehypePlugins}
                     components={{
                       h1: ({ children }) => <h1 className="text-base font-semibold mb-2 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h1>,
                       h2: ({ children }) => <h2 className="text-sm font-semibold mb-1.5 mt-2 break-words" style={{ color: "var(--color-text)" }}>{children}</h2>,

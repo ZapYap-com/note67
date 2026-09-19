@@ -41,6 +41,8 @@ audio, meeting detection and launch at login.
 - After Note67 started at login, its window couldn't be brought back by
   reloading.
 - Clicking through a task's details no longer marks it as edited.
+- Clicking a link in a summary opened the website inside Note67's window,
+  in place of the app. The window now stays on Note67.
 - When Retranscribe fails, Note67 now says why (the transcript you had is
   kept), and imported files are no longer marked as transcribed when their
   new transcript was discarded. Errors about imported files say whether
@@ -57,6 +59,8 @@ audio, meeting detection and launch at login.
   anything in Note67's data folder before, including the notes database.
 - Note67's window has a Content Security Policy, so HTML that ends up in a
   note, a transcript or an AI summary can't run code.
+- HTML in AI summaries is cleaned before it's shown, so a summary can't
+  hide parts of the app, embed a page or send the window somewhere else.
 
 ## [0.1.27] - Unreleased
 

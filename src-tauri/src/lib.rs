@@ -5,6 +5,7 @@ mod db;
 #[cfg(test)]
 mod frontend_access_tests;
 mod meeting_detection;
+mod navigation;
 mod transcription;
 
 use commands::{init_transcription_state, AiState, AudioState};
@@ -162,6 +163,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(navigation::guard())
         .setup(|app| {
             // Check if app was launched with --minimized flag (from autostart)
             let args: Vec<String> = std::env::args().collect();
