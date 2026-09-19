@@ -42,6 +42,15 @@ describe("aiRehypePlugins", () => {
     expect(html.textContent).toContain("Pricing moves to three tiers.");
   });
 
+  it("opens links in the browser, titled with where they go", () => {
+    const html = renderAi("See [the pricing page](https://example.com/pricing).");
+    const a = html.querySelector("a");
+    expect(a?.getAttribute("href")).toBe("https://example.com/pricing");
+    expect(a?.getAttribute("target")).toBe("_blank");
+    expect(a?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(a?.getAttribute("title")).toBe("https://example.com/pricing");
+  });
+
   it("keeps the formatting models write", () => {
     const html = renderAi(
       [

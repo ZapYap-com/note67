@@ -21,6 +21,7 @@ use tauri_plugin_fs::FsExt;
 fn app() -> App<MockRuntime> {
     let app = mock_builder()
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .build(crate::app_context())
         .expect("the app builds on the mock runtime");
     // The window the capability is granted to. The mock builder doesn't open
@@ -79,6 +80,17 @@ fn write(app: &App<MockRuntime>, path: &Path) -> Result<(), String> {
         "plugin:fs|write_file",
         InvokeBody::Raw(b"# Notes".to_vec()),
         headers,
+    )
+}
+
+/// Sends an opener command. Every probe is refused before anything opens,
+/// and names nothing that exists, in case it isn't.
+fn opener(app: &App<MockRuntime>, cmd: &str, args: serde_json::Value) -> Result<(), String> {
+    invoke(
+        app,
+        &format!("plugin:opener|{cmd}"),
+        InvokeBody::Json(args),
+        HeaderMap::new(),
     )
 }
 
@@ -153,4 +165,41 @@ fn the_asset_protocol_serves_only_recordings_and_images() {
     assert!(scope.is_allowed(data.join("attachments/n1/pasted.png")));
     assert!(!scope.is_allowed(data.join("note67.db")));
     assert!(!scope.is_allowed(data.join("models/ggml-base.en.bin")));
+}
+
+#[test]
+fn links_open_only_as_web_or_mail_links_in_the_default_browser() {
+    let app = app();
+    // Refused by the URL scope, so the command itself is granted.
+    let refused_url = |result: &Result<(), String>| matches!(result, Err(e) if e.contains("Not allowed to open url"));
+
+    for url in ["file:///note67-probe-missing.txt", "note67-probe://open"] {
+        let result = opener(&app, "open_url", serde_json::json!({ "url": url }));
+        assert!(refused_url(&result), "{url}: {result:?}");
+    }
+    // Not even a web link, with a program other than the default browser.
+    let result = opener(
+        &app,
+        "open_url",
+        serde_json::json!({ "url": "https://example.com/", "with": "note67-probe-no-such-app" }),
+    );
+    assert!(refused_url(&result), "{result:?}");
+
+    // Opening files, or showing them in Finder, isn't granted at all.
+    for (cmd, args) in [
+        (
+            "open_path",
+            serde_json::json!({ "path": "/note67-probe-missing.txt" }),
+        ),
+        (
+            "reveal_item_in_dir",
+            serde_json::json!({ "paths": ["/note67-probe-missing.txt"] }),
+        ),
+    ] {
+        let result = opener(&app, cmd, args);
+        assert!(
+            matches!(&result, Err(e) if e.contains(&format!("opener.{cmd} not allowed"))),
+            "{cmd}: {result:?}"
+        );
+    }
 }

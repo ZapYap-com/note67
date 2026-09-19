@@ -163,6 +163,15 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Opens links in the default browser. Its own click script is off:
+        // it also opens any link on Shift-click, which in the note editor
+        // means extending a selection. src/utils/externalLinks.ts opens only
+        // target="_blank" links instead.
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .plugin(navigation::guard())
         .setup(|app| {
             // Check if app was launched with --minimized flag (from autostart)

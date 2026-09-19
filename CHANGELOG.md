@@ -41,8 +41,10 @@ audio, meeting detection and launch at login.
 - After Note67 started at login, its window couldn't be brought back by
   reloading.
 - Clicking through a task's details no longer marks it as edited.
-- Clicking a link in a summary opened the website inside Note67's window,
-  in place of the app. The window now stays on Note67.
+- Links in summaries open in your browser. They used to load the website
+  inside Note67's window, in place of the app.
+- The links in Settings and in first-run setup (such as the Ollama
+  download) open in your browser again. They had done nothing since 0.1.22.
 - When Retranscribe fails, Note67 now says why (the transcript you had is
   kept), and imported files are no longer marked as transcribed when their
   new transcript was discarded. Errors about imported files say whether
