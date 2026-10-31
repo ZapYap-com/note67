@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_fs::FsExt;
 use uuid::Uuid;
 
 use crate::audio::converter::{
@@ -15,6 +16,7 @@ use crate::commands::transcription::{
 use crate::transcription::should_skip_segment;
 use crate::db::models::{NewTranscriptSegment, UploadedAudio};
 use crate::db::Database;
+use crate::paths::validate_note_id;
 
 /// Upload and convert an audio file for a note
 ///
@@ -27,7 +29,15 @@ pub async fn upload_audio(
     speaker_label: Option<String>,
     db: State<'_, Database>,
 ) -> Result<UploadedAudio, String> {
+    validate_note_id(&note_id)?;
     let source = PathBuf::from(&source_path);
+
+    // Only a file the user picked: the open dialog adds each pick to the fs
+    // scope. Otherwise the webview could copy any audio on disk into the
+    // recordings folder, which it can read.
+    if !app.fs_scope().is_allowed(&source) {
+        return Err("Choose the audio file to import".to_string());
+    }
 
     // Validate file exists
     if !source.exists() {

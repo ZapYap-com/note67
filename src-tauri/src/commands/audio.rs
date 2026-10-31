@@ -10,6 +10,7 @@ use crate::audio::{
     SystemAudioCapture,
 };
 use crate::db::Database;
+use crate::paths::validate_note_id;
 
 /// Result of dual recording containing paths to all recorded files
 #[derive(Debug, Clone, Serialize)]
@@ -47,6 +48,8 @@ pub fn start_recording(
     state: State<AudioState>,
     note_id: String,
 ) -> Result<String, String> {
+    validate_note_id(&note_id)?;
+
     ensure_no_session(&state.recording)?;
 
     // Get app data directory for storing recordings
@@ -247,6 +250,8 @@ pub fn stop_dual_recording_with_segments(
     db: State<Database>,
     note_id: String,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     // Read the open segment before stop_recording resets the session: it
     // zeroes current_segment_db_id, so reading the id afterwards meant the
     // final segment's duration was never saved.
@@ -408,6 +413,8 @@ pub fn rebuild_note_playback(
     db: State<Database>,
     note_id: String,
 ) -> Result<String, String> {
+    validate_note_id(&note_id)?;
+
     let path = build_note_playback(&app, &db, &note_id)
         .ok_or_else(|| "Could not rebuild playback from this note's recordings".to_string())?;
     db.set_note_audio_path(&note_id, &path)
@@ -530,6 +537,8 @@ pub fn resume_dual_recording(
     note_id: String,
     capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     let current_phase = state.recording.get_phase();
     if current_phase != RecordingPhase::Paused {
         return Err("Recording is not paused".to_string());
@@ -605,6 +614,8 @@ pub fn continue_note_recording(
     note_id: String,
     capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     ensure_no_session(&state.recording)?;
 
     // First, reopen the note (clear ended_at)
@@ -703,6 +714,8 @@ pub fn start_dual_recording_with_segments(
     note_id: String,
     capture_system: Option<bool>,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     ensure_no_session(&state.recording)?;
 
     let app_data_dir = app
@@ -847,6 +860,8 @@ pub fn start_system_only_recording_with_segments(
     db: State<Database>,
     note_id: String,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     ensure_no_session(&state.recording)?;
 
     let app_data_dir = app
@@ -967,6 +982,8 @@ pub fn resume_system_only_recording(
     db: State<Database>,
     note_id: String,
 ) -> Result<DualRecordingResult, String> {
+    validate_note_id(&note_id)?;
+
     if state.recording.get_phase() != RecordingPhase::Paused {
         return Err("Recording is not paused".to_string());
     }

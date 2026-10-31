@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::Utc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 use crate::audio::converter::get_audio_duration_ms;
@@ -9,6 +9,18 @@ use crate::commands::links::{sync_note_links_internal, update_incoming_links_int
 use crate::commands::tags::sync_note_tags_internal;
 use crate::db::models::{AudioSegment, NewNote, Note, UpdateNote};
 use crate::db::Database;
+use crate::paths::is_inside;
+
+/// The folder every note's audio lives in. `delete_note` removes the file at
+/// a note's audio_path, so a path from anywhere else is never stored or
+/// deleted.
+fn recordings_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
+    app_handle
+        .path()
+        .app_data_dir()
+        .map(|dir| dir.join("recordings"))
+        .map_err(|e| format!("Failed to get app data dir: {}", e))
+}
 
 #[tauri::command]
 pub fn create_note(
@@ -280,10 +292,17 @@ fn search_notes_fts(conn: &rusqlite::Connection, query: &str) -> rusqlite::Resul
 
 #[tauri::command]
 pub fn end_note(
+    app_handle: AppHandle,
     db: State<Database>,
     id: String,
     audio_path: Option<String>,
 ) -> Result<(), String> {
+    if let Some(path) = audio_path.as_deref().filter(|p| !p.is_empty())
+        && !is_inside(&recordings_dir(&app_handle)?, &PathBuf::from(path))
+    {
+        return Err("Audio must be in the recordings folder".to_string());
+    }
+
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now();
 
@@ -317,12 +336,14 @@ pub fn delete_note(
     conn.execute("DELETE FROM notes WHERE id = ?1", [&id])
         .map_err(|e| e.to_string())?;
 
-    // Delete the audio file if it exists
+    // Delete the audio file if it exists. Only ever inside the recordings
+    // folder: notes saved before end_note checked the path could hold any.
     if let Some(path) = audio_path
         && !path.is_empty()
+        && recordings_dir(&app_handle).is_ok_and(|dir| is_inside(&dir, &PathBuf::from(&path)))
         && let Err(e) = std::fs::remove_file(&path)
     {
-        eprintln!("Failed to delete audio file {}: {}", path, e);
+        eprintln!("Failed to delete the note's audio file: {}", e);
     }
 
     // Emit event for real-time updates

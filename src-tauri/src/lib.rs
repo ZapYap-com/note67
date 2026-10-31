@@ -6,6 +6,7 @@ mod db;
 mod frontend_access_tests;
 mod meeting_detection;
 mod navigation;
+mod paths;
 mod transcription;
 
 use commands::{init_transcription_state, AiState, AudioState};
