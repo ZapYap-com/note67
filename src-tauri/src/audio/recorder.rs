@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Instant;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat};
+use cpal::{FromSample, SampleFormat, SizedSample};
 use hound::{WavSpec, WavWriter};
 use serde::{Deserialize, Serialize};
 
@@ -232,7 +232,7 @@ fn run_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Result<(),
         .ok_or(AudioError::NoInputDevice)?;
 
     let config = device.default_input_config()?;
-    let sample_rate = config.sample_rate().0;
+    let sample_rate = config.sample_rate();
     let channels = config.channels();
 
     // Store sample rate and channels for live transcription
@@ -254,46 +254,27 @@ fn run_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Result<(),
     let writer = WavWriter::create(&output_path, spec)?;
     let writer = Arc::new(std::sync::Mutex::new(Some(writer)));
 
-    let state_for_callback = state.clone();
-    let writer_clone = writer.clone();
-
-    let err_fn = |err| eprintln!("Audio stream error: {}", err);
-
+    // cpal 0.18 can pick a 24- or 32-bit integer format over 16-bit when the
+    // device has no f32, so every PCM format is accepted, not just the three
+    // older cpal defaulted to.
+    let stream_config = config.config();
     let stream = match config.sample_format() {
-        SampleFormat::F32 => device.build_input_stream(
-            &config.into(),
-            move |data: &[f32], _| {
-                process_audio(data, &state_for_callback, &writer_clone);
-            },
-            err_fn,
-            None,
-        )?,
-        SampleFormat::I16 => {
-            let state_for_callback = state.clone();
-            let writer_clone = writer.clone();
-            device.build_input_stream(
-                &config.into(),
-                move |data: &[i16], _| {
-                    let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                    process_audio(&float_data, &state_for_callback, &writer_clone);
-                },
-                err_fn,
-                None,
-            )?
+        SampleFormat::F32 => build_input_stream::<f32>(&device, stream_config, &state, &writer)?,
+        SampleFormat::F64 => build_input_stream::<f64>(&device, stream_config, &state, &writer)?,
+        SampleFormat::I8 => build_input_stream::<i8>(&device, stream_config, &state, &writer)?,
+        SampleFormat::I16 => build_input_stream::<i16>(&device, stream_config, &state, &writer)?,
+        SampleFormat::I24 => {
+            build_input_stream::<cpal::I24>(&device, stream_config, &state, &writer)?
         }
-        SampleFormat::U16 => {
-            let state_for_callback = state.clone();
-            let writer_clone = writer.clone();
-            device.build_input_stream(
-                &config.into(),
-                move |data: &[u16], _| {
-                    let float_data: Vec<f32> = data.iter().map(|&s| s.to_float_sample()).collect();
-                    process_audio(&float_data, &state_for_callback, &writer_clone);
-                },
-                err_fn,
-                None,
-            )?
+        SampleFormat::I32 => build_input_stream::<i32>(&device, stream_config, &state, &writer)?,
+        SampleFormat::I64 => build_input_stream::<i64>(&device, stream_config, &state, &writer)?,
+        SampleFormat::U8 => build_input_stream::<u8>(&device, stream_config, &state, &writer)?,
+        SampleFormat::U16 => build_input_stream::<u16>(&device, stream_config, &state, &writer)?,
+        SampleFormat::U24 => {
+            build_input_stream::<cpal::U24>(&device, stream_config, &state, &writer)?
         }
+        SampleFormat::U32 => build_input_stream::<u32>(&device, stream_config, &state, &writer)?,
+        SampleFormat::U64 => build_input_stream::<u64>(&device, stream_config, &state, &writer)?,
         _ => return Err(AudioError::UnsupportedFormat),
     };
 
@@ -318,10 +299,37 @@ fn run_recording(state: Arc<RecordingState>, output_path: PathBuf) -> Result<(),
     Ok(())
 }
 
+type SharedWavWriter = Arc<std::sync::Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>;
+
+/// An input stream that hands the device's samples to `process_audio` as f32.
+fn build_input_stream<T>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    state: &Arc<RecordingState>,
+    writer: &SharedWavWriter,
+) -> Result<cpal::Stream, AudioError>
+where
+    T: SizedSample,
+    f32: FromSample<T>,
+{
+    let state = state.clone();
+    let writer = writer.clone();
+    let stream = device.build_input_stream(
+        config,
+        move |data: &[T], _| {
+            let float_data: Vec<f32> = data.iter().map(|&s| s.to_sample::<f32>()).collect();
+            process_audio(&float_data, &state, &writer);
+        },
+        |err| eprintln!("Audio stream error: {}", err),
+        None,
+    )?;
+    Ok(stream)
+}
+
 fn process_audio(
     data: &[f32],
     state: &Arc<RecordingState>,
-    writer: &Arc<std::sync::Mutex<Option<WavWriter<std::io::BufWriter<std::fs::File>>>>>,
+    writer: &SharedWavWriter,
 ) {
     if !state.is_recording.load(Ordering::SeqCst) {
         return;

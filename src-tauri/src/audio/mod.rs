@@ -60,17 +60,10 @@ pub enum AudioError {
     #[error("Permission denied for audio capture: {0}")]
     PermissionDenied(String),
 
+    /// cpal 0.18 reports every device, config, build and play failure as
+    /// one error type.
     #[error("Audio device error: {0}")]
-    DeviceError(#[from] cpal::DevicesError),
-
-    #[error("Audio stream error: {0}")]
-    StreamError(#[from] cpal::BuildStreamError),
-
-    #[error("Audio play error: {0}")]
-    PlayError(#[from] cpal::PlayStreamError),
-
-    #[error("Default stream config error: {0}")]
-    DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+    DeviceError(#[from] cpal::Error),
 
     #[error("WAV file error: {0}")]
     WavError(#[from] hound::Error),

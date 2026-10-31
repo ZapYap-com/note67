@@ -29,7 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
-cpal = "0.15"
+cpal = "0.18"
 hound = "3.5"
 symphonia = { version = "0.6", features = ["mp3", "aac", "alac", "flac", "ogg", "wav", "isomp4", "mkv"] }
 whisper-rs = "0.13"
