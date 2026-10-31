@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use hound::{WavSpec, WavWriter};
-use wasapi::{Device, Direction, SampleType, ShareMode};
+use wasapi::{Device, DeviceEnumerator, Direction, SampleType, StreamMode};
 
 use super::system_audio::{SystemAudioCapture, SystemAudioResult};
 use crate::audio::AudioError;
@@ -70,9 +70,11 @@ fn get_default_render_device() -> Result<Device, AudioError> {
     ensure_com_initialized();
 
     // Use get_default_device to get the actual Windows default, not just index 0
-    wasapi::get_default_device(&Direction::Render).map_err(|e| {
-        AudioError::PermissionDenied(format!("Failed to get default device: {}", e))
-    })
+    DeviceEnumerator::new()
+        .and_then(|enumerator| enumerator.get_default_device(&Direction::Render))
+        .map_err(|e| {
+            AudioError::PermissionDenied(format!("Failed to get default device: {}", e))
+        })
 }
 
 /// Downsample audio from source rate to 16kHz mono for Whisper
@@ -152,20 +154,21 @@ impl WindowsSystemAudioCapture {
         let channels = wave_format.get_nchannels();
 
         // Get the default device period for buffer sizing
-        let default_period = audio_client.get_periods().map_err(|e| {
+        let (default_period, _min_period) = audio_client.get_device_period().map_err(|e| {
             AudioError::PermissionDenied(format!("Failed to get device periods: {}", e))
         })?;
 
-        // Initialize the audio client in loopback mode with event callback
-        // Direction::Capture adds AUDCLNT_STREAMFLAGS_EVENTCALLBACK which requires an event handle
+        // Initialize the audio client in loopback mode: capturing from a
+        // render device in shared mode is loopback. Events mode adds
+        // AUDCLNT_STREAMFLAGS_EVENTCALLBACK, which requires an event handle.
+        // These are the flags wasapi 0.16 set here (its last argument, once
+        // commented as enabling loopback, was autoconvert).
+        let stream_mode = StreamMode::EventsShared {
+            autoconvert: true,
+            buffer_duration_hns: default_period,
+        };
         audio_client
-            .initialize_client(
-                &wave_format,
-                default_period.0, // Use default period
-                &Direction::Capture, // Need Capture to get capture client
-                &ShareMode::Shared,
-                true, // Enable loopback mode
-            )
+            .initialize_client(&wave_format, &Direction::Capture, &stream_mode)
             .map_err(|e| {
                 AudioError::PermissionDenied(format!("Failed to initialize audio client: {}", e))
             })?;
@@ -226,7 +229,7 @@ impl WindowsSystemAudioCapture {
             thread::sleep(Duration::from_millis(10));
 
             // Read available frames
-            if let Ok(Some(frames)) = capture_client.get_next_nbr_frames()
+            if let Ok(Some(frames)) = capture_client.get_next_packet_size()
                 && frames > 0
             {
                 // Read the audio data into the buffer

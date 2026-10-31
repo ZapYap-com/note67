@@ -53,7 +53,7 @@ core-foundation = "0.10"
 
 # Windows-specific dependencies for system audio capture via WASAPI loopback
 [target.'cfg(target_os = "windows")'.dependencies]
-wasapi = "0.16"
+wasapi = "0.26"
 
 [dev-dependencies]
 # The mock runtime, to check the capability file against the real config.
