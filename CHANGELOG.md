@@ -7,6 +7,50 @@ the people using the app.
 Earlier versions are listed on the
 [GitHub releases page](https://github.com/ZapYap-com/note67/releases).
 
+## [0.1.29] - Unreleased
+
+A security release, and every library Note67 is built on brought up to
+date.
+
+### Security
+
+- Note67's window could ask the app to read, write or delete files outside
+  Note67's own folders, for example to delete a folder in your home
+  directory or save a file somewhere it would run at login. Only HTML that
+  managed to run code in the window could have done this. Each of those
+  requests is now checked: a note's recordings and images stay in Note67's
+  folders, deleting a note deletes only its own recording, and importing
+  audio reads only the file you picked.
+- Transcription models are checked against their published checksum after
+  downloading. A failed download used to be saved as the model, and the
+  model then counted as downloaded.
+- The editor components that handle pasted content are updated for a
+  cross-site scripting advisory, along with the HTML sanitizer they use.
+- The secure-connection libraries (rustls) are updated for advisories that
+  could weaken connections, and the updater's archive library for unsafe
+  extraction.
+
+### Changed
+
+- Only images can be pasted into a note: PNG, JPEG, GIF, WebP, BMP and
+  AVIF. Other files, including SVG, are refused.
+
+### Fixed
+
+- Microphones that deliver only 24- or 32-bit audio can record. They used
+  to fail with an unsupported-format error.
+- A transcript no longer fails when Whisper splits a character, such as
+  Chinese, Japanese, Korean or an emoji, across two lines.
+- Imported MP3 and Ogg files convert to their exact length, without the
+  encoder's padding at the end.
+- Saving a PDF export that fails now says so, instead of waiting forever.
+
+### Under the hood
+
+- Tauri 2.12, SQLite 3.54, a newer whisper.cpp, and updated audio
+  recording, decoding and Windows system-audio libraries.
+- Note67 no longer bundles OpenSSL: all secure connections use one library.
+
 ## [0.1.28] - 2026-09-19
 
 Cleanup, and fixes to the features Note67 is keeping: tasks, uploaded

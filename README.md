@@ -8,7 +8,18 @@
 
 A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
 
-## What's New (v0.1.28)
+## What's New (v0.1.29)
+
+- Security — Note67's window can no longer make the app read, write or delete files outside Note67's own folders; deleting a note deletes only its own recording, and importing audio reads only the file you picked
+- Security — transcription models are checked against their published checksum after downloading, and a failed download is no longer saved as the model
+- Security — updated the editor's paste handling and HTML sanitizer for a cross-site scripting advisory, and the secure-connection and updater libraries for their advisories
+- Only images (PNG, JPEG, GIF, WebP, BMP, AVIF) can be pasted into a note; other files, including SVG, are refused
+- Microphones that deliver only 24- or 32-bit audio can record
+- Fixed a transcript failing when Whisper splits a Chinese, Japanese or Korean character or an emoji across two lines
+- Imported MP3 and Ogg files convert to their exact length, and a PDF export that fails to save now says so
+- Updated Tauri, SQLite, whisper.cpp and the audio libraries; OpenSSL is no longer bundled
+
+### v0.1.28
 
 - Meeting detection can be turned off in Settings > System — it prompts once per call, never during a recording, and not just because Teams or Discord is open
 - The meeting prompt shows even when Note67 is closed to the menu bar, and goes away a couple of minutes after the call ends
