@@ -24,7 +24,7 @@ tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11"
 serde_json = "1"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 thiserror = "2"
