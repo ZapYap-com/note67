@@ -105,23 +105,16 @@ impl Transcriber {
             .map_err(|e| TranscriptionError::TranscriptionFailed(e.to_string()))?;
 
         // Extract segments
-        let num_segments = state.full_n_segments().map_err(|e| {
-            TranscriptionError::TranscriptionFailed(e.to_string())
-        })?;
-
         let mut segments = Vec::new();
         let mut full_text = String::new();
 
-        for i in 0..num_segments {
-            let start_time = state.full_get_segment_t0(i).map_err(|e| {
-                TranscriptionError::TranscriptionFailed(e.to_string())
-            })? as f64 / 100.0; // Convert centiseconds to seconds
+        for segment in state.as_iter() {
+            let start_time = segment.start_timestamp() as f64 / 100.0; // Convert centiseconds to seconds
+            let end_time = segment.end_timestamp() as f64 / 100.0;
 
-            let end_time = state.full_get_segment_t1(i).map_err(|e| {
-                TranscriptionError::TranscriptionFailed(e.to_string())
-            })? as f64 / 100.0;
-
-            let text = state.full_get_segment_text(i).map_err(|e| {
+            // Lossy: Whisper can split a multi-byte character across two
+            // segments, which shouldn't fail the whole transcript.
+            let text = segment.to_str_lossy().map_err(|e| {
                 TranscriptionError::TranscriptionFailed(e.to_string())
             })?;
 
@@ -142,11 +135,7 @@ impl Transcriber {
 
         // The language Whisper actually used: the requested one, or what it
         // detected when asked to auto-detect.
-        let language = state
-            .full_lang_id_from_state()
-            .ok()
-            .and_then(get_lang_str)
-            .map(str::to_string);
+        let language = get_lang_str(state.full_lang_id_from_state()).map(str::to_string);
 
         Ok(TranscriptionResult {
             segments,

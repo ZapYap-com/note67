@@ -32,7 +32,7 @@ uuid = { version = "1", features = ["v4"] }
 cpal = "0.18"
 hound = "3.5"
 symphonia = { version = "0.6", features = ["mp3", "aac", "alac", "flac", "ogg", "wav", "isomp4", "mkv"] }
-whisper-rs = "0.13"
+whisper-rs = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs", "macros", "time"] }
 # The defaults would add aws-lc-rs as a second TLS crypto backend (a C
 # build); use ring, like Tauri and its updater. lib.rs installs it.
