@@ -7,7 +7,7 @@ the people using the app.
 Earlier versions are listed on the
 [GitHub releases page](https://github.com/ZapYap-com/note67/releases).
 
-## [0.1.29] - Unreleased
+## [0.1.29] - 2026-11-01
 
 A security release, and every library Note67 is built on brought up to
 date.
