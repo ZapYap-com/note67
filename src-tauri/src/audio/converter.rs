@@ -6,12 +6,13 @@
 use std::fs::File;
 use std::path::Path;
 
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
-use symphonia::core::formats::FormatOptions;
+use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::errors::Error as SymphoniaError;
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 use super::AudioError;
 
@@ -19,7 +20,7 @@ use super::AudioError;
 /// asks the backend for this list, so the two can't disagree again (it offered
 /// .wma, which was always rejected, and hid .mp4 and .mkv, which work).
 ///
-/// No .webm: it almost always carries Opus, which Symphonia 0.5 can't decode.
+/// No .webm: it almost always carries Opus, which Symphonia 0.6 can't decode.
 /// .ogg stays because Vorbis decodes; an Opus .ogg gets `OPUS_UNSUPPORTED`.
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "mp3", "m4a", "aac", "flac", "ogg", "wav", "mkv", "mp4",
@@ -54,8 +55,8 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
     // Probe the format
     let format_opts = FormatOptions::default();
     let metadata_opts = MetadataOptions::default();
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &format_opts, &metadata_opts)
+    let mut format = symphonia::default::get_probe()
+        .probe(&hint, mss, format_opts, metadata_opts)
         .map_err(|e| {
             AudioError::IoError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -63,13 +64,20 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
             ))
         })?;
 
-    let mut format = probed.format;
-
     // Find the first audio track
-    let track = format
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+    let track = format.default_track(TrackType::Audio).ok_or_else(|| {
+        AudioError::IoError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "No audio track found",
+        ))
+    })?;
+
+    let track_id = track.id;
+    let codec_params = track
+        .codec_params
+        .as_ref()
+        .and_then(|p| p.audio())
+        .cloned()
         .ok_or_else(|| {
             AudioError::IoError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -77,17 +85,14 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
             ))
         })?;
 
-    let track_id = track.id;
-    let codec_params = track.codec_params.clone();
-
-    if codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
+    if codec_params.codec == CODEC_ID_OPUS {
         return Err(AudioError::UnsupportedCodec(OPUS_UNSUPPORTED.to_string()));
     }
 
     // Create decoder
-    let decoder_opts = DecoderOptions::default();
+    let decoder_opts = AudioDecoderOptions::default();
     let mut decoder = symphonia::default::get_codecs()
-        .make(&codec_params, &decoder_opts)
+        .make_audio_decoder(&codec_params, &decoder_opts)
         .map_err(|_| {
             AudioError::UnsupportedCodec(
                 "This file's audio codec isn't supported. Convert it to m4a or mp3 and upload it again."
@@ -97,26 +102,28 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
 
     // Collect all samples
     let mut all_samples: Vec<f32> = Vec::new();
-    let mut sample_buf: Option<SampleBuffer<f32>> = None;
-    let mut decoded_spec: Option<symphonia::core::audio::SignalSpec> = None;
+    let mut packet_samples: Vec<f32> = Vec::new();
+    let mut decoded_spec: Option<(u32, usize)> = None;
 
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
-            Err(symphonia::core::errors::Error::IoError(ref e))
-                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                break; // End of stream
-            }
-            Err(e) => {
-                // Log but continue on decode errors
+            Ok(Some(packet)) => packet,
+            Ok(None) => break, // End of stream
+            Err(SymphoniaError::DecodeError(e)) => {
+                // A damaged packet: skip it and keep going
                 eprintln!("Error reading packet: {}", e);
                 continue;
+            }
+            // Anything else (I/O, reset) won't get better on the next read;
+            // keep what decoded so far.
+            Err(e) => {
+                eprintln!("Error reading packet: {}", e);
+                break;
             }
         };
 
         // Skip packets from other tracks
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
 
@@ -129,19 +136,13 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
             }
         };
 
-        // Initialize sample buffer on first packet
-        if sample_buf.is_none() {
-            let spec = *decoded.spec();
-            decoded_spec = Some(spec);
-            let capacity = decoded.capacity() as u64;
-            sample_buf = Some(SampleBuffer::new(capacity, spec));
+        if decoded_spec.is_none() {
+            let spec = decoded.spec();
+            decoded_spec = Some((spec.rate(), spec.channels().count()));
         }
 
-        // Copy samples to buffer
-        if let Some(buf) = &mut sample_buf {
-            buf.copy_interleaved_ref(decoded);
-            all_samples.extend_from_slice(buf.samples());
-        }
+        decoded.copy_to_vec_interleaved(&mut packet_samples);
+        all_samples.extend_from_slice(&packet_samples);
     }
 
     if all_samples.is_empty() {
@@ -155,11 +156,10 @@ pub fn convert_to_wav(input_path: &Path, output_path: &Path) -> Result<(), Audio
     // container claims. An MP4 track often doesn't state its channel count, and
     // the old fallback of 2 averaged a mono recording's samples in pairs: a
     // 5 s mono voice memo came out 2.5 s long, at double speed.
-    let Some(spec) = decoded_spec else {
+    let Some((source_sample_rate, channels)) = decoded_spec else {
         return Err(AudioError::UnsupportedFormat);
     };
-    let channels = spec.channels.count().max(1);
-    let source_sample_rate = spec.rate;
+    let channels = channels.max(1);
 
     // Convert to mono if stereo (average channels)
     let mono_samples: Vec<f32> = if channels > 1 {
@@ -249,8 +249,8 @@ pub fn get_audio_duration_ms(path: &Path) -> Result<i64, AudioError> {
     let format_opts = FormatOptions::default();
     let metadata_opts = MetadataOptions::default();
 
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &format_opts, &metadata_opts)
+    let format = symphonia::default::get_probe()
+        .probe(&hint, mss, format_opts, metadata_opts)
         .map_err(|e| {
             AudioError::IoError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -258,23 +258,24 @@ pub fn get_audio_duration_ms(path: &Path) -> Result<i64, AudioError> {
             ))
         })?;
 
-    let format = probed.format;
-
     // Find the first audio track
-    if let Some(track) = format.tracks().first() {
-        if let Some(n_frames) = track.codec_params.n_frames {
-            let sample_rate = track.codec_params.sample_rate.unwrap_or(44100) as u64;
-            let duration_ms = (n_frames * 1000) / sample_rate;
-            return Ok(duration_ms as i64);
+    if let Some(track) = format.default_track(TrackType::Audio) {
+        // The container's duration, in its own timebase
+        if let (Some(time_base), Some(duration)) = (track.time_base, track.duration)
+            && let Some(time) = time_base.calc_duration(duration)
+        {
+            return Ok(time.as_millis() as i64);
         }
 
-        // Fallback: use time base if available
-        if let Some(time_base) = track.codec_params.time_base
-            && let Some(n_frames) = track.codec_params.n_frames
-        {
-            let duration_secs =
-                (n_frames as f64 * time_base.numer as f64) / time_base.denom as f64;
-            return Ok((duration_secs * 1000.0) as i64);
+        // Fallback: frame count at the codec's sample rate
+        if let Some(n_frames) = track.num_frames {
+            let sample_rate = track
+                .codec_params
+                .as_ref()
+                .and_then(|p| p.audio())
+                .and_then(|p| p.sample_rate)
+                .unwrap_or(44100) as u64;
+            return Ok(((n_frames * 1000) / sample_rate) as i64);
         }
     }
 
