@@ -48,7 +48,7 @@ tauri-plugin-opener = "2.5.5"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSArray", "NSDictionary", "NSNotification", "NSThread"] }
 block2 = "0.6"
-core-graphics = "0.24"
+core-graphics = "0.25"
 core-foundation = "0.10"
 
 # Windows-specific dependencies for system audio capture via WASAPI loopback

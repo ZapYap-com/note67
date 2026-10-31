@@ -233,7 +233,7 @@ mod macos {
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFGetTypeID, TCFType};
     use core_foundation::string::{CFString, CFStringGetTypeID};
-    use core_graphics::display::{
+    use core_graphics::window::{
         CGWindowListCopyWindowInfo, kCGNullWindowID, kCGWindowListOptionOnScreenOnly,
     };
 
