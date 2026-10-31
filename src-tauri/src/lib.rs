@@ -157,7 +157,16 @@ pub(crate) fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// reqwest is built without a TLS crypto provider (see Cargo.toml), so
+/// install ring, the one Tauri's updater uses, before any client is made.
+pub(crate) fn install_tls_provider() {
+    // Errs only if a provider is already installed, which is fine.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 pub fn run() {
+    install_tls_provider();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())

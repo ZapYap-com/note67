@@ -52,6 +52,13 @@ struct GenerateResponse {
     response: String,
 }
 
+/// Ollama is plain http on localhost, but reqwest still needs the TLS
+/// provider to build a client; tests construct one without `run()`.
+fn http_client() -> reqwest::Client {
+    crate::install_tls_provider();
+    reqwest::Client::new()
+}
+
 pub struct OllamaClient {
     client: reqwest::Client,
     base_url: String,
@@ -60,7 +67,7 @@ pub struct OllamaClient {
 impl OllamaClient {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: http_client(),
             base_url: OLLAMA_BASE_URL.to_string(),
         }
     }
@@ -69,7 +76,7 @@ impl OllamaClient {
     #[cfg(test)]
     pub fn with_base_url(base_url: &str) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: http_client(),
             base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
