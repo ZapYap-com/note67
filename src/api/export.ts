@@ -26,7 +26,7 @@ function loadPdfMake(): Promise<PdfMakeModule> {
     ]).then(([pdfMakeModule, pdfFontsModule]) => {
       const pdfMake = interop<PdfMakeModule>(pdfMakeModule);
       // pdfmake's vfs_fonts module exports the font map directly (no `.vfs` wrapper).
-      pdfMake.vfs = interop<VfsFonts>(pdfFontsModule);
+      pdfMake.addVirtualFileSystem(interop<VfsFonts>(pdfFontsModule));
       return pdfMake;
     });
   }
@@ -265,21 +265,14 @@ export const exportApi = {
     const pdfMake = await loadPdfMake();
     const docDefinition = createPdfDocument(markdown);
 
-    return new Promise((resolve) => {
-      pdfMake.createPdf(docDefinition).getBuffer(async (buffer) => {
-        const pdfFilename = defaultFilename.replace(/\.md$/, ".pdf");
-        const filePath = await save({
-          defaultPath: pdfFilename,
-          filters: [{ name: "PDF", extensions: ["pdf"] }],
-        });
-
-        if (filePath) {
-          await writeFile(filePath, new Uint8Array(buffer));
-          resolve(filePath);
-        } else {
-          resolve(null);
-        }
-      });
+    const buffer = await pdfMake.createPdf(docDefinition).getBuffer();
+    const filePath = await save({
+      defaultPath: defaultFilename.replace(/\.md$/, ".pdf"),
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
     });
+    if (!filePath) return null;
+
+    await writeFile(filePath, new Uint8Array(buffer));
+    return filePath;
   },
 };
