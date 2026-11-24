@@ -1,15 +1,10 @@
-pub mod engine;
 pub mod live;
-/// Hand-run end-to-end checks; see the module docs to run them.
-#[cfg(test)]
-mod verification;
 pub mod model;
 pub mod transcriber;
 
-pub use engine::{Engine, TranscriptionResult, TranscriptionSegment};
 pub use live::{AudioSource, LiveTranscriptionState, TranscriptionUpdateEvent};
 pub use model::{ModelInfo, ModelManager, ModelSize};
-pub use transcriber::Transcriber;
+pub use transcriber::{TranscriptionResult, TranscriptionSegment, Transcriber};
 
 /// Whether a transcript segment should be dropped rather than saved/displayed.
 ///
@@ -213,17 +208,6 @@ pub enum TranscriptionError {
 
     #[error("Already transcribing")]
     AlreadyTranscribing,
-
-    /// The chosen model cannot transcribe the chosen language.
-    ///
-    /// Refusing beats transcribing: Parakeet given Chinese audio writes
-    /// confident nonsense in the Latin alphabet, and Whisper told the wrong
-    /// language writes that language as a rough translation. Both look like a
-    /// real transcript.
-    #[error(
-        "The {model} model can't transcribe {language}. Pick a Whisper model for this language, or change the transcription language in Settings."
-    )]
-    LanguageNotSupported { model: String, language: String },
 }
 
 #[cfg(test)]

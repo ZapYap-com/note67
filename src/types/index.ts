@@ -8,7 +8,6 @@ export type {
   ActionItem,
   ModelSize,
   ModelInfo,
-  TranscriptionEngine,
   TranscriptionSegment,
   TranscriptionResult,
   OllamaModel,

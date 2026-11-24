@@ -21,30 +21,7 @@ pub enum ModelSize {
     Large,
     LargeTurbo,
     LargeTurboQ8,
-    /// Moondream's Parakeet Ultra, run by `wavo`. Not a Whisper model: a
-    /// different engine, and only 25 European languages.
-    ParakeetUltra,
 }
-
-/// Which engine runs a model. They take different inputs and support
-/// different languages, so the difference is not an implementation detail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum EngineKind {
-    Whisper,
-    Parakeet,
-}
-
-/// The 25 languages Parakeet Ultra was trained on, as note67's language codes.
-///
-/// Nine of them are in the list note67 offers (en, es, fr, de, pt, ru, it, nl,
-/// pl); the rest of that list — Chinese, Japanese, Korean, Turkish, Arabic,
-/// Hindi, Vietnamese, Thai, Indonesian, Malay and Tagalog — Parakeet cannot
-/// transcribe at all, which is what the Settings screen has to make plain.
-pub const PARAKEET_LANGUAGES: &[&str] = &[
-    "en", "de", "fr", "es", "it", "pt", "ru", "uk", "hr", "sl", "lv", "lt", "et", "fi", "sv", "da",
-    "nl", "pl", "cs", "sk", "hu", "ro", "bg", "el", "mt",
-];
 
 impl ModelSize {
     pub fn as_str(&self) -> &'static str {
@@ -60,32 +37,6 @@ impl ModelSize {
             ModelSize::Large => "large",
             ModelSize::LargeTurbo => "large-turbo",
             ModelSize::LargeTurboQ8 => "large-turbo-q8",
-            ModelSize::ParakeetUltra => "parakeet-ultra",
-        }
-    }
-
-    /// Which engine runs this model.
-    pub fn engine_kind(&self) -> EngineKind {
-        match self {
-            ModelSize::ParakeetUltra => EngineKind::Parakeet,
-            _ => EngineKind::Whisper,
-        }
-    }
-
-    /// The languages this model can transcribe, or `None` when it covers every
-    /// language note67 offers (every Whisper model does).
-    pub fn languages(&self) -> Option<&'static [&'static str]> {
-        match self.engine_kind() {
-            EngineKind::Whisper => None,
-            EngineKind::Parakeet => Some(PARAKEET_LANGUAGES),
-        }
-    }
-
-    /// Whether this model can transcribe `code` (a note67 language code).
-    pub fn supports_language(&self, code: &str) -> bool {
-        match self.languages() {
-            None => true,
-            Some(langs) => langs.contains(&code),
         }
     }
 
@@ -103,8 +54,6 @@ impl ModelSize {
             ModelSize::Large => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
             ModelSize::LargeTurbo => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
             ModelSize::LargeTurboQ8 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin",
-            // transcribe.cpp's GGUF conversion, the file `wavo` loads.
-            ModelSize::ParakeetUltra => "https://huggingface.co/handy-computer/parakeet-ultra-gguf/resolve/main/parakeet-ultra-Q8_0.gguf",
         }
     }
 
@@ -123,7 +72,6 @@ impl ModelSize {
             ModelSize::Large => "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
             ModelSize::LargeTurbo => "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
             ModelSize::LargeTurboQ8 => "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
-            ModelSize::ParakeetUltra => "007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59",
         }
     }
 
@@ -141,7 +89,6 @@ impl ModelSize {
             ModelSize::Large => 3100,
             ModelSize::LargeTurbo => 1620,
             ModelSize::LargeTurboQ8 => 874,
-            ModelSize::ParakeetUltra => 740,
         }
     }
 
@@ -159,7 +106,6 @@ impl ModelSize {
             ModelSize::Large => "ggml-large-v3.bin",
             ModelSize::LargeTurbo => "ggml-large-v3-turbo.bin",
             ModelSize::LargeTurboQ8 => "ggml-large-v3-turbo-q8_0.bin",
-            ModelSize::ParakeetUltra => "parakeet-ultra-Q8_0.gguf",
         }
     }
 
@@ -167,7 +113,6 @@ impl ModelSize {
         &[
             ModelSize::LargeTurbo,
             ModelSize::LargeTurboQ8,
-            ModelSize::ParakeetUltra,
             ModelSize::Tiny,
             ModelSize::TinyQ8,
             ModelSize::Base,
@@ -189,12 +134,6 @@ pub struct ModelInfo {
     pub downloaded: bool,
     pub path: Option<String>,
     pub size_mb: u64,
-    /// Which engine runs it.
-    pub engine: EngineKind,
-    /// The languages it can transcribe, or `None` for every language note67
-    /// offers. The Settings screen uses this to say what a model cannot do
-    /// before the user picks it.
-    pub languages: Option<Vec<String>>,
 }
 
 /// Manages whisper model downloads and paths
@@ -242,10 +181,6 @@ impl ModelManager {
                     downloaded,
                     path,
                     size_mb: size.size_mb(),
-                    engine: size.engine_kind(),
-                    languages: size
-                        .languages()
-                        .map(|l| l.iter().map(|c| c.to_string()).collect()),
                 }
             })
             .collect()
@@ -326,88 +261,5 @@ impl ModelManager {
             fs::remove_file(path).await?;
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{EngineKind, ModelSize, PARAKEET_LANGUAGES};
-
-    /// Every language note67 offers in Settings.
-    const OFFERED: &[&str] = &[
-        "en", "zh", "es", "fr", "de", "ja", "ko", "pt", "ru", "it", "nl", "pl", "tr", "ar", "hi",
-        "vi", "th", "id", "ms", "tl",
-    ];
-
-    #[test]
-    fn whisper_models_cover_every_language_offered() {
-        for size in ModelSize::all() {
-            if size.engine_kind() != EngineKind::Whisper {
-                continue;
-            }
-            assert!(size.languages().is_none(), "{} should cover all", size.as_str());
-            for code in OFFERED {
-                assert!(size.supports_language(code), "{} / {code}", size.as_str());
-            }
-        }
-    }
-
-    #[test]
-    fn parakeet_covers_nine_of_the_languages_offered() {
-        // The whole reason the UI has to talk about languages. If this list
-        // ever changes, the Settings copy ("25 European languages") and the
-        // README have to change with it.
-        let covered: Vec<&str> = OFFERED
-            .iter()
-            .copied()
-            .filter(|c| ModelSize::ParakeetUltra.supports_language(c))
-            .collect();
-        assert_eq!(covered, ["en", "es", "fr", "de", "pt", "ru", "it", "nl", "pl"]);
-    }
-
-    #[test]
-    fn parakeet_cannot_do_the_cjk_and_other_languages() {
-        // Transcribing these with Parakeet would produce confident nonsense in
-        // the Latin alphabet, so the engine must refuse rather than try.
-        for code in ["zh", "ja", "ko", "tr", "ar", "hi", "vi", "th", "id", "ms", "tl"] {
-            assert!(
-                !ModelSize::ParakeetUltra.supports_language(code),
-                "Parakeet must not claim {code}"
-            );
-        }
-    }
-
-    #[test]
-    fn parakeet_lists_twenty_five_languages() {
-        assert_eq!(PARAKEET_LANGUAGES.len(), 25);
-        assert_eq!(
-            ModelSize::ParakeetUltra.languages().map(|l| l.len()),
-            Some(25)
-        );
-    }
-
-    #[test]
-    fn every_model_has_distinct_coherent_metadata() {
-        // A copy-pasted arm (same filename or checksum as another model) would
-        // make one model overwrite or fail to verify the other.
-        let all = ModelSize::all();
-        for (i, a) in all.iter().enumerate() {
-            assert_eq!(a.sha256().len(), 64, "{}", a.as_str());
-            assert!(a.download_url().starts_with("https://"), "{}", a.as_str());
-            assert!(a.size_mb() > 0, "{}", a.as_str());
-            for b in &all[i + 1..] {
-                assert_ne!(a.filename(), b.filename(), "{} vs {}", a.as_str(), b.as_str());
-                assert_ne!(a.sha256(), b.sha256(), "{} vs {}", a.as_str(), b.as_str());
-                assert_ne!(a.as_str(), b.as_str(), "duplicate name");
-            }
-        }
-    }
-
-    #[test]
-    fn the_parakeet_model_is_the_gguf_wavo_loads() {
-        // wavo takes the Q8_0 GGUF; a .bin here would fail at load time.
-        assert_eq!(ModelSize::ParakeetUltra.filename(), "parakeet-ultra-Q8_0.gguf");
-        assert!(ModelSize::ParakeetUltra.download_url().ends_with(".gguf"));
-        assert_eq!(ModelSize::ParakeetUltra.engine_kind(), EngineKind::Parakeet);
     }
 }

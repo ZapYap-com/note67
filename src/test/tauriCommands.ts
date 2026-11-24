@@ -72,23 +72,6 @@ export const defaultCommands: CommandMap = {
       downloaded: true,
       path: "/models/ggml-large-v3-turbo-q8_0.bin",
       size_mb: 874,
-      engine: "whisper",
-      languages: null,
-    },
-    // Parakeet, not downloaded: covers 25 European languages and nothing else,
-    // which is what Settings has to show rather than hide.
-    {
-      size: "parakeet-ultra",
-      name: "parakeet-ultra",
-      downloaded: false,
-      path: null,
-      size_mb: 740,
-      engine: "parakeet",
-      languages: [
-        "en", "de", "fr", "es", "it", "pt", "ru", "uk", "hr", "sl", "lv", "lt",
-        "et", "fi", "sv", "da", "nl", "pl", "cs", "sk", "hu", "ro", "bg", "el",
-        "mt",
-      ],
     },
   ],
   get_loaded_model: "large-turbo-q8",
@@ -140,15 +123,7 @@ export const defaultCommands: CommandMap = {
 export const needsSetupCommands: CommandMap = {
   get_loaded_model: null,
   list_models: [
-    {
-      size: "large-turbo-q8",
-      name: "large-turbo-q8",
-      downloaded: false,
-      path: null,
-      size_mb: 874,
-      engine: "whisper",
-      languages: null,
-    },
+    { size: "large-turbo-q8", name: "large-turbo-q8", downloaded: false, path: null, size_mb: 874 },
   ],
   get_ollama_status: { running: false, models: [], selected_model: null },
   has_microphone_permission: false,

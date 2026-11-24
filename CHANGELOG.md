@@ -9,26 +9,7 @@ Earlier versions are listed on the
 
 ## [0.1.30] - Unreleased
 
-Transcription is several times faster on a Mac, and there is a new model
-for meetings in English and the other European languages.
-
-### Added
-
-- A second transcription model, Parakeet Ultra. It transcribes a recording
-  about two and a half times faster than the Turbo model, writes with
-  capital letters and punctuation, and is a 740 MB download instead of
-  874 MB. You can pick it in Settings > Whisper.
-- Parakeet Ultra covers 25 European languages. Of the languages Note67
-  offers, that is English, Spanish, French, German, Portuguese, Russian,
-  Italian, Dutch and Polish. It has no Chinese, Japanese, Korean, Turkish,
-  Arabic, Hindi, Vietnamese, Thai, Indonesian, Malay or Tagalog, so those
-  keep using a Whisper model, and Turbo is still the recommended one.
-- Settings now says which languages each model can transcribe. A model that
-  cannot handle the language you have chosen says so and cannot be loaded,
-  and if you change the language afterwards Note67 tells you that the model
-  you have loaded cannot write it. No model is ever quietly used for a
-  language it was not trained on: asked to, it stops and explains instead
-  of returning a transcript that looks right and is not.
+Transcription is several times faster on a Mac.
 
 ### Changed
 
@@ -36,11 +17,6 @@ for meetings in English and the other European languages.
   times faster than before, and every Whisper model benefits. The first
   transcription after installing an update takes a few seconds longer while
   your Mac prepares the graphics code, once.
-
-### Under the hood
-
-- Note67 loads the transcription model once instead of twice, so recording
-  uses about half as much memory for it.
 
 ## [0.1.29] - 2026-11-01
 

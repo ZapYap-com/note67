@@ -235,7 +235,7 @@ export function OnboardingWizard({ onDismiss, onStatusChange }: OnboardingWizard
           ) : step?.key === "whisper" ? (
             <StepShell
               title="Download a transcription model"
-              desc="Note67 turns speech into text on your device. We recommend the balanced Turbo model — it covers every language Note67 offers."
+              desc="Note67 turns speech into text on your device with Whisper. We recommend the balanced Turbo model."
               done={whisperDone}
               doneLabel="Transcription model ready"
             >

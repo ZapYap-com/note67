@@ -42,7 +42,6 @@ futures-util = "0.3"
 scopeguard = "1.2"
 regex = "1"
 tauri-plugin-opener = "2.5.5"
-wavo = { version = "0.6.0", default-features = false }
 
 # macOS-specific dependencies for system audio capture via ScreenCaptureKit
 [target.'cfg(target_os = "macos")'.dependencies]

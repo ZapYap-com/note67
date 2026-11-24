@@ -8,31 +8,6 @@ const SETTINGS_KEY_LANGUAGE = "whisper_language";
 
 export type WhisperLanguage = "auto" | string;
 
-/**
- * Whether `model` can transcribe `language`.
- *
- * `model.languages` is null for every Whisper model, which covers all of the
- * languages below. Parakeet covers 25 European ones and genuinely cannot do
- * the rest — it has no Chinese, Japanese, Korean, Turkish, Arabic, Hindi,
- * Vietnamese, Thai, Indonesian, Malay or Tagalog — so this is the check that
- * keeps the UI honest about it.
- *
- * "auto" is always supported: each model detects among its own languages.
- */
-export function modelSupportsLanguage(
-  model: Pick<ModelInfo, "languages">,
-  language: WhisperLanguage,
-): boolean {
-  if (model.languages === null) return true;
-  if (language === "auto" || language === "") return true;
-  return model.languages.includes(language);
-}
-
-/** The display name for a language code, for messages about coverage. */
-export function languageName(code: WhisperLanguage): string {
-  return WHISPER_LANGUAGES.find((l) => l.code === code)?.name ?? code;
-}
-
 // Common languages supported by Whisper (subset of ~99 total)
 export const WHISPER_LANGUAGES: { code: WhisperLanguage; name: string }[] = [
   { code: "en", name: "English" },

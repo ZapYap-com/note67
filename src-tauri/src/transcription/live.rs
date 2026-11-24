@@ -10,10 +10,11 @@ use crate::audio::{take_system_audio_samples, RecordingPhase, RecordingState};
 use crate::db::models::NewTranscriptSegment;
 use crate::db::Database;
 use crate::transcription::{
-    is_echo_of_system, should_skip_live_segment, should_skip_segment, Engine, TranscriptionError,
+    is_echo_of_system, should_skip_live_segment, should_skip_segment, TranscriptionError,
     TranscriptionResult, TranscriptionSegment,
 };
 use tauri::Manager;
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
 /// Simple voice activity detection based on RMS energy
 /// Returns true if audio has enough energy to likely contain speech
@@ -119,7 +120,7 @@ pub async fn start_live_transcription(
     language: Option<String>,
     recording_state: Arc<RecordingState>,
     live_state: Arc<LiveTranscriptionState>,
-    engine: Arc<Engine>,
+    whisper_ctx: Arc<WhisperContext>,
 ) -> Result<(), TranscriptionError> {
     if live_state.is_running.swap(true, Ordering::SeqCst) {
         return Err(TranscriptionError::AlreadyTranscribing);
@@ -136,7 +137,7 @@ pub async fn start_live_transcription(
     let language_clone = language.clone();
     let recording_state_clone = recording_state.clone();
     let live_state_clone = live_state.clone();
-    let engine_clone = engine.clone();
+    let whisper_ctx_clone = whisper_ctx.clone();
 
     // Spawn the live transcription task
     tokio::spawn(async move {
@@ -242,18 +243,18 @@ pub async fn start_live_transcription(
             };
 
             // Process mic and system audio in PARALLEL
-            let engine_mic = engine_clone.clone();
-            let engine_sys = engine_clone.clone();
+            let whisper_ctx_mic = whisper_ctx_clone.clone();
+            let whisper_ctx_sys = whisper_ctx_clone.clone();
 
             let lang_mic = lang.clone();
             let lang_sys = lang.clone();
 
             let mic_future = async {
                 if let Some((samples, time_offset)) = mic_data {
-                    let engine = engine_mic;
+                    let ctx = whisper_ctx_mic;
                     let language = lang_mic;
                     tokio::task::spawn_blocking(move || {
-                        transcribe_samples(&engine, &samples, 16000, 1, time_offset, language.as_deref())
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset, language.as_deref())
                     })
                     .await
                     .ok()
@@ -265,10 +266,10 @@ pub async fn start_live_transcription(
 
             let system_future = async {
                 if let Some((samples, time_offset)) = system_data {
-                    let engine = engine_sys;
+                    let ctx = whisper_ctx_sys;
                     let language = lang_sys;
                     tokio::task::spawn_blocking(move || {
-                        transcribe_samples(&engine, &samples, 16000, 1, time_offset, language.as_deref())
+                        transcribe_samples(&ctx, &samples, 16000, 1, time_offset, language.as_deref())
                     })
                     .await
                     .ok()
@@ -441,12 +442,9 @@ pub async fn stop_live_transcription(
     }
 }
 
-/// Transcribe one live chunk of raw audio samples with the loaded engine.
-///
-/// Converts to the 16 kHz mono both engines take, then hands the chunk over;
-/// which model runs it, Whisper or Parakeet, is the engine's business.
+/// Transcribe raw audio samples
 fn transcribe_samples(
-    engine: &Engine,
+    ctx: &WhisperContext,
     samples: &[f32],
     sample_rate: u32,
     channels: usize,
@@ -471,7 +469,68 @@ fn transcribe_samples(
         mono_samples
     };
 
-    engine.transcribe_samples(&resampled, time_offset, language)
+    // Create whisper state
+    let mut state = ctx
+        .create_state()
+        .map_err(|e| TranscriptionError::TranscriptionFailed(e.to_string()))?;
+
+    // Set up transcription parameters
+    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+    params.set_language(language); // None = auto-detect
+    params.set_translate(false);
+    params.set_print_special(false);
+    params.set_print_progress(false);
+    params.set_print_realtime(false);
+    params.set_print_timestamps(false);
+    params.set_token_timestamps(true);
+    params.set_n_threads(num_cpus());
+
+    // Run transcription
+    state
+        .full(params, &resampled)
+        .map_err(|e| TranscriptionError::TranscriptionFailed(e.to_string()))?;
+
+    // Extract segments
+    let mut segments = Vec::new();
+    let mut full_text = String::new();
+
+    for segment in state.as_iter() {
+        let start_time = segment.start_timestamp() as f64 / 100.0 + time_offset;
+        let end_time = segment.end_timestamp() as f64 / 100.0 + time_offset;
+
+        // Lossy: Whisper can split a multi-byte character across two
+        // segments, which shouldn't drop the whole chunk.
+        let text = segment
+            .to_str_lossy()
+            .map_err(|e| TranscriptionError::TranscriptionFailed(e.to_string()))?;
+
+        let text = text.trim().to_string();
+        if !text.is_empty() {
+            if !full_text.is_empty() {
+                full_text.push(' ');
+            }
+            full_text.push_str(&text);
+
+            segments.push(TranscriptionSegment {
+                start_time,
+                end_time,
+                text,
+            });
+        }
+    }
+
+    Ok(TranscriptionResult {
+        segments,
+        full_text,
+        language: language.map(|s| s.to_string()),
+    })
+}
+
+fn num_cpus() -> i32 {
+    std::thread::available_parallelism()
+        .map(|n| n.get() as i32)
+        .unwrap_or(4)
+        .min(8)
 }
 
 fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
