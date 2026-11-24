@@ -6,7 +6,7 @@
 
 **🚀 We're on Product Hunt!** If you find Note67 useful, please consider [upvoting us on Product Hunt](https://www.producthunt.com/products/note67-private-meeting-notes-assistant) — it helps others discover the project!
 
-A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper, and generate AI-powered summaries — all on your device.
+A private, local meeting notes assistant. Capture audio, transcribe locally with Whisper or Parakeet, and generate AI-powered summaries — all on your device.
 
 ## What's New (v0.1.29)
 
@@ -127,7 +127,10 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Meeting management (create, end, delete)
 - [x] SQLite database for local storage
 - [x] Audio recording (microphone)
-- [x] Local transcription with Whisper
+- [x] Local transcription with Whisper (99 languages) or Parakeet Ultra
+      (25 European languages, several times faster) — Settings shows which
+      languages each model can transcribe, and a model is never used for a
+      language it wasn't trained on
 - [x] Speaker distinction (You vs Others) on macOS
 - [x] Echo deduplication for speaker usage
 - [x] Live transcription during recording
@@ -138,7 +141,7 @@ A private, local meeting notes assistant. Capture audio, transcribe locally with
 - [x] Upload external audio files for transcription (mp3, m4a, aac, flac, ogg, wav, mkv, mp4; Opus audio isn't supported yet)
 - [x] Download and delete audio files
 - [x] Reorder audio files with up/down controls
-- [x] Retranscribe audio with different Whisper model
+- [x] Retranscribe audio with a different transcription model
 - [x] Voice Activity Detection (VAD) for mic input
 - [x] Automatic filtering of blank/noise segments
 - [x] Transcript viewer with search and speaker filter

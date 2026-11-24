@@ -2,14 +2,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
-use whisper_rs::{WhisperContext, WhisperContextParameters};
 
 use crate::commands::audio::AudioState;
 use crate::db::models::NewTranscriptSegment;
 use crate::db::Database;
 use crate::transcription::{
-    is_echo_of_system, live, should_skip_segment, LiveTranscriptionState, ModelInfo, ModelManager,
-    ModelSize, TranscriptionResult, Transcriber,
+    is_echo_of_system, live, should_skip_segment, Engine, LiveTranscriptionState, ModelInfo,
+    ModelManager, ModelSize, TranscriptionResult, Transcriber,
 };
 
 /// Clamp a segment's (start, end) so `start` never goes backwards relative to
@@ -107,7 +106,9 @@ pub(crate) fn batch_language(db: &Database) -> Option<String> {
 pub struct TranscriptionState {
     pub model_manager: Mutex<Option<ModelManager>>,
     pub transcriber: Mutex<Option<Arc<Transcriber>>>,
-    pub whisper_ctx: Mutex<Option<Arc<WhisperContext>>>,
+    /// The loaded model, shared with the live path so the weights are in
+    /// memory once rather than per caller.
+    pub engine: Mutex<Option<Arc<Engine>>>,
     pub current_model: Mutex<Option<ModelSize>>,
     pub is_transcribing: AtomicBool,
     pub download_progress: Arc<AtomicU8>,
@@ -120,7 +121,7 @@ impl Default for TranscriptionState {
         Self {
             model_manager: Mutex::new(None),
             transcriber: Mutex::new(None),
-            whisper_ctx: Mutex::new(None),
+            engine: Mutex::new(None),
             current_model: Mutex::new(None),
             is_transcribing: AtomicBool::new(false),
             download_progress: Arc::new(AtomicU8::new(0)),
@@ -138,7 +139,7 @@ pub fn init_transcription_state(app: &AppHandle) -> TranscriptionState {
     TranscriptionState {
         model_manager: Mutex::new(Some(model_manager)),
         transcriber: Mutex::new(None),
-        whisper_ctx: Mutex::new(None),
+        engine: Mutex::new(None),
         current_model: Mutex::new(None),
         is_transcribing: AtomicBool::new(false),
         download_progress: Arc::new(AtomicU8::new(0)),
@@ -258,26 +259,19 @@ pub fn load_model(size: String, state: State<TranscriptionState>) -> Result<(), 
         return Err(format!("Model {} is not downloaded", size));
     }
 
-    // Load the model
-    let transcriber = Transcriber::new(&model_path).map_err(|e| e.to_string())?;
-
-    // Also load WhisperContext for live transcription
-    let whisper_ctx = WhisperContext::new_with_params(
-        model_path.to_str().unwrap(),
-        WhisperContextParameters::default(),
-    )
-    .map_err(|e| format!("Failed to load whisper context: {}", e))?;
+    // Load the model once; the file path and the live path share it.
+    let engine = Arc::new(Engine::load(model_size, &model_path).map_err(|e| e.to_string())?);
 
     // Store the transcriber
     {
         let mut t = state.transcriber.lock().map_err(|e| e.to_string())?;
-        *t = Some(Arc::new(transcriber));
+        *t = Some(Arc::new(Transcriber::new(engine.clone())));
     }
 
-    // Store the whisper context
+    // Store the engine for live transcription
     {
-        let mut ctx = state.whisper_ctx.lock().map_err(|e| e.to_string())?;
-        *ctx = Some(Arc::new(whisper_ctx));
+        let mut e = state.engine.lock().map_err(|e| e.to_string())?;
+        *e = Some(engine);
     }
 
     // Update current model
@@ -323,16 +317,16 @@ pub async fn start_live_transcription(
     state: State<'_, TranscriptionState>,
     audio_state: State<'_, AudioState>,
 ) -> Result<(), String> {
-    // Get the whisper context
-    let whisper_ctx = {
-        let guard = state.whisper_ctx.lock().map_err(|e| e.to_string())?;
+    // Get the loaded engine
+    let engine = {
+        let guard = state.engine.lock().map_err(|e| e.to_string())?;
         guard.clone().ok_or("No model loaded. Please load a model first.")?
     };
 
     let recording_state = audio_state.recording.clone();
     let live_state = state.live_state.clone();
 
-    live::start_live_transcription(app, note_id, language, recording_state, live_state, whisper_ctx)
+    live::start_live_transcription(app, note_id, language, recording_state, live_state, engine)
         .await
         .map_err(|e| e.to_string())
 }
@@ -654,6 +648,7 @@ fn parse_model_size(size: &str) -> Result<ModelSize, String> {
         "large" => Ok(ModelSize::Large),
         "large-turbo" => Ok(ModelSize::LargeTurbo),
         "large-turbo-q8" => Ok(ModelSize::LargeTurboQ8),
+        "parakeet-ultra" => Ok(ModelSize::ParakeetUltra),
         _ => Err(format!("Invalid model size: {}", size)),
     }
 }
@@ -675,6 +670,20 @@ mod tests {
         take_transcription_slot(&slot).await;
         assert!(started.elapsed() >= std::time::Duration::from_millis(250));
         assert!(slot.load(Ordering::SeqCst), "the waiter now holds the slot");
+    }
+
+    #[test]
+    fn every_model_parses_back_from_its_own_name() {
+        // A new ModelSize without a parse_model_size arm is downloadable and
+        // then impossible to load.
+        for size in ModelSize::all() {
+            assert_eq!(
+                parse_model_size(size.as_str()),
+                Ok(*size),
+                "{} has no parse arm",
+                size.as_str()
+            );
+        }
     }
 
     #[test]

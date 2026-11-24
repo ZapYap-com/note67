@@ -76,7 +76,13 @@ export type ModelSize =
   | "medium-q8"
   | "large"
   | "large-turbo"
-  | "large-turbo-q8";
+  | "large-turbo-q8"
+  | "parakeet-ultra";
+
+/// Which engine runs a model. Parakeet is not Whisper: it is several times
+/// faster and covers 25 European languages instead of 99, so the difference is
+/// visible to the user, not just internal.
+export type TranscriptionEngine = "whisper" | "parakeet";
 
 export interface ModelInfo {
   size: ModelSize;
@@ -84,6 +90,10 @@ export interface ModelInfo {
   downloaded: boolean;
   path: string | null;
   size_mb: number;
+  engine: TranscriptionEngine;
+  /** The languages this model can transcribe; null means every language the
+   * app offers (every Whisper model). */
+  languages: string[] | null;
 }
 
 // Segment from whisper transcription (before saving to DB)

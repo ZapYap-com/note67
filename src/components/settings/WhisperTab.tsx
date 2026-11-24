@@ -1,10 +1,19 @@
 import { useModels } from "../../hooks";
 import {
+  languageName,
+  modelSupportsLanguage,
   useWhisperStore,
   WHISPER_LANGUAGES,
   type WhisperLanguage,
 } from "../../stores/whisperStore";
 import type { ModelInfo, ModelSize } from "../../types";
+
+/// What a model's language coverage amounts to, for the card's summary line.
+function coverageLabel(model: ModelInfo): string {
+  return model.languages === null
+    ? "99 languages"
+    : `${model.languages.length} European languages`;
+}
 
 export function WhisperTab() {
   const {
@@ -34,7 +43,18 @@ export function WhisperTab() {
     large: "Best accuracy, slowest",
     "large-turbo": "Fast + accurate, full size",
     "large-turbo-q8": "Fast + accurate, half the size (recommended)",
+    "parakeet-ultra": "Much faster, fewer languages",
   };
+
+  // The model that is loaded right now, if the list has caught up with it.
+  const activeModel = models.find((m) => m.size === loadedModel);
+  // Changing the language after loading a model can leave the two at odds.
+  // Nothing downstream can paper over that: Parakeet has no Chinese to fall
+  // back on, so say it here rather than letting a recording fail later.
+  const activeModelMismatch =
+    activeModel && !modelSupportsLanguage(activeModel, language)
+      ? activeModel
+      : null;
 
   return (
     <div>
@@ -50,6 +70,21 @@ export function WhisperTab() {
         </div>
       )}
 
+      {activeModelMismatch && (
+        <div
+          className="mb-4 px-3 py-2 rounded-lg text-sm"
+          style={{
+            backgroundColor: "rgba(245, 158, 11, 0.1)",
+            color: "#b45309",
+          }}
+        >
+          The active model, {activeModelMismatch.name}, can&rsquo;t transcribe{" "}
+          {languageName(language)} — it only covers{" "}
+          {coverageLabel(activeModelMismatch)}. Load a Whisper model below to
+          transcribe {languageName(language)}, or change the language.
+        </div>
+      )}
+
       {/* Language Selection */}
       <div className="mb-6">
         <h3
@@ -62,7 +97,9 @@ export function WhisperTab() {
           className="text-sm mb-3"
           style={{ color: "var(--color-text-secondary)" }}
         >
-          Select the language for transcription.
+          Select the language for transcription. Whisper models cover all of
+          these; Parakeet covers the European ones only, and each model below
+          says what it can do.
         </p>
         <select
           value={language}
@@ -108,6 +145,7 @@ export function WhisperTab() {
               downloadProgress={downloadProgress}
               sizeLabel={sizeLabels[model.size]}
               isRecommended={model.size === "large-turbo-q8"}
+              language={language}
               onDownload={() => downloadModel(model.size)}
               onDelete={() => deleteModel(model.size)}
               onLoad={() => loadModel(model.size)}
@@ -134,6 +172,9 @@ interface WhisperModelCardProps {
   downloadProgress: number;
   sizeLabel: string;
   isRecommended: boolean;
+  /** The chosen transcription language, to say up front whether this model can
+   * actually write it. */
+  language: WhisperLanguage;
   onDownload: () => void;
   onDelete: () => void;
   onLoad: () => void;
@@ -147,11 +188,14 @@ function WhisperModelCard({
   downloadProgress,
   sizeLabel,
   isRecommended,
+  language,
   onDownload,
   onDelete,
   onLoad,
   isAnyDownloading,
 }: WhisperModelCardProps) {
+  const supportsLanguage = modelSupportsLanguage(model, language);
+
   return (
     <div
       className="p-3 rounded-xl transition-colors"
@@ -192,13 +236,29 @@ function WhisperModelCard({
                 Recommended
               </span>
             )}
+            {model.engine === "parakeet" && (
+              <span
+                className="px-1.5 py-0.5 text-xs font-medium rounded"
+                style={{
+                  backgroundColor: "rgba(59, 130, 246, 0.12)",
+                  color: "#2563eb",
+                }}
+              >
+                Faster
+              </span>
+            )}
           </div>
           <p
             className="text-xs mt-0.5"
             style={{ color: "var(--color-text-tertiary)" }}
           >
-            {sizeLabel} · {model.size_mb} MB
+            {sizeLabel} · {model.size_mb} MB · {coverageLabel(model)}
           </p>
+          {!supportsLanguage && (
+            <p className="text-xs mt-1" style={{ color: "#b45309" }}>
+              Can&rsquo;t transcribe {languageName(language)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {model.downloaded ? (
@@ -206,7 +266,13 @@ function WhisperModelCard({
               {!isLoaded && (
                 <button
                   onClick={onLoad}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                  disabled={!supportsLanguage}
+                  title={
+                    supportsLanguage
+                      ? undefined
+                      : `This model can't transcribe ${languageName(language)}`
+                  }
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     backgroundColor: "var(--color-accent)",
                     color: "white",
