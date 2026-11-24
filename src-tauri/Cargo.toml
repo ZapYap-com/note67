@@ -46,6 +46,11 @@ wavo = { version = "0.6.0", default-features = false }
 
 # macOS-specific dependencies for system audio capture via ScreenCaptureKit
 [target.'cfg(target_os = "macos")'.dependencies]
+# Metal for whisper.cpp, on macOS only: whisper-rs-sys builds it with
+# GGML_METAL_EMBED_LIBRARY, so the shaders go in the binary and there is no
+# .metallib to ship. Cargo unions features across target tables, so the plain
+# `whisper-rs` above stays CPU-only on Windows and Linux.
+whisper-rs = { version = "0.16", features = ["metal"] }
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSError", "NSString", "NSArray", "NSDictionary", "NSNotification", "NSThread"] }
 block2 = "0.6"
