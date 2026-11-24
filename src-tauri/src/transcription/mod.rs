@@ -133,11 +133,7 @@ fn should_skip_segment_inner(
 
     // Long segment carrying almost no words = stuck hallucination over silence
     let word_count = normalized.split_whitespace().count();
-    if word_count <= 2 && (end_time - start_time) >= 6.0 {
-        return true;
-    }
-
-    false
+    word_count <= 2 && (end_time - start_time) >= 6.0
 }
 
 /// Whether a mic segment is likely an echo of system audio (the mic re-capturing
